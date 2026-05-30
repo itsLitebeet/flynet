@@ -229,35 +229,78 @@ def _own_order_or_none(db: Database, order_id: int, user_id: int):
     return row
 
 
-async def _show_services_list(message: Message, db: Database) -> None:
-    user = message.from_user
-    if user is None:
-        return
-    rows = db.list_user_orders(user.id, limit=50)
+async def _show_services_list(
+    message: Message,
+    db: Database,
+    user_id: int,
+    *,
+    edit_in_place: bool = False,
+) -> None:
+    rows = db.list_user_orders(user_id, limit=50)
     if not rows:
-        await message.answer(
-            texts.MY_SERVICES_EMPTY, reply_markup=keyboards.main_reply_keyboard()
-        )
+        text = texts.MY_SERVICES_EMPTY
+        if edit_in_place:
+            try:
+                await message.edit_text(text, parse_mode=ParseMode.HTML)
+            except TelegramBadRequest as exc:
+                if not _is_not_modified_error(exc):
+                    await message.answer(
+                        text,
+                        reply_markup=keyboards.main_reply_keyboard(),
+                        parse_mode=ParseMode.HTML,
+                    )
+            except Exception:  # noqa: BLE001
+                await message.answer(
+                    text,
+                    reply_markup=keyboards.main_reply_keyboard(),
+                    parse_mode=ParseMode.HTML,
+                )
+        else:
+            await message.answer(
+                text,
+                reply_markup=keyboards.main_reply_keyboard(),
+                parse_mode=ParseMode.HTML,
+            )
         return
+
     items = [{"id": int(r["id"]), "label": _service_list_label(r)} for r in rows]
-    await message.answer(
-        texts.MY_SERVICES_HEADER, reply_markup=keyboards.my_services_list(items)
-    )
+    text = texts.MY_SERVICES_HEADER
+    markup = keyboards.my_services_list(items)
+    if edit_in_place:
+        try:
+            await message.edit_text(
+                text, reply_markup=markup, parse_mode=ParseMode.HTML
+            )
+        except TelegramBadRequest as exc:
+            if _is_not_modified_error(exc):
+                return
+            await message.answer(text, reply_markup=markup, parse_mode=ParseMode.HTML)
+        except Exception:  # noqa: BLE001
+            await message.answer(text, reply_markup=markup, parse_mode=ParseMode.HTML)
+    else:
+        await message.answer(text, reply_markup=markup, parse_mode=ParseMode.HTML)
 
 
 # ---------- entry: list ----------
 @router.message(F.text == texts.BTN_MY_SERVICES, StateFilter(None))
 async def msg_my_services(message: Message, db: Database) -> None:
-    await _show_services_list(message, db)
+    if message.from_user is None:
+        return
+    await _show_services_list(message, db, message.from_user.id)
 
 
 @router.callback_query(F.data == keyboards.CB_MAIN_MY_SERVICES)
 @router.callback_query(F.data == keyboards.CB_MY_LIST)
 async def cb_my_services(callback: CallbackQuery, db: Database) -> None:
-    if not isinstance(callback.message, Message):
+    if callback.from_user is None or not isinstance(callback.message, Message):
         await callback.answer()
         return
-    await _show_services_list(callback.message, db)
+    await _show_services_list(
+        callback.message,
+        db,
+        callback.from_user.id,
+        edit_in_place=True,
+    )
     await callback.answer()
 
 
