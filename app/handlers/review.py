@@ -24,6 +24,7 @@ from aiogram.types import CallbackQuery, Message
 from app import keyboards, texts
 from app.config import Settings
 from app.db import Database
+from app.handlers.review_notify import clear_admin_receipt_buttons
 from app.xui import XuiClient, XuiError, build_client_email
 
 
@@ -37,6 +38,27 @@ class DeclineFlow(StatesGroup):
 
 def _is_admin(user_id: int, settings: Settings) -> bool:
     return user_id in settings.admin_ids
+
+
+def _status_label(status: str) -> str:
+    return texts.STATUS_BADGE.get(status, status)
+
+
+async def _reject_if_not_reviewable(
+    callback: CallbackQuery, db: Database, order_id: int
+) -> bool:
+    """Return True if order is still awaiting_review; else alert and return False."""
+    order = db.get_order(order_id)
+    if order is None:
+        await callback.answer("سفارش پیدا نشد.", show_alert=True)
+        return False
+    if order["status"] != "awaiting_review":
+        await callback.answer(
+            texts.REVIEW_ALREADY.format(status=_status_label(order["status"])),
+            show_alert=True,
+        )
+        return False
+    return True
 
 
 
@@ -60,23 +82,30 @@ async def cb_accept_order(
         await callback.answer()
         return
 
-    order = db.get_order(order_id)
-    if order is None:
-        await callback.answer("سفارش پیدا نشد.", show_alert=True)
-        return
-    if order["status"] != "awaiting_review":
-        await callback.answer(texts.REVIEW_ALREADY, show_alert=True)
+    if not await _reject_if_not_reviewable(callback, db, order_id):
         return
 
-    # Optimistically mark as approved so a second admin click is a no-op.
-    db.set_order_status(order_id, "approved", admin_id=callback.from_user.id)
+    order = db.get_order(order_id)
+    assert order is not None
+    admin_id = callback.from_user.id
+
+    if not db.claim_order_review(order_id, "approved", admin_id):
+        order = db.get_order(order_id)
+        st = order["status"] if order else "—"
+        await callback.answer(
+            texts.REVIEW_ALREADY.format(status=_status_label(str(st))),
+            show_alert=True,
+        )
+        return
+
     await callback.answer(texts.REVIEW_ACCEPTED)
-    # Strip buttons from the receipt message so it doesn't get re-clicked.
-    try:
-        if isinstance(callback.message, Message):
-            await callback.message.edit_reply_markup(reply_markup=None)
-    except Exception:  # noqa: BLE001
-        pass
+    await clear_admin_receipt_buttons(
+        bot,
+        db,
+        order_id,
+        acting_admin_id=admin_id,
+        action="تأیید شد",
+    )
 
     location = db.get_location(int(order["location_id"]))
     if location is None or not location.inbound_ids:
@@ -167,13 +196,11 @@ async def cb_decline_order(
         await callback.answer()
         return
 
+    if not await _reject_if_not_reviewable(callback, db, order_id):
+        return
+
     order = db.get_order(order_id)
-    if order is None:
-        await callback.answer("سفارش پیدا نشد.", show_alert=True)
-        return
-    if order["status"] != "awaiting_review":
-        await callback.answer(texts.REVIEW_ALREADY, show_alert=True)
-        return
+    assert order is not None
 
     await state.set_state(DeclineFlow.waiting_reason)
     await state.update_data(decline_order_id=order_id, decline_user_id=int(order["user_id"]))
@@ -211,14 +238,32 @@ async def on_decline_reason(
         return
 
     order = db.get_order(order_id)
-    if order is None or order["status"] != "awaiting_review":
-        await message.answer(texts.REVIEW_ALREADY)
+    if order is None:
+        await message.answer("سفارش پیدا نشد.")
+        return
+    if order["status"] != "awaiting_review":
+        await message.answer(
+            texts.REVIEW_ALREADY.format(status=_status_label(order["status"]))
+        )
         return
 
-    db.set_order_status(
-        order_id, "declined",
-        admin_id=message.from_user.id,
-        decline_reason=reason,
+    admin_id = message.from_user.id
+    if not db.claim_order_review(
+        order_id, "declined", admin_id, decline_reason=reason
+    ):
+        order = db.get_order(order_id)
+        st = order["status"] if order else "—"
+        await message.answer(
+            texts.REVIEW_ALREADY.format(status=_status_label(str(st)))
+        )
+        return
+
+    await clear_admin_receipt_buttons(
+        bot,
+        db,
+        order_id,
+        acting_admin_id=admin_id,
+        action="رد شد",
     )
     await message.answer(texts.REVIEW_DECLINE_SENT)
 

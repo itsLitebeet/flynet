@@ -568,7 +568,14 @@ PENDING_ITEM   = (
     "{volume}GB / {days}d — <b>{price}</b> ({created_at})"
 )
 
-REVIEW_ALREADY = "⚠️ این سفارش قبلاً بررسی شده است."
+REVIEW_ALREADY = (
+    "⚠️ این سفارش قبلاً توسط ادمین دیگر بررسی شده است.\n"
+    "وضعیت فعلی: <b>{status}</b>"
+)
+REVIEW_OTHER_ADMIN_DONE = (
+    "ℹ️ سفارش <code>#{order_id}</code> دیگر در انتظار بررسی نیست.\n"
+    "نتیجه: <b>{action}</b> (ادمین <code>{admin_id}</code>)"
+)
 REVIEW_DECLINE_PROMPT = (
     "❌ دلیل رد را در یک پیام ارسال کنید (یا /cancel برای انصراف).\n"
     "این متن برای کاربر ارسال می‌شود."

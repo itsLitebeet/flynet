@@ -317,16 +317,20 @@ async def cb_admin_view_order(
 
     try:
         if file_id:
-            await bot.send_photo(
+            sent = await bot.send_photo(
                 admin_chat,
                 photo=file_id,
                 caption=caption,
                 reply_markup=review_kb,
             )
+            if sent:
+                db.add_admin_receipt_message(order_id, admin_chat, sent.message_id)
         else:
-            await bot.send_message(
+            sent = await bot.send_message(
                 admin_chat, caption, reply_markup=review_kb
             )
+            if sent:
+                db.add_admin_receipt_message(order_id, admin_chat, sent.message_id)
     except Exception:  # noqa: BLE001
         await callback.answer("ارسال رسید ناموفق بود.", show_alert=True)
         return

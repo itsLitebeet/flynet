@@ -179,6 +179,7 @@ class Database:
         self._ensure_column("locations", "price_per_gb", "INTEGER")
         self._ensure_column("locations", "price_per_day", "INTEGER")
         self._ensure_column("orders", "nickname", "TEXT")
+        self._ensure_column("orders", "admin_receipt_refs", "TEXT")
         # Legacy status from an earlier version — hard-delete on upgrade.
         with self._cursor() as cur:
             cur.execute("DELETE FROM orders WHERE status = 'panel_removed'")
@@ -475,6 +476,62 @@ class Database:
                 "updated_at = datetime('now') WHERE id = ?",
                 (status, admin_id, decline_reason, order_id),
             )
+
+    def claim_order_review(
+        self,
+        order_id: int,
+        status: str,
+        admin_id: int,
+        *,
+        decline_reason: str | None = None,
+    ) -> bool:
+        """Atomically move order from awaiting_review → status (one admin wins)."""
+        with self._cursor() as cur:
+            cur.execute(
+                "UPDATE orders SET status = ?, admin_id = ?, "
+                "decline_reason = COALESCE(?, decline_reason), "
+                "updated_at = datetime('now') "
+                "WHERE id = ? AND status = 'awaiting_review'",
+                (status, admin_id, decline_reason, order_id),
+            )
+            return cur.rowcount > 0
+
+    def add_admin_receipt_message(
+        self, order_id: int, admin_id: int, message_id: int
+    ) -> None:
+        """Remember each admin's receipt message so buttons can be cleared later."""
+        order = self.get_order(order_id)
+        refs: dict[str, int] = {}
+        if order is not None:
+            raw = order["admin_receipt_refs"]
+            if raw:
+                try:
+                    loaded = json.loads(raw)
+                    if isinstance(loaded, dict):
+                        refs = {str(k): int(v) for k, v in loaded.items()}
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    refs = {}
+        refs[str(admin_id)] = message_id
+        with self._cursor() as cur:
+            cur.execute(
+                "UPDATE orders SET admin_receipt_refs = ? WHERE id = ?",
+                (json.dumps(refs), order_id),
+            )
+
+    def get_admin_receipt_refs(self, order_id: int) -> dict[int, int]:
+        order = self.get_order(order_id)
+        if order is None:
+            return {}
+        raw = order["admin_receipt_refs"]
+        if not raw:
+            return {}
+        try:
+            loaded = json.loads(raw)
+            if not isinstance(loaded, dict):
+                return {}
+            return {int(k): int(v) for k, v in loaded.items()}
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return {}
 
     def set_order_provisioned(
         self,

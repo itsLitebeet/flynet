@@ -404,12 +404,14 @@ async def on_receipt_photo(
 
     for admin_id in settings.admin_ids:
         try:
-            await bot.send_photo(
+            sent = await bot.send_photo(
                 chat_id=admin_id,
                 photo=file_id,
                 caption=caption,
                 reply_markup=review_kb,
             )
+            if sent:
+                db.add_admin_receipt_message(order_id, admin_id, sent.message_id)
         except Exception:  # noqa: BLE001 — admin may have blocked the bot
             log.exception("Failed to send receipt to admin %s", admin_id)
 
