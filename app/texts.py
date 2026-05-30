@@ -61,12 +61,12 @@ BTN_DECLINE    = "❌ رد پرداخت"
 BTN_VIEW_USER  = "👤 پروفایل کاربر"
 
 # My services
-BTN_VIEW_CONFIGS  = "📋 مشاهده لینک‌ها"
+BTN_VIEW_CONFIGS  = "📋 دریافت کانفیگ‌ها"
 BTN_REFRESH_USAGE = "🔄 بروزرسانی مصرف"
 BTN_TOGGLE_OFF   = "⏸ توقف موقت"
 BTN_TOGGLE_ON    = "▶️ فعال‌سازی"
 BTN_RENAME       = "✏️ تغییر نام"
-BTN_REGEN        = "🔁 تولید مجدد"
+BTN_REGEN        = "🔁 تغییر لینک ساب"
 BTN_REGEN_CONFIRM = "✅ بله، تولید مجدد کن"
 
 
