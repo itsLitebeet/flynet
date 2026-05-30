@@ -268,6 +268,29 @@ class Database:
             )
             return cur.rowcount > 0
 
+    def count_orders_for_location(self, location_id: int) -> int:
+        with self._cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*) AS c FROM orders WHERE location_id = ?",
+                (location_id,),
+            )
+            return int(cur.fetchone()["c"])
+
+    def purge_location(self, location_id: int) -> str:
+        """Hard-delete a location AND every order that references it.
+
+        Returns 'not_found' or 'purged'. Use this only when you're sure you
+        want to lose the order history. Wrapped in a single transaction so a
+        crash mid-purge leaves the DB consistent.
+        """
+        with self._cursor() as cur:
+            cur.execute("SELECT id FROM locations WHERE id = ?", (location_id,))
+            if cur.fetchone() is None:
+                return "not_found"
+            cur.execute("DELETE FROM orders   WHERE location_id = ?", (location_id,))
+            cur.execute("DELETE FROM locations WHERE id = ?",           (location_id,))
+            return "purged"
+
     def get_location(self, location_id: int) -> Location | None:
         with self._cursor() as cur:
             cur.execute("SELECT * FROM locations WHERE id = ?", (location_id,))

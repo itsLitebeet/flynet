@@ -33,6 +33,10 @@ CB_CANCEL_SUPPORT = "support:cancel"
 CB_ADMIN_ACCEPT_PREFIX  = "adm:acc:"   # adm:acc:<order_id>
 CB_ADMIN_DECLINE_PREFIX = "adm:dec:"   # adm:dec:<order_id>
 
+# Admin destructive actions (require explicit confirmation)
+CB_PURGE_CONFIRM_PREFIX = "adm:prg:ok:"  # adm:prg:ok:<location_id>
+CB_PURGE_CANCEL         = "adm:prg:no"
+
 
 # ---------- main menu ----------
 def main_menu() -> InlineKeyboardMarkup:
@@ -121,6 +125,23 @@ def cancel_support() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text=texts.BTN_CANCEL, callback_data=CB_CANCEL_SUPPORT)]
+        ]
+    )
+
+
+# ---------- admin destructive confirmation ----------
+def purge_confirm(location_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ بله، پاک کن",
+                    callback_data=f"{CB_PURGE_CONFIRM_PREFIX}{location_id}",
+                ),
+                InlineKeyboardButton(
+                    text="❌ انصراف", callback_data=CB_PURGE_CANCEL
+                ),
+            ]
         ]
     )
 

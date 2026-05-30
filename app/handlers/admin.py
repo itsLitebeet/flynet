@@ -4,11 +4,11 @@ import asyncio
 import logging
 from html import escape
 
-from aiogram import Bot, Router
+from aiogram import Bot, F, Router
 from aiogram.filters import Command, CommandObject
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, Message
 
-from app import texts
+from app import keyboards, texts
 from app.config import Settings
 from app.db import Database
 
@@ -275,6 +275,69 @@ async def cmd_dellocation(
         await message.answer(texts.DEL_LOC_DISABLED.format(id=loc_id))
     else:
         await message.answer(texts.DEL_LOC_OK.format(id=loc_id))
+
+
+@router.message(Command("purgelocation"))
+async def cmd_purgelocation(
+    message: Message, command: CommandObject, settings: Settings, db: Database
+) -> None:
+    if not _require_admin(message, settings):
+        await message.answer(texts.NOT_ADMIN)
+        return
+
+    raw = (command.args or "").strip()
+    try:
+        loc_id = int(raw)
+    except ValueError:
+        await message.answer(texts.PURGE_USAGE)
+        return
+
+    loc = db.get_location(loc_id)
+    if loc is None:
+        await message.answer(texts.DEL_LOC_NOTFOUND)
+        return
+
+    count = db.count_orders_for_location(loc_id)
+    await message.answer(
+        texts.PURGE_CONFIRM.format(id=loc_id, name=escape(loc.name), count=count),
+        reply_markup=keyboards.purge_confirm(loc_id),
+    )
+
+
+@router.callback_query(F.data.startswith(keyboards.CB_PURGE_CONFIRM_PREFIX))
+async def cb_purge_confirm(
+    callback: CallbackQuery, db: Database, settings: Settings
+) -> None:
+    if callback.from_user is None or not _is_admin(callback.from_user.id, settings):
+        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+        return
+
+    raw = (callback.data or "").removeprefix(keyboards.CB_PURGE_CONFIRM_PREFIX)
+    try:
+        loc_id = int(raw)
+    except ValueError:
+        await callback.answer()
+        return
+
+    # Capture count BEFORE deletion so the success message is accurate.
+    count = db.count_orders_for_location(loc_id)
+    result = db.purge_location(loc_id)
+    if result == "not_found":
+        await callback.answer("یافت نشد", show_alert=True)
+        return
+
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text(
+            texts.PURGE_DONE.format(id=loc_id, count=count), reply_markup=None
+        )
+    await callback.answer("حذف شد ✅")
+
+
+@router.callback_query(F.data == keyboards.CB_PURGE_CANCEL)
+async def cb_purge_cancel(callback: CallbackQuery) -> None:
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text(texts.PURGE_CANCELLED, reply_markup=None)
+    await callback.answer()
 
 
 @router.message(Command("togglelocation"))

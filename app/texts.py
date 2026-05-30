@@ -190,7 +190,8 @@ ADMIN_HELP = (
     "<b>لوکیشن‌ها:</b>\n"
     "/locations — لیست لوکیشن‌ها\n"
     "/addlocation &lt;name&gt; | &lt;base_url&gt; | &lt;api_token&gt; | &lt;inbound_id1,id2&gt;\n"
-    "/dellocation &lt;id&gt;\n"
+    "/dellocation &lt;id&gt; — حذف اگر سفارشی ندارد، در غیر این صورت غیرفعال\n"
+    "/purgelocation &lt;id&gt; — ⚠️ حذف کامل لوکیشن و همه سفارش‌های آن\n"
     "/togglelocation &lt;id&gt;"
 )
 
@@ -254,6 +255,16 @@ DEL_LOC_DISABLED  = (
     "اگر می‌خواهید کاملاً پاک شود، ابتدا سفارش‌های مرتبط را از دیتابیس حذف کنید."
 )
 DEL_LOC_NOTFOUND  = "❗ لوکیشنی با این شناسه پیدا نشد."
+
+PURGE_USAGE     = "❗ استفاده: <code>/purgelocation &lt;id&gt;</code>"
+PURGE_CONFIRM   = (
+    "⚠️ <b>هشدار — عملیات غیرقابل بازگشت</b>\n\n"
+    "این کار لوکیشن <code>#{id}</code> «<b>{name}</b>» و "
+    "<b>{count}</b> سفارش مرتبط با آن را برای همیشه از دیتابیس حذف می‌کند.\n\n"
+    "آیا مطمئن هستید؟"
+)
+PURGE_DONE      = "✅ لوکیشن <code>#{id}</code> و <b>{count}</b> سفارش مرتبط حذف شدند."
+PURGE_CANCELLED = "❌ پاک‌سازی لغو شد."
 TOGGLE_LOC_USAGE = "❗ استفاده: <code>/togglelocation &lt;id&gt;</code>"
 TOGGLE_LOC_OK    = "✅ لوکیشن <code>{id}</code> اکنون <b>{state}</b> است."
 LOC_LIST_EMPTY  = "هیچ لوکیشنی ثبت نشده است. با <code>/addlocation</code> یکی اضافه کنید."
