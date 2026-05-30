@@ -41,6 +41,39 @@ class ProvisionedClient:
     raw_get_response: dict[str, Any] | None = None
 
 
+@dataclass
+class ClientUsage:
+    """Snapshot of a client's traffic + limits from the panel.
+
+    All byte fields are best-effort: different 3x-ui forks return the
+    information in slightly different shapes, so the helper that builds
+    this is defensive and may return zeros if a field can't be found.
+    """
+    up_bytes: int
+    down_bytes: int
+    total_bytes: int        # totalGB limit, in bytes (0 = unlimited)
+    expiry_time_ms: int     # 0 = never
+    enable: bool
+
+    @property
+    def used_bytes(self) -> int:
+        return max(0, self.up_bytes + self.down_bytes)
+
+    @property
+    def remaining_bytes(self) -> int:
+        if self.total_bytes <= 0:
+            return 0  # unlimited; caller treats this specially
+        return max(0, self.total_bytes - self.used_bytes)
+
+    @property
+    def is_unlimited_traffic(self) -> bool:
+        return self.total_bytes <= 0
+
+    @property
+    def is_never_expires(self) -> bool:
+        return self.expiry_time_ms <= 0
+
+
 def _auth_headers(api_token: str) -> dict[str, str]:
     return {
         "Authorization": f"Bearer {api_token}",
@@ -76,6 +109,59 @@ def _extract_sub_id(obj: Any) -> str | None:
             if found:
                 return found
     return None
+
+
+def _extract_int(obj: Any, *keys: str) -> int:
+    """Walk a nested dict/list looking for the first key in `keys` with an int value."""
+    if isinstance(obj, dict):
+        for k in keys:
+            if k in obj:
+                try:
+                    return int(obj[k])
+                except (TypeError, ValueError):
+                    pass
+        for v in obj.values():
+            n = _extract_int(v, *keys)
+            if n:
+                return n
+    elif isinstance(obj, list):
+        for item in obj:
+            n = _extract_int(item, *keys)
+            if n:
+                return n
+    return 0
+
+
+def _extract_bool(obj: Any, key: str, default: bool = True) -> bool:
+    if isinstance(obj, dict):
+        if key in obj and isinstance(obj[key], bool):
+            return obj[key]
+        for v in obj.values():
+            if isinstance(v, dict) and key in v and isinstance(v[key], bool):
+                return v[key]
+    return default
+
+
+def _parse_usage(raw: Any) -> ClientUsage:
+    """Best-effort extraction of usage stats from a get/list response payload.
+
+    The 3x-ui `get/{email}` endpoint sometimes wraps the client object inside
+    `obj` as a JSON-encoded string; handle both shapes.
+    """
+    if isinstance(raw, dict) and isinstance(raw.get("obj"), str):
+        try:
+            import json as _json
+            raw = {"obj": _json.loads(raw["obj"])}
+        except (ValueError, TypeError):
+            pass
+
+    return ClientUsage(
+        up_bytes=_extract_int(raw, "up"),
+        down_bytes=_extract_int(raw, "down"),
+        total_bytes=_extract_int(raw, "totalGB", "total"),
+        expiry_time_ms=_extract_int(raw, "expiryTime"),
+        enable=_extract_bool(raw, "enable", default=True),
+    )
 
 
 def _extract_uuid(obj: Any) -> str | None:
@@ -181,6 +267,38 @@ class XuiClient:
 
     async def get_client(self, email: str) -> dict[str, Any]:
         return await self._request("GET", f"/panel/api/clients/get/{email}")
+
+    async def update_client(
+        self,
+        *,
+        email: str,
+        volume_gb: int | None = None,
+        expiry_time_ms: int | None = None,
+        tg_user_id: int | None = None,
+        enable: bool | None = None,
+    ) -> dict[str, Any]:
+        """Update a client. Only non-None fields are sent.
+
+        Note: 3x-ui's update endpoint as documented requires the email AND
+        all fields it wants to overwrite. We always send `email` so the
+        panel knows which client we mean.
+        """
+        body: dict[str, Any] = {"email": email}
+        if volume_gb is not None:
+            body["totalGB"] = _gb_to_bytes(volume_gb)
+        if expiry_time_ms is not None:
+            body["expiryTime"] = expiry_time_ms
+        if tg_user_id is not None:
+            body["tgId"] = tg_user_id
+        if enable is not None:
+            body["enable"] = enable
+        return await self._request(
+            "POST", f"/panel/api/clients/update/{email}", json_body=body
+        )
+
+    async def get_usage(self, email: str) -> ClientUsage:
+        data = await self.get_client(email)
+        return _parse_usage(data)
 
     async def get_sub_links(self, sub_id: str) -> list[str]:
         data = await self._request("GET", f"/panel/api/clients/subLinks/{sub_id}")

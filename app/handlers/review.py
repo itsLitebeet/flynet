@@ -39,10 +39,6 @@ def _is_admin(user_id: int, settings: Settings) -> bool:
     return user_id in settings.admin_ids
 
 
-def _format_sub_links(links: list[str]) -> str:
-    if not links:
-        return "—"
-    return "\n".join(f"<code>{escape(link)}</code>" for link in links)
 
 
 # ---------- Accept ----------
@@ -128,6 +124,12 @@ async def cb_accept_order(
         sub_links=result.sub_links,
     )
 
+    sub_url = location.render_sub_url(result.sub_id)
+    configs_block = texts.format_configs_block(
+        sub_url=sub_url,
+        sub_links=[escape(x) for x in result.sub_links],
+    )
+
     try:
         await bot.send_message(
             int(order["user_id"]),
@@ -136,7 +138,7 @@ async def cb_accept_order(
                 location=escape(str(order["location_name"])),
                 volume=int(order["volume_gb"]),
                 days=int(order["duration_days"]),
-                links=_format_sub_links(result.sub_links),
+                configs_block=configs_block,
             ),
         )
     except Exception:  # noqa: BLE001 — user may have blocked the bot

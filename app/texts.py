@@ -21,12 +21,22 @@ def calc_price(volume_gb: int, duration_days: int,
     return int(base + per_gb * volume_gb + per_day * duration_days)
 
 
+def format_bytes(n: int) -> str:
+    """Render a byte count using GB/MB units (1024-based)."""
+    if n <= 0:
+        return "0 MB"
+    if n >= 1024 ** 3:
+        return f"{n / (1024 ** 3):.2f} GB"
+    return f"{n / (1024 ** 2):.1f} MB"
+
+
 # ---------- buttons ----------
-BTN_BUY        = "🛒 خرید سرویس"
-BTN_MY_ACCOUNT = "👤 حساب کاربری"
-BTN_SUPPORT    = "💬 پشتیبانی"
-BTN_HELP       = "❓ راهنما"
-BTN_ABOUT      = "ℹ️ درباره ما"
+BTN_BUY          = "🛒 خرید سرویس"
+BTN_MY_SERVICES  = "📊 سرویس‌های من"
+BTN_MY_ACCOUNT   = "👤 حساب کاربری"
+BTN_SUPPORT      = "💬 پشتیبانی"
+BTN_HELP         = "❓ راهنما"
+BTN_ABOUT        = "ℹ️ درباره ما"
 BTN_BACK       = "🔙 بازگشت"
 BTN_CANCEL     = "❌ انصراف"
 BTN_CONFIRM    = "✅ تأیید و ادامه"
@@ -34,6 +44,106 @@ BTN_CUSTOM     = "✏️ مقدار دلخواه"
 BTN_ACCEPT     = "✅ تأیید پرداخت"
 BTN_DECLINE    = "❌ رد پرداخت"
 BTN_VIEW_USER  = "👤 پروفایل کاربر"
+
+# My services
+BTN_VIEW_CONFIGS = "📋 مشاهده لینک‌ها"
+BTN_VIEW_USAGE   = "📊 مصرف و وضعیت"
+BTN_TOGGLE_OFF   = "⏸ توقف موقت"
+BTN_TOGGLE_ON    = "▶️ فعال‌سازی"
+BTN_RENAME       = "✏️ تغییر نام"
+BTN_REGEN        = "🔁 تولید مجدد"
+BTN_REGEN_CONFIRM = "✅ بله، تولید مجدد کن"
+
+
+# ---------- my services ----------
+MY_SERVICES_EMPTY = (
+    "📊 <b>سرویس‌های من</b>\n\n"
+    "هنوز هیچ سفارشی ثبت نکرده‌اید.\n"
+    "برای خرید اولین سرویس، از منوی اصلی روی «خرید سرویس» بزنید."
+)
+
+MY_SERVICES_HEADER = (
+    "📊 <b>سرویس‌های من</b>\n\n"
+    "روی هر سرویس بزنید تا جزئیات و اقدامات آن را ببینید:"
+)
+
+# Status badges used in both list and detail
+STATUS_BADGE = {
+    "awaiting_payment": "💳 در انتظار پرداخت",
+    "awaiting_review":  "⏳ در انتظار بررسی",
+    "approved":         "✅ تأییدشده",
+    "declined":         "❌ ردشده",
+    "provisioned":      "🟢 فعال",
+    "failed":           "⚠️ خطا",
+}
+
+SERVICE_LIST_ITEM = (
+    "{status_emoji} #{id} — {location} — {volume}GB / {days}d{nickname_part}"
+)
+
+SERVICE_DETAIL = (
+    "📦 <b>سرویس #{order_id}</b>{nickname_part}\n\n"
+    "📍 لوکیشن: <b>{location}</b>\n"
+    "💾 حجم: <b>{volume} گیگابایت</b>\n"
+    "📅 مدت اعتبار: <b>{days} روز</b>\n"
+    "💰 مبلغ: <b>{price}</b>\n"
+    "🏷 وضعیت: <b>{status}</b>\n"
+    "🗓 تاریخ ثبت: {created_at}"
+)
+
+SERVICE_NOT_PROVISIONED_ACTIONS = (
+    "\n\nℹ️ این سرویس هنوز فعال نشده، بنابراین گزینه‌های مدیریت در دسترس نیستند."
+)
+
+VIEW_CONFIGS_TITLE = (
+    "🔗 <b>اطلاعات اتصال — سرویس #{order_id}</b>\n\n{configs_block}"
+)
+
+VIEW_USAGE_TITLE = (
+    "📊 <b>وضعیت سرویس #{order_id}</b>\n\n"
+    "🟢 وضعیت: <b>{enabled}</b>\n"
+    "💾 مصرف: <b>{used}</b> از <b>{total}</b>\n"
+    "📈 باقیمانده: <b>{remaining}</b>\n"
+    "⏳ اعتبار تا: <b>{expiry}</b> ({time_left})"
+)
+VIEW_USAGE_UNLIMITED_TRAFFIC = "نامحدود"
+VIEW_USAGE_NEVER_EXPIRES     = "بدون انقضا"
+VIEW_USAGE_EXPIRED           = "منقضی شده"
+VIEW_USAGE_ENABLED           = "فعال"
+VIEW_USAGE_DISABLED          = "غیرفعال"
+VIEW_USAGE_FETCH_FAILED      = (
+    "⚠️ دریافت اطلاعات مصرف از پنل ممکن نشد:\n<code>{error}</code>\n\n"
+    "ممکن است سرویس از پنل حذف شده باشد یا پنل در دسترس نباشد."
+)
+
+TOGGLE_OK_DISABLED = "⏸ سرویس #{order_id} موقتاً متوقف شد."
+TOGGLE_OK_ENABLED  = "▶️ سرویس #{order_id} دوباره فعال شد."
+TOGGLE_FAILED      = "⚠️ تغییر وضعیت ممکن نشد:\n<code>{error}</code>"
+
+RENAME_PROMPT = (
+    "✏️ <b>تغییر نام سرویس #{order_id}</b>\n\n"
+    "یک نام دلخواه برای این سرویس بفرستید (مثلاً «گوشی»، «مک‌بوک»).\n"
+    "حداکثر ۳۰ کاراکتر. برای حذف نام: کلمه <code>-</code> را بفرستید.\n"
+    "برای انصراف: /cancel"
+)
+RENAME_TOO_LONG = "❗ نام نباید بیشتر از ۳۰ کاراکتر باشد."
+RENAME_OK       = "✅ نام سرویس به‌روز شد."
+RENAME_CLEARED  = "✅ نام سرویس حذف شد."
+
+REGEN_CONFIRM = (
+    "⚠️ <b>تولید مجدد لینک‌ها</b>\n\n"
+    "این کار:\n"
+    "• سرویس فعلی روی پنل را <b>غیرفعال</b> می‌کند (لینک‌های فعلی دیگر کار نخواهند کرد)\n"
+    "• یک سرویس جدید با ترافیک باقیمانده و همان تاریخ انقضا می‌سازد\n"
+    "• شمارنده مصرف <b>صفر</b> می‌شود اما مهلت زمانی تغییر نمی‌کند\n\n"
+    "این کار <b>قابل بازگشت نیست</b>. آیا مطمئن هستید؟"
+)
+REGEN_IN_PROGRESS = "⏳ در حال ساخت مجدد سرویس..."
+REGEN_OK          = "🎉 سرویس با موفقیت بازسازی شد.\n\n{configs_block}"
+REGEN_FAILED      = "⚠️ بازسازی ناموفق بود:\n<code>{error}</code>\n\nسرویس قبلی شما همچنان فعال است."
+REGEN_NOT_SUPPORTED = (
+    "ℹ️ این سرویس هنوز روی پنل ساخته نشده یا اطلاعات کافی ندارد."
+)
 
 
 # ---------- top-level messages ----------
@@ -148,10 +258,29 @@ ORDER_PROVISIONED_NOTIFY = (
     "📦 لوکیشن: <b>{location}</b>\n"
     "💾 حجم: <b>{volume} گیگابایت</b>\n"
     "📅 مدت اعتبار: <b>{days} روز</b>\n\n"
-    "🔗 <b>لینک‌های اتصال:</b>\n"
-    "{links}\n\n"
-    "💡 لینک‌ها را در اپلیکیشن وی‌پی‌ان خود وارد کنید (V2RayNG، NekoBox، v2rayN و ...)."
+    "{configs_block}\n\n"
+    "💡 پیشنهاد می‌شود از <b>لینک اشتراک</b> استفاده کنید — کافی است یک‌بار در "
+    "اپلیکیشن وی‌پی‌ان وارد شود، کانفیگ‌ها به‌صورت خودکار به‌روزرسانی می‌شوند.\n"
+    "اپلیکیشن‌های پیشنهادی: V2RayNG، NekoBox، v2rayN، Streisand."
 )
+
+
+def format_configs_block(sub_url: str | None, sub_links: list[str]) -> str:
+    """Build the connection-info block used in both the order completion message
+    and the My Services detail view.
+    """
+    parts: list[str] = []
+    if sub_url:
+        parts.append("🔔 <b>لینک اشتراک:</b>")
+        parts.append(f"<code>{sub_url}</code>")
+        parts.append("")
+    if sub_links:
+        parts.append("📋 <b>لینک‌های جداگانه:</b>")
+        for link in sub_links:
+            parts.append(f"<code>{link}</code>")
+    if not parts:
+        parts.append("—")
+    return "\n".join(parts)
 
 ORDER_PROVISION_FAILED_USER = (
     "⚠️ پرداخت شما تأیید شد، اما در ساخت کانفیگ روی پنل مشکلی پیش آمد. "
@@ -192,7 +321,8 @@ ADMIN_HELP = (
     "/addlocation &lt;name&gt; | &lt;base_url&gt; | &lt;api_token&gt; | &lt;inbound_id1,id2&gt;\n"
     "/dellocation &lt;id&gt; — حذف اگر سفارشی ندارد، در غیر این صورت غیرفعال\n"
     "/purgelocation &lt;id&gt; — ⚠️ حذف کامل لوکیشن و همه سفارش‌های آن\n"
-    "/togglelocation &lt;id&gt;"
+    "/togglelocation &lt;id&gt;\n"
+    "/setsuburl &lt;id&gt; &lt;template&gt; — تنظیم لینک اشتراک"
 )
 
 ADMIN_STATS = (
@@ -244,9 +374,21 @@ SHOW_SETTINGS      = (
 ADD_LOC_USAGE   = (
     "❗ استفاده:\n"
     "<code>/addlocation Germany 🇩🇪 | https://panel.example.com | "
-    "MY_API_TOKEN | 3,5</code>"
+    "MY_API_TOKEN | 3,5</code>\n\n"
+    "می‌توانید فیلد پنجم اختیاری را برای لینک اشتراک اضافه کنید:\n"
+    "<code>... | 3,5 | https://panel.example.com:2096/sub/{subId}</code>"
 )
 ADD_LOC_OK      = "✅ لوکیشن «{name}» با شناسه <code>{id}</code> اضافه شد."
+
+SET_SUBURL_USAGE = (
+    "❗ استفاده:\n"
+    "<code>/setsuburl &lt;id&gt; https://host:2096/sub/{subId}</code>\n\n"
+    "برای حذف الگو: <code>/setsuburl &lt;id&gt; -</code>\n"
+    "متن باید شامل <code>{subId}</code> باشد (محل قرارگیری شناسه اشتراک)."
+)
+SET_SUBURL_OK       = "✅ الگوی لینک اشتراک برای لوکیشن <code>#{id}</code> تنظیم شد:\n<code>{template}</code>"
+SET_SUBURL_CLEARED  = "✅ الگوی لینک اشتراک برای لوکیشن <code>#{id}</code> حذف شد."
+SET_SUBURL_BAD      = "❗ الگو باید شامل <code>{subId}</code> باشد."
 DEL_LOC_USAGE     = "❗ استفاده: <code>/dellocation &lt;id&gt;</code>"
 DEL_LOC_OK        = "✅ لوکیشن <code>{id}</code> حذف شد."
 DEL_LOC_DISABLED  = (
@@ -272,7 +414,8 @@ LOC_LIST_HEADER = "📍 <b>لوکیشن‌های ثبت‌شده</b>\n"
 LOC_LIST_ITEM   = (
     "• <code>#{id}</code> {state_emoji} <b>{name}</b>\n"
     "    base: <code>{base_url}</code>\n"
-    "    inbounds: <code>{inbounds}</code>"
+    "    inbounds: <code>{inbounds}</code>\n"
+    "    sub: <code>{sub_template}</code>"
 )
 
 PENDING_EMPTY  = "هیچ سفارشی در انتظار بررسی نیست."

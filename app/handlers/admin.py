@@ -202,6 +202,7 @@ async def cmd_locations(message: Message, settings: Settings, db: Database) -> N
                 name=escape(loc.name),
                 base_url=escape(loc.base_url),
                 inbounds=",".join(str(i) for i in loc.inbound_ids) or "—",
+                sub_template=escape(loc.sub_url_template) if loc.sub_url_template else "—",
             )
         )
     await message.answer("\n\n".join(lines))
@@ -229,11 +230,14 @@ async def cmd_addlocation(
 
     raw = (command.args or "").strip()
     parts = [p.strip() for p in raw.split("|")]
-    if len(parts) != 4 or not all(parts):
+    # 4 required fields, 5th (sub_url_template) is optional
+    if len(parts) not in (4, 5) or not all(parts[:4]):
         await message.answer(texts.ADD_LOC_USAGE)
         return
 
-    name, base_url, api_token, inbound_str = parts
+    name, base_url, api_token, inbound_str = parts[:4]
+    sub_url_template = parts[4].strip() if len(parts) == 5 and parts[4].strip() else None
+
     base_url = _normalize_panel_url(base_url)
     try:
         inbound_ids = [int(x.strip()) for x in inbound_str.split(",") if x.strip()]
@@ -244,12 +248,66 @@ async def cmd_addlocation(
         await message.answer(texts.ADD_LOC_USAGE)
         return
 
-    loc_id = db.add_location(name=name, base_url=base_url, api_token=api_token,
-                              inbound_ids=inbound_ids)
+    if sub_url_template is not None and "{subId}" not in sub_url_template:
+        await message.answer(texts.SET_SUBURL_BAD)
+        return
+
+    loc_id = db.add_location(
+        name=name,
+        base_url=base_url,
+        api_token=api_token,
+        inbound_ids=inbound_ids,
+        sub_url_template=sub_url_template,
+    )
+    extra_sub_line = (
+        f"\n🔔 sub: <code>{escape(sub_url_template)}</code>"
+        if sub_url_template else ""
+    )
     await message.answer(
         texts.ADD_LOC_OK.format(name=escape(name), id=loc_id)
         + f"\n\n🔗 base_url:\n<code>{escape(base_url)}</code>"
         + f"\n📡 inbounds: <code>{','.join(str(i) for i in inbound_ids)}</code>"
+        + extra_sub_line
+    )
+
+
+@router.message(Command("setsuburl"))
+async def cmd_setsuburl(
+    message: Message, command: CommandObject, settings: Settings, db: Database
+) -> None:
+    if not _require_admin(message, settings):
+        await message.answer(texts.NOT_ADMIN)
+        return
+
+    raw = (command.args or "").strip()
+    parts = raw.split(maxsplit=1)
+    if len(parts) != 2:
+        await message.answer(texts.SET_SUBURL_USAGE)
+        return
+    try:
+        loc_id = int(parts[0])
+    except ValueError:
+        await message.answer(texts.SET_SUBURL_USAGE)
+        return
+
+    template_raw = parts[1].strip()
+    loc = db.get_location(loc_id)
+    if loc is None:
+        await message.answer(texts.DEL_LOC_NOTFOUND)
+        return
+
+    if template_raw == "-":
+        db.set_location_sub_url_template(loc_id, None)
+        await message.answer(texts.SET_SUBURL_CLEARED.format(id=loc_id))
+        return
+
+    if "{subId}" not in template_raw:
+        await message.answer(texts.SET_SUBURL_BAD)
+        return
+
+    db.set_location_sub_url_template(loc_id, template_raw)
+    await message.answer(
+        texts.SET_SUBURL_OK.format(id=loc_id, template=escape(template_raw))
     )
 
 

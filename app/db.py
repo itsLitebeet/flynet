@@ -25,13 +25,14 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 
 CREATE TABLE IF NOT EXISTS locations (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    name        TEXT NOT NULL,
-    base_url    TEXT NOT NULL,
-    api_token   TEXT NOT NULL,
-    inbound_ids TEXT NOT NULL,      -- JSON array of integers
-    enabled     INTEGER NOT NULL DEFAULT 1,
-    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    name              TEXT NOT NULL,
+    base_url          TEXT NOT NULL,
+    api_token         TEXT NOT NULL,
+    inbound_ids       TEXT NOT NULL,      -- JSON array of integers
+    sub_url_template  TEXT,                -- e.g. https://host:2096/sub/{subId}
+    enabled           INTEGER NOT NULL DEFAULT 1,
+    created_at        TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS orders (
@@ -53,6 +54,7 @@ CREATE TABLE IF NOT EXISTS orders (
     xui_sub_id          TEXT,
     xui_client_uuid     TEXT,
     sub_links           TEXT,                    -- JSON array of strings
+    nickname            TEXT,                    -- user-chosen local nickname
     created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
     updated_at          TEXT    NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (user_id)     REFERENCES users(user_id),
@@ -87,7 +89,13 @@ class Location:
     base_url: str
     api_token: str
     inbound_ids: list[int]
+    sub_url_template: str | None
     enabled: bool
+
+    def render_sub_url(self, sub_id: str | None) -> str | None:
+        if not self.sub_url_template or not sub_id:
+            return None
+        return self.sub_url_template.replace("{subId}", sub_id)
 
 
 def _row_to_location(row: sqlite3.Row) -> Location:
@@ -97,12 +105,19 @@ def _row_to_location(row: sqlite3.Row) -> Location:
             inbound_ids = []
     except (json.JSONDecodeError, TypeError):
         inbound_ids = []
+    # sub_url_template may be missing from older rows; .keys() is safe via Row.
+    sub_url_template = None
+    try:
+        sub_url_template = row["sub_url_template"]
+    except (IndexError, KeyError):
+        pass
     return Location(
         id=int(row["id"]),
         name=str(row["name"]),
         base_url=str(row["base_url"]),
         api_token=str(row["api_token"]),
         inbound_ids=[int(x) for x in inbound_ids],
+        sub_url_template=str(sub_url_template) if sub_url_template else None,
         enabled=bool(row["enabled"]),
     )
 
@@ -115,6 +130,7 @@ class Database:
         self._conn.execute("PRAGMA foreign_keys = ON;")
         self._conn.executescript(SCHEMA)
         self._conn.commit()
+        self._migrate()
         self._seed_defaults()
 
     @contextmanager
@@ -125,6 +141,24 @@ class Database:
             self._conn.commit()
         finally:
             cur.close()
+
+    def _ensure_column(self, table: str, column: str, sql_type: str) -> None:
+        """Idempotently add a column to `table` if it isn't already there."""
+        with self._cursor() as cur:
+            cur.execute(f"PRAGMA table_info({table})")
+            cols = {row["name"] for row in cur.fetchall()}
+            if column not in cols:
+                cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {sql_type}")
+
+    def _migrate(self) -> None:
+        """Schema migrations for upgrades from earlier versions of this bot.
+
+        Each step must be safe to re-run (idempotent) and avoid destructive
+        changes. SQLite's ALTER TABLE only supports add-column, so we stick
+        to additive evolution.
+        """
+        self._ensure_column("locations", "sub_url_template", "TEXT")
+        self._ensure_column("orders", "nickname", "TEXT")
 
     def _seed_defaults(self) -> None:
         with self._cursor() as cur:
@@ -221,15 +255,31 @@ class Database:
 
     # ---------- locations ----------
     def add_location(
-        self, name: str, base_url: str, api_token: str, inbound_ids: list[int]
+        self,
+        name: str,
+        base_url: str,
+        api_token: str,
+        inbound_ids: list[int],
+        sub_url_template: str | None = None,
     ) -> int:
         with self._cursor() as cur:
             cur.execute(
-                "INSERT INTO locations (name, base_url, api_token, inbound_ids) "
-                "VALUES (?, ?, ?, ?)",
-                (name, base_url, api_token, json.dumps(inbound_ids)),
+                "INSERT INTO locations "
+                "(name, base_url, api_token, inbound_ids, sub_url_template) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (name, base_url, api_token, json.dumps(inbound_ids), sub_url_template),
             )
             return int(cur.lastrowid or 0)
+
+    def set_location_sub_url_template(
+        self, location_id: int, template: str | None
+    ) -> bool:
+        with self._cursor() as cur:
+            cur.execute(
+                "UPDATE locations SET sub_url_template = ? WHERE id = ?",
+                (template, location_id),
+            )
+            return cur.rowcount > 0
 
     def remove_location(self, location_id: int) -> str:
         """Hard-delete a location, or disable it if orders still reference it.
@@ -369,6 +419,42 @@ class Database:
         with self._cursor() as cur:
             cur.execute("SELECT * FROM orders WHERE id = ?", (order_id,))
             return cur.fetchone()
+
+    def list_user_orders(self, user_id: int, limit: int = 50) -> list[sqlite3.Row]:
+        with self._cursor() as cur:
+            cur.execute(
+                "SELECT * FROM orders WHERE user_id = ? "
+                "ORDER BY created_at DESC LIMIT ?",
+                (user_id, limit),
+            )
+            return list(cur.fetchall())
+
+    def set_order_nickname(self, order_id: int, nickname: str | None) -> bool:
+        with self._cursor() as cur:
+            cur.execute(
+                "UPDATE orders SET nickname = ?, updated_at = datetime('now') "
+                "WHERE id = ?",
+                (nickname, order_id),
+            )
+            return cur.rowcount > 0
+
+    def update_order_xui(
+        self,
+        order_id: int,
+        *,
+        email: str,
+        sub_id: str | None,
+        client_uuid: str | None,
+        sub_links: list[str],
+    ) -> None:
+        """Used by the regenerate flow when a new panel client replaces the old one."""
+        with self._cursor() as cur:
+            cur.execute(
+                "UPDATE orders SET xui_email = ?, xui_sub_id = ?, "
+                "xui_client_uuid = ?, sub_links = ?, updated_at = datetime('now') "
+                "WHERE id = ?",
+                (email, sub_id, client_uuid, json.dumps(sub_links), order_id),
+            )
 
     def count_orders(self) -> int:
         with self._cursor() as cur:
