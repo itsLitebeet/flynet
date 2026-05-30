@@ -142,8 +142,11 @@ async def cb_my_service_detail(callback: CallbackQuery, db: Database) -> None:
         return
 
     text = _build_detail_text(row)
-    provisioned = row["status"] == "provisioned"
-    if not provisioned:
+    status = str(row["status"])
+    provisioned = status == "provisioned"
+    if status == "panel_removed":
+        text += texts.SERVICE_PANEL_REMOVED_NOTE
+    elif not provisioned:
         text += texts.SERVICE_NOT_PROVISIONED_ACTIONS
 
     # We don't know the live enabled state without an API call; assume

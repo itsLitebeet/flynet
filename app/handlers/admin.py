@@ -10,7 +10,8 @@ from aiogram.types import CallbackQuery, Message
 
 from app import keyboards, texts
 from app.config import Settings
-from app.db import Database
+from app.db import Database, Location
+from app.xui import XuiClient, XuiError
 
 
 router = Router(name="admin")
@@ -50,6 +51,7 @@ async def cmd_stats(message: Message, settings: Settings, db: Database) -> None:
             awaiting_payment=db.count_orders_by_status("awaiting_payment"),
             awaiting_review=db.count_orders_by_status("awaiting_review"),
             provisioned=db.count_orders_by_status("provisioned"),
+            panel_removed=db.count_orders_by_status("panel_removed"),
             declined=db.count_orders_by_status("declined"),
             failed=db.count_orders_by_status("failed"),
             tickets=db.count_tickets(),
@@ -450,3 +452,98 @@ async def cmd_pending(message: Message, settings: Settings, db: Database) -> Non
             )
         )
     await message.answer("\n".join(lines))
+
+
+# ---------- panel sync (manual client deletion on 3x-ui) ----------
+@router.message(Command("clearorder"))
+async def cmd_clearorder(
+    message: Message, command: CommandObject, settings: Settings, db: Database
+) -> None:
+    """Mark one provisioned order as removed from the panel (no API call)."""
+    if not _require_admin(message, settings):
+        await message.answer(texts.NOT_ADMIN)
+        return
+
+    raw = (command.args or "").strip()
+    try:
+        order_id = int(raw)
+    except ValueError:
+        await message.answer(texts.CLEAR_ORDER_USAGE)
+        return
+
+    if db.get_order(order_id) is None:
+        await message.answer(texts.CLEAR_ORDER_NOTFOUND)
+        return
+
+    if db.mark_order_panel_removed(order_id):
+        await message.answer(texts.CLEAR_ORDER_OK.format(id=order_id))
+    else:
+        await message.answer(texts.CLEAR_ORDER_SKIP.format(id=order_id))
+
+
+async def _sync_location_orders(db: Database, loc: Location) -> tuple[list[int], str | None]:
+    """Return (cleared_order_ids, error_message)."""
+    try:
+        async with XuiClient(loc.base_url, loc.api_token) as xui:
+            clients = await xui.list_clients()
+    except XuiError as exc:
+        return [], str(exc)
+
+    panel_emails = {str(c.get("email", "")) for c in clients if c.get("email")}
+    cleared: list[int] = []
+    for row in db.list_provisioned_orders(location_id=loc.id):
+        email = row["xui_email"]
+        if not email:
+            continue
+        if str(email) not in panel_emails:
+            if db.mark_order_panel_removed(int(row["id"])):
+                cleared.append(int(row["id"]))
+    return cleared, None
+
+
+@router.message(Command("syncpanel"))
+async def cmd_syncpanel(
+    message: Message, command: CommandObject, settings: Settings, db: Database
+) -> None:
+    """Compare bot DB with panel /clients/list and clear orphaned orders."""
+    if not _require_admin(message, settings):
+        await message.answer(texts.NOT_ADMIN)
+        return
+
+    raw = (command.args or "").strip()
+    loc_filter: int | None = None
+    if raw:
+        try:
+            loc_filter = int(raw)
+        except ValueError:
+            await message.answer(texts.SYNC_PANEL_USAGE)
+            return
+        if db.get_location(loc_filter) is None:
+            await message.answer(texts.DEL_LOC_NOTFOUND)
+            return
+
+    await message.answer(texts.SYNC_PANEL_START)
+
+    locations = db.list_locations(only_enabled=False)
+    if loc_filter is not None:
+        loc = db.get_location(loc_filter)
+        locations = [loc] if loc else []
+
+    all_cleared: list[int] = []
+    for loc in locations:
+        cleared, err = await _sync_location_orders(db, loc)
+        if err:
+            await message.answer(
+                texts.SYNC_PANEL_LOC_ERR.format(
+                    id=loc.id, name=escape(loc.name), error=escape(err)
+                )
+            )
+            continue
+        all_cleared.extend(cleared)
+
+    if not all_cleared:
+        await message.answer(texts.SYNC_PANEL_NONE)
+        return
+
+    ids_str = ", ".join(str(i) for i in all_cleared)
+    await message.answer(texts.SYNC_PANEL_DONE.format(count=len(all_cleared), ids=ids_str))

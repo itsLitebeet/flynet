@@ -74,6 +74,7 @@ STATUS_BADGE = {
     "approved":         "✅ تأییدشده",
     "declined":         "❌ ردشده",
     "provisioned":      "🟢 فعال",
+    "panel_removed":    "🗑 حذف از پنل",
     "failed":           "⚠️ خطا",
 }
 
@@ -93,6 +94,9 @@ SERVICE_DETAIL = (
 
 SERVICE_NOT_PROVISIONED_ACTIONS = (
     "\n\nℹ️ این سرویس هنوز فعال نشده، بنابراین گزینه‌های مدیریت در دسترس نیستند."
+)
+SERVICE_PANEL_REMOVED_NOTE = (
+    "\n\n🗑 این سرویس از پنل حذف شده است. برای اتصال مجدد، سرویس جدید خریداری کنید."
 )
 
 VIEW_CONFIGS_TITLE = (
@@ -322,7 +326,11 @@ ADMIN_HELP = (
     "/dellocation &lt;id&gt; — حذف اگر سفارشی ندارد، در غیر این صورت غیرفعال\n"
     "/purgelocation &lt;id&gt; — ⚠️ حذف کامل لوکیشن و همه سفارش‌های آن\n"
     "/togglelocation &lt;id&gt;\n"
-    "/setsuburl &lt;id&gt; &lt;template&gt; — تنظیم لینک اشتراک"
+    "/setsuburl &lt;id&gt; &lt;template&gt; — تنظیم لینک اشتراک\n\n"
+    "<b>همگام‌سازی پنل:</b>\n"
+    "/clearorder &lt;order_id&gt; — پاک کردن یک سفارش (کلاینت را از پنل حذف کرده‌اید)\n"
+    "/syncpanel — بررسی همه لوکیشن‌ها و پاک کردن سفارش‌های یتیم\n"
+    "/syncpanel &lt;location_id&gt; — فقط یک لوکیشن"
 )
 
 ADMIN_STATS = (
@@ -332,10 +340,30 @@ ADMIN_STATS = (
     "⏳ در انتظار پرداخت: <b>{awaiting_payment}</b>\n"
     "🔍 در انتظار بررسی: <b>{awaiting_review}</b>\n"
     "🎉 فعال‌شده: <b>{provisioned}</b>\n"
+    "🗑 حذف از پنل: <b>{panel_removed}</b>\n"
     "❌ رد‌شده: <b>{declined}</b>\n"
     "⚠️ خطا در فعال‌سازی: <b>{failed}</b>\n"
     "💬 تیکت‌های پشتیبانی: <b>{tickets}</b>"
 )
+
+CLEAR_ORDER_USAGE   = "❗ استفاده: <code>/clearorder &lt;order_id&gt;</code>"
+CLEAR_ORDER_OK      = "✅ سفارش <code>#{id}</code> از پنل جدا شد (وضعیت: حذف از پنل)."
+CLEAR_ORDER_SKIP    = "❗ سفارش <code>#{id}</code> یافت نشد یا وضعیت آن «فعال» نیست."
+CLEAR_ORDER_NOTFOUND = "❗ سفارشی با این شناسه پیدا نشد."
+
+SYNC_PANEL_USAGE    = (
+    "❗ استفاده:\n"
+    "<code>/syncpanel</code> — همه لوکیشن‌ها\n"
+    "<code>/syncpanel 2</code> — فقط لوکیشن ۲"
+)
+SYNC_PANEL_START    = "⏳ در حال همگام‌سازی با پنل..."
+SYNC_PANEL_NONE     = "✅ همه سفارش‌های فعال در پنل موجودند. موردی برای پاک‌سازی نبود."
+SYNC_PANEL_DONE     = (
+    "✅ همگام‌سازی پایان یافت.\n"
+    "پاک‌شده: <b>{count}</b> سفارش\n"
+    "شناسه‌ها: <code>{ids}</code>"
+)
+SYNC_PANEL_LOC_ERR  = "⚠️ خطا در لوکیشن <code>#{id}</code> ({name}):\n<code>{error}</code>"
 
 BROADCAST_EMPTY   = "❗ استفاده: <code>/broadcast متن پیام</code>"
 BROADCAST_STARTED = "📣 شروع ارسال همگانی به {count} کاربر..."

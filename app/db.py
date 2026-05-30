@@ -475,6 +475,39 @@ class Database:
             )
             return list(cur.fetchall())
 
+    def list_provisioned_orders(
+        self, location_id: int | None = None
+    ) -> list[sqlite3.Row]:
+        """All orders still marked provisioned (optionally for one location)."""
+        with self._cursor() as cur:
+            if location_id is not None:
+                cur.execute(
+                    "SELECT * FROM orders WHERE status = 'provisioned' "
+                    "AND location_id = ? ORDER BY id",
+                    (location_id,),
+                )
+            else:
+                cur.execute(
+                    "SELECT * FROM orders WHERE status = 'provisioned' ORDER BY id"
+                )
+            return list(cur.fetchall())
+
+    def mark_order_panel_removed(self, order_id: int) -> bool:
+        """Clear panel linkage when the client was deleted manually on 3x-ui.
+
+        Keeps the order row for history (price, user, dates) but drops xui_*
+        fields so My Services no longer offers live panel actions.
+        """
+        with self._cursor() as cur:
+            cur.execute(
+                "UPDATE orders SET status = 'panel_removed', "
+                "xui_email = NULL, xui_sub_id = NULL, xui_client_uuid = NULL, "
+                "sub_links = NULL, updated_at = datetime('now') "
+                "WHERE id = ? AND status = 'provisioned'",
+                (order_id,),
+            )
+            return cur.rowcount > 0
+
     # ---------- tickets ----------
     def create_ticket(self, user_id: int, message: str) -> int:
         with self._cursor() as cur:
