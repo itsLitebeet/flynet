@@ -344,7 +344,7 @@ ADMIN_HELP = (
     "/clearorder &lt;order_id&gt; — حذف یک سفارش از دیتابیس\n"
     "/syncpanel — حذف سفارش‌های یتیم (پنل) + همه رد‌شده‌ها\n"
     "/syncpanel &lt;location_id&gt; — فقط یک لوکیشن\n"
-    "/cleardeclined — حذف همه سفارش‌های رد‌شده"
+    "/cleardeclined — حذف سفارش‌های رد‌شده و پرداخت‌نشده"
 )
 
 ADMIN_STATS = (
@@ -363,8 +363,13 @@ CLEAR_ORDER_USAGE    = "❗ استفاده: <code>/clearorder &lt;order_id&gt;</
 CLEAR_ORDER_OK       = "✅ سفارش <code>#{id}</code> از دیتابیس حذف شد."
 CLEAR_ORDER_NOTFOUND = "❗ سفارشی با این شناسه پیدا نشد."
 
-CLEAR_DECLINED_OK    = "✅ <b>{count}</b> سفارش رد‌شده از دیتابیس حذف شد."
-CLEAR_DECLINED_NONE  = "ℹ️ سفارش رد‌شده‌ای در دیتابیس نیست."
+CLEAR_DECLINED_OK = (
+    "✅ از دیتابیس حذف شد:\n"
+    "❌ رد‌شده: <b>{declined}</b>\n"
+    "💳 پرداخت‌نشده: <b>{unpaid}</b>\n"
+    "جمع: <b>{total}</b>"
+)
+CLEAR_DECLINED_NONE = "ℹ️ سفارش رد‌شده یا پرداخت‌نشده‌ای در دیتابیس نیست."
 
 SYNC_PANEL_USAGE    = (
     "❗ استفاده:\n"

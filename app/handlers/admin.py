@@ -553,11 +553,17 @@ async def cmd_cleardeclined(message: Message, settings: Settings, db: Database) 
         await message.answer(texts.NOT_ADMIN)
         return
 
-    count = db.delete_orders_by_status("declined")
-    if count == 0:
+    declined = db.delete_orders_by_status("declined")
+    unpaid = db.delete_orders_by_status("awaiting_payment")
+    total = declined + unpaid
+    if total == 0:
         await message.answer(texts.CLEAR_DECLINED_NONE)
     else:
-        await message.answer(texts.CLEAR_DECLINED_OK.format(count=count))
+        await message.answer(
+            texts.CLEAR_DECLINED_OK.format(
+                declined=declined, unpaid=unpaid, total=total
+            )
+        )
 
 
 async def _sync_location_orders(db: Database, loc: Location) -> tuple[list[int], str | None]:
