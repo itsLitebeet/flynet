@@ -319,9 +319,89 @@ NOT_ADMIN   = "⛔ این دستور فقط برای ادمین‌ها در دس
 USER_BANNED = "⛔ دسترسی شما به ربات مسدود شده است."
 
 
-# ---------- admin ----------
+# ---------- admin panel (buttons) ----------
+ADMIN_BTN_DASHBOARD = "📊 داشبورد"
+ADMIN_BTN_PENDING   = "🔍 بررسی پرداخت‌ها"
+ADMIN_BTN_SETTINGS  = "⚙️ تنظیمات"
+ADMIN_BTN_LOCATIONS = "📍 لوکیشن‌ها"
+ADMIN_BTN_TOOLS     = "🛠 ابزارها"
+ADMIN_BTN_USERS     = "👥 کاربران"
+ADMIN_BTN_PANEL     = "🏠 پنل ادمین"
+ADMIN_BTN_REFRESH   = "🔄 بروزرسانی"
+
+ADMIN_PANEL_HOME = (
+    "🛠 <b>پنل مدیریت NetFly</b>\n\n"
+    "از <b>دکمه‌های پایین صفحه</b> یا منوی زیر استفاده کنید.\n"
+    "دستورات متنی همچنان کار می‌کنند — <code>/admin</code> برای راهنمای کامل."
+)
+
+ADMIN_DASHBOARD_HEADER = (
+    "📊 <b>داشبورد</b>\n\n"
+    "{stats}\n\n"
+    "👇 برای بررسی رسیدها، دکمه «بررسی پرداخت‌ها» را بزنید."
+)
+
+ADMIN_SETTINGS_VIEW = (
+    "⚙️ <b>تنظیمات فعلی</b>\n\n"
+    "💳 شماره کارت: <code>{card_number}</code>\n"
+    "👤 صاحب کارت: <b>{card_holder}</b>\n\n"
+    "💰 قیمت پیش‌فرض:\n"
+    "base = <b>{base}</b> | per_gb = <b>{per_gb}</b> | per_day = <b>{per_day}</b>\n\n"
+    "<b>ویرایش با دستور:</b>\n"
+    "<code>/setcard 6037... | نام</code>\n"
+    "<code>/setprice 20000 8000 1500</code>"
+)
+
+ADMIN_SETTINGS_MENU = (
+    "⚙️ <b>تنظیمات</b>\n\n"
+    "برای تغییر، دستورات زیر را در چت بفرستید (مثال‌ها در راهنما)."
+)
+
+ADMIN_TOOLS_MENU = (
+    "🛠 <b>ابزارها</b>\n\n"
+    "از دکمه‌های زیر استفاده کنید یا دستور متنی بفرستید."
+)
+
+ADMIN_LOCATIONS_MENU = (
+    "📍 <b>لوکیشن‌ها</b> ({count} مورد)\n\n"
+    "روی هر لوکیشن بزنید برای جزئیات. 🔁 = فعال/غیرفعال."
+)
+
+ADMIN_LOC_EMPTY = "هیچ لوکیشنی ثبت نشده است.\n\n<code>/addlocation ...</code>"
+
+ADMIN_LOC_DETAIL = (
+    "📍 <b>لوکیشن #{id}</b> {state_emoji} <b>{name}</b>\n\n"
+    "🔗 <code>{base_url}</code>\n"
+    "📡 inbounds: <code>{inbounds}</code>\n"
+    "🔔 sub: <code>{sub}</code>\n"
+    "💰 {pricing}\n\n"
+    "<b>دستورات:</b>\n"
+    "<code>/setlocationprice {id} base per_gb per_day</code>\n"
+    "<code>/setsuburl {id} https://host:2096/sub/{{subId}}</code>\n"
+    "<code>/purgelocation {id}</code>"
+)
+
+ADMIN_PENDING_HEADER = (
+    "🔍 <b>سفارش‌های در انتظار بررسی</b> — <b>{count}</b> مورد\n\n"
+    "روی هر سفارش بزنید تا رسید و دکمه‌های تأیید/رد نمایش داده شود."
+)
+
+ADMIN_PENDING_EMPTY = "✅ هیچ سفارشی در انتظار بررسی نیست."
+
+ADMIN_PENDING_BTN = "🔍 #{id} · {price} · کاربر {user_id}"
+
+ADMIN_USERS_HEADER = "👥 <b>۲۰ کاربر اخیر</b>\n"
+ADMIN_USER_ITEM = "• <code>{user_id}</code> — {name} ({username}) — {created_at}"
+
+ADMIN_TOOL_SYNC_DONE = "✅ همگام‌سازی پنل انجام شد (همان نتیجه <code>/syncpanel</code>)."
+
+ADMIN_CMD_HELP_BTN = "📖 راهنمای دستورات"
+
+
+# ---------- admin commands (reference) ----------
 ADMIN_HELP = (
     "🛠 <b>دستورهای ادمین</b>\n\n"
+    "💡 <b>پنل دکمه‌ای:</b> <code>/admin</code> — منوی پایین + دکمه‌های شیشه‌ای\n\n"
     "<b>عمومی:</b>\n"
     "/stats — آمار کلی\n"
     "/users — ۲۰ کاربر اخیر\n"
@@ -415,13 +495,7 @@ SET_CARD_USAGE     = "❗ استفاده:\n<code>/setcard 6037-9912-3456-7890 | 
 SET_PRICE_OK       = ("✅ فرمول قیمت به‌روزرسانی شد:\n"
                      "base = <b>{base}</b> | per_gb = <b>{per_gb}</b> | per_day = <b>{per_day}</b>")
 SET_PRICE_USAGE    = "❗ استفاده:\n<code>/setprice 20000 8000 1500</code>"
-SHOW_SETTINGS      = (
-    "⚙️ <b>تنظیمات فعلی</b>\n\n"
-    "💳 شماره کارت: <code>{card_number}</code>\n"
-    "👤 صاحب کارت: <b>{card_holder}</b>\n\n"
-    "💰 قیمت پیش‌فرض (لوکیشن جدید / fallback):\n"
-    "base = <b>{base}</b> | per_gb = <b>{per_gb}</b> | per_day = <b>{per_day}</b>"
-)
+SHOW_SETTINGS      = ADMIN_SETTINGS_VIEW  # alias for /showsettings command
 
 SET_LOC_PRICE_USAGE = (
     "❗ استفاده:\n"

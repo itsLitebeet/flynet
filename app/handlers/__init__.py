@@ -1,6 +1,6 @@
 from aiogram import Router
 
-from app.handlers import admin, my_services, order, review, start, support
+from app.handlers import admin, admin_panel, my_services, order, review, start, support
 
 
 def build_root_router() -> Router:
@@ -16,5 +16,6 @@ def build_root_router() -> Router:
     root.include_router(my_services.router)
     root.include_router(start.router)
     root.include_router(support.router)
+    root.include_router(admin_panel.router)
     root.include_router(admin.router)
     return root
