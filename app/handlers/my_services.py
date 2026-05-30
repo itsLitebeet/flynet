@@ -18,6 +18,8 @@ from datetime import datetime, timezone
 from html import escape
 
 from aiogram import F, Router
+from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -39,15 +41,37 @@ class RenameFlow(StatesGroup):
 
 
 # ---------- helpers ----------
+def _is_not_modified_error(exc: TelegramBadRequest) -> bool:
+    msg = (exc.message or str(exc)).lower()
+    return "message is not modified" in msg or "exactly the same" in msg
+
+
 async def _edit_or_answer(callback: CallbackQuery, text: str, reply_markup=None) -> None:
-    if isinstance(callback.message, Message):
-        try:
-            await callback.message.edit_text(text, reply_markup=reply_markup)
+    """Edit the callback's message in place; only send a new one if edit is impossible."""
+    if not isinstance(callback.message, Message):
+        return
+    try:
+        await callback.message.edit_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode=ParseMode.HTML,
+        )
+        return
+    except TelegramBadRequest as exc:
+        if _is_not_modified_error(exc):
+            # Same text/markup — still a successful refresh, do not duplicate the message.
+            if reply_markup is not None:
+                try:
+                    await callback.message.edit_reply_markup(reply_markup=reply_markup)
+                except TelegramBadRequest as exc2:
+                    if not _is_not_modified_error(exc2):
+                        log.debug("edit_reply_markup failed", exc_info=True)
             return
-        except Exception:  # noqa: BLE001 — uneditable (e.g. photo)
-            pass
-    if callback.message is not None:
-        await callback.message.answer(text, reply_markup=reply_markup)
+    except Exception:  # noqa: BLE001 — e.g. photo message, message too old
+        log.debug("edit_text failed, falling back to answer", exc_info=True)
+    await callback.message.answer(
+        text, reply_markup=reply_markup, parse_mode=ParseMode.HTML
+    )
 
 
 def _status_badge(status: str) -> str:
