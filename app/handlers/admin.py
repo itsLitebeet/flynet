@@ -51,7 +51,6 @@ async def cmd_stats(message: Message, settings: Settings, db: Database) -> None:
             awaiting_payment=db.count_orders_by_status("awaiting_payment"),
             awaiting_review=db.count_orders_by_status("awaiting_review"),
             provisioned=db.count_orders_by_status("provisioned"),
-            panel_removed=db.count_orders_by_status("panel_removed"),
             declined=db.count_orders_by_status("declined"),
             failed=db.count_orders_by_status("failed"),
             tickets=db.count_tickets(),
@@ -133,9 +132,12 @@ async def cmd_setcard(
         await message.answer(texts.SET_CARD_USAGE)
         return
 
+    number = texts.format_card_number(number)
     db.set_setting("card_number", number)
     db.set_setting("card_holder", holder)
-    await message.answer(texts.SET_CARD_OK.format(number=escape(number), holder=escape(holder)))
+    await message.answer(
+        texts.SET_CARD_OK.format(number=escape(number), holder=escape(holder))
+    )
 
 
 @router.message(Command("setprice"))
@@ -174,7 +176,9 @@ async def cmd_showsettings(message: Message, settings: Settings, db: Database) -
     base, per_gb, per_day = db.get_pricing()
     await message.answer(
         texts.SHOW_SETTINGS.format(
-            card_number=escape(db.get_setting("card_number", "—") or "—"),
+            card_number=escape(
+                texts.format_card_number(db.get_setting("card_number", "—") or "—")
+            ),
             card_holder=escape(db.get_setting("card_holder", "—") or "—"),
             base=base,
             per_gb=per_gb,
@@ -459,7 +463,7 @@ async def cmd_pending(message: Message, settings: Settings, db: Database) -> Non
 async def cmd_clearorder(
     message: Message, command: CommandObject, settings: Settings, db: Database
 ) -> None:
-    """Mark one provisioned order as removed from the panel (no API call)."""
+    """Hard-delete one order from the database."""
     if not _require_admin(message, settings):
         await message.answer(texts.NOT_ADMIN)
         return
@@ -471,14 +475,23 @@ async def cmd_clearorder(
         await message.answer(texts.CLEAR_ORDER_USAGE)
         return
 
-    if db.get_order(order_id) is None:
+    if not db.delete_order(order_id):
         await message.answer(texts.CLEAR_ORDER_NOTFOUND)
         return
+    await message.answer(texts.CLEAR_ORDER_OK.format(id=order_id))
 
-    if db.mark_order_panel_removed(order_id):
-        await message.answer(texts.CLEAR_ORDER_OK.format(id=order_id))
+
+@router.message(Command("cleardeclined"))
+async def cmd_cleardeclined(message: Message, settings: Settings, db: Database) -> None:
+    if not _require_admin(message, settings):
+        await message.answer(texts.NOT_ADMIN)
+        return
+
+    count = db.delete_orders_by_status("declined")
+    if count == 0:
+        await message.answer(texts.CLEAR_DECLINED_NONE)
     else:
-        await message.answer(texts.CLEAR_ORDER_SKIP.format(id=order_id))
+        await message.answer(texts.CLEAR_DECLINED_OK.format(count=count))
 
 
 async def _sync_location_orders(db: Database, loc: Location) -> tuple[list[int], str | None]:
@@ -496,8 +509,9 @@ async def _sync_location_orders(db: Database, loc: Location) -> tuple[list[int],
         if not email:
             continue
         if str(email) not in panel_emails:
-            if db.mark_order_panel_removed(int(row["id"])):
-                cleared.append(int(row["id"]))
+            oid = int(row["id"])
+            if db.delete_order(oid):
+                cleared.append(oid)
     return cleared, None
 
 
@@ -541,9 +555,17 @@ async def cmd_syncpanel(
             continue
         all_cleared.extend(cleared)
 
-    if not all_cleared:
-        await message.answer(texts.SYNC_PANEL_NONE)
+    declined_deleted = db.delete_orders_by_status("declined")
+
+    if not all_cleared and declined_deleted == 0:
+        await message.answer(texts.SYNC_PANEL_NONE.format(declined=0))
         return
 
-    ids_str = ", ".join(str(i) for i in all_cleared)
-    await message.answer(texts.SYNC_PANEL_DONE.format(count=len(all_cleared), ids=ids_str))
+    orphan_ids = ", ".join(str(i) for i in all_cleared) if all_cleared else "—"
+    await message.answer(
+        texts.SYNC_PANEL_DONE.format(
+            orphan_count=len(all_cleared),
+            orphan_ids=orphan_ids,
+            declined=declined_deleted,
+        )
+    )

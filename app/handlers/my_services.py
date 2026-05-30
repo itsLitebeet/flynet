@@ -98,30 +98,38 @@ def _own_order_or_none(db: Database, order_id: int, user_id: int):
     row = db.get_order(order_id)
     if row is None or int(row["user_id"]) != user_id:
         return None
-    if str(row["status"]) == "panel_removed":
-        return None
     return row
 
 
+async def _show_services_list(message: Message, db: Database) -> None:
+    user = message.from_user
+    if user is None:
+        return
+    rows = db.list_user_orders(user.id, limit=50)
+    if not rows:
+        await message.answer(
+            texts.MY_SERVICES_EMPTY, reply_markup=keyboards.main_reply_keyboard()
+        )
+        return
+    items = [{"id": int(r["id"]), "label": _service_list_label(r)} for r in rows]
+    await message.answer(
+        texts.MY_SERVICES_HEADER, reply_markup=keyboards.my_services_list(items)
+    )
+
+
 # ---------- entry: list ----------
+@router.message(F.text == texts.BTN_MY_SERVICES, StateFilter(None))
+async def msg_my_services(message: Message, db: Database) -> None:
+    await _show_services_list(message, db)
+
+
 @router.callback_query(F.data == keyboards.CB_MAIN_MY_SERVICES)
 @router.callback_query(F.data == keyboards.CB_MY_LIST)
 async def cb_my_services(callback: CallbackQuery, db: Database) -> None:
-    user = callback.from_user
-    if user is None:
+    if not isinstance(callback.message, Message):
         await callback.answer()
         return
-
-    rows = db.list_user_orders(user.id, limit=50)
-    if not rows:
-        await _edit_or_answer(callback, texts.MY_SERVICES_EMPTY, keyboards.back_to_menu())
-        await callback.answer()
-        return
-
-    items = [{"id": int(r["id"]), "label": _service_list_label(r)} for r in rows]
-    await _edit_or_answer(
-        callback, texts.MY_SERVICES_HEADER, keyboards.my_services_list(items)
-    )
+    await _show_services_list(callback.message, db)
     await callback.answer()
 
 
@@ -345,7 +353,7 @@ async def cb_rename(callback: CallbackQuery, state: FSMContext, db: Database) ->
 @router.message(StateFilter(RenameFlow.waiting_for_nickname), Command("cancel"))
 async def cmd_cancel_rename(message: Message, state: FSMContext) -> None:
     await state.clear()
-    await message.answer(texts.CANCELLED, reply_markup=keyboards.main_menu())
+    await message.answer(texts.CANCELLED, reply_markup=keyboards.main_reply_keyboard())
 
 
 @router.message(StateFilter(RenameFlow.waiting_for_nickname))
@@ -366,7 +374,9 @@ async def on_nickname_received(
     if nick == "-":
         db.set_order_nickname(order_id, None)
         await state.clear()
-        await message.answer(texts.RENAME_CLEARED, reply_markup=keyboards.back_to_service(order_id) if False else keyboards.main_menu())
+        await message.answer(
+            texts.RENAME_CLEARED, reply_markup=keyboards.back_to_service(order_id)
+        )
         return
 
     if len(nick) > MAX_NICKNAME_LEN:
@@ -375,7 +385,7 @@ async def on_nickname_received(
 
     db.set_order_nickname(order_id, nick or None)
     await state.clear()
-    await message.answer(texts.RENAME_OK, reply_markup=keyboards.main_menu())
+    await message.answer(texts.RENAME_OK, reply_markup=keyboards.main_reply_keyboard())
 
 
 # ---------- regenerate (destructive) ----------

@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
+)
 
 from app import texts
 from app.db import Location
@@ -49,7 +55,46 @@ CB_MY_REGEN_PREFIX          = "my:rg:"       # my:rg:<order_id>      (asks confi
 CB_MY_REGEN_CONFIRM_PREFIX  = "my:rg!ok:"    # my:rg!ok:<order_id>   (actually regen)
 
 
-# ---------- main menu ----------
+# ---------- reply keyboard (bottom menu, replaces phone keyboard) ----------
+def main_reply_keyboard() -> ReplyKeyboardMarkup:
+    """Persistent bottom buttons — main navigation for buyers."""
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [
+                KeyboardButton(text=texts.BTN_BUY),
+                KeyboardButton(text=texts.BTN_MY_SERVICES),
+            ],
+            [
+                KeyboardButton(text=texts.BTN_MY_ACCOUNT),
+                KeyboardButton(text=texts.BTN_SUPPORT),
+            ],
+            [
+                KeyboardButton(text=texts.BTN_HELP),
+                KeyboardButton(text=texts.BTN_ABOUT),
+            ],
+        ],
+        resize_keyboard=True,
+        is_persistent=True,
+    )
+
+
+def hide_reply_keyboard() -> ReplyKeyboardRemove:
+    """Hide bottom buttons during wizards (order, support, rename)."""
+    return ReplyKeyboardRemove()
+
+
+# All main-menu button labels — use with F.text.in_(...) + StateFilter(None).
+MAIN_MENU_BUTTONS = frozenset({
+    texts.BTN_BUY,
+    texts.BTN_MY_SERVICES,
+    texts.BTN_MY_ACCOUNT,
+    texts.BTN_SUPPORT,
+    texts.BTN_HELP,
+    texts.BTN_ABOUT,
+})
+
+
+# ---------- inline keyboards (inside messages / wizards) ----------
 def main_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[

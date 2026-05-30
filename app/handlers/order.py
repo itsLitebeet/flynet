@@ -101,11 +101,32 @@ async def _show_review(callback: CallbackQuery, state: FSMContext, db: Database)
     )
 
 
+async def _begin_buy_message(message: Message, state: FSMContext, db: Database) -> None:
+    """Start buy flow (reply-keyboard button or inline «خرید»)."""
+    await state.clear()
+    locs = db.list_locations(only_enabled=True)
+    if not locs:
+        await message.answer(
+            texts.NO_LOCATIONS_USER, reply_markup=keyboards.main_reply_keyboard()
+        )
+        return
+    await state.set_state(OrderFlow.picking_location)
+    await message.answer(".", reply_markup=keyboards.hide_reply_keyboard())
+    await message.answer(
+        texts.ORDER_PICK_LOCATION, reply_markup=keyboards.locations(locs)
+    )
+
+
 # ---------- entry ----------
+@router.message(F.text == texts.BTN_BUY, StateFilter(None))
+async def msg_start_order(message: Message, state: FSMContext, db: Database) -> None:
+    await _begin_buy_message(message, state, db)
+
+
 @router.callback_query(F.data == keyboards.CB_MAIN_BUY)
 async def cb_start_order(callback: CallbackQuery, state: FSMContext, db: Database) -> None:
-    await state.clear()
-    await _show_locations(callback, db, state)
+    if isinstance(callback.message, Message):
+        await _begin_buy_message(callback.message, state, db)
     await callback.answer()
 
 
@@ -260,15 +281,16 @@ async def cb_confirm_order(
     await state.update_data(order_id=order_id)
     await state.set_state(OrderFlow.awaiting_receipt)
 
-    card_number = db.get_setting("card_number", "—") or "—"
+    card_raw = db.get_setting("card_number", "—") or "—"
     card_holder = db.get_setting("card_holder", "—") or "—"
+    price_toman = int(data["price"])
 
     await _edit_or_answer(
         callback,
         texts.ORDER_PAYMENT_INSTRUCTIONS.format(
             order_id=order_id,
-            price=texts.format_price(int(data["price"])),
-            card_number=escape(card_number),
+            amount=texts.format_payment_amount(price_toman),
+            card_number=escape(texts.format_card_number(card_raw)),
             card_holder=escape(card_holder),
         ),
         keyboards.cancel_only(),
@@ -280,7 +302,10 @@ async def cb_confirm_order(
 @router.callback_query(F.data == keyboards.CB_ORDER_CANCEL)
 async def cb_cancel_anywhere(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
-    await _edit_or_answer(callback, texts.CANCELLED, keyboards.main_menu())
+    if callback.message is not None:
+        await callback.message.answer(
+            texts.CANCELLED, reply_markup=keyboards.main_reply_keyboard()
+        )
     await callback.answer()
 
 
@@ -320,7 +345,7 @@ async def on_receipt_photo(
     order_id = int(data.get("order_id", 0))
     if not order_id or message.photo is None:
         await state.clear()
-        await message.answer(texts.CANCELLED, reply_markup=keyboards.main_menu())
+        await message.answer(texts.CANCELLED, reply_markup=keyboards.main_reply_keyboard())
         return
 
     # Highest-resolution photo size is last.
@@ -328,7 +353,9 @@ async def on_receipt_photo(
     db.set_order_screenshot(order_id, file_id, new_status="awaiting_review")
 
     await state.clear()
-    await message.answer(texts.ORDER_RECEIPT_RECEIVED, reply_markup=keyboards.main_menu())
+    await message.answer(
+        texts.ORDER_RECEIPT_RECEIVED, reply_markup=keyboards.main_reply_keyboard()
+    )
 
     user = message.from_user
     full_name = "—"

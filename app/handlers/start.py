@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from aiogram import F, Router
-from aiogram.filters import Command, CommandStart
+from aiogram.filters import Command, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
@@ -13,7 +13,24 @@ router = Router(name="start")
 
 
 async def _show_menu(message: Message) -> None:
-    await message.answer(texts.WELCOME, reply_markup=keyboards.main_menu())
+    """Welcome text + bottom reply keyboard (main navigation)."""
+    await message.answer(texts.WELCOME, reply_markup=keyboards.main_reply_keyboard())
+
+
+def _account_text(message: Message, db: Database) -> str | None:
+    user = message.from_user
+    if user is None:
+        return None
+    row = db.get_user(user.id)
+    created_at = row["created_at"] if row else "—"
+    full_name = " ".join(p for p in [user.first_name, user.last_name] if p) or "—"
+    username = f"@{user.username}" if user.username else "—"
+    return texts.ACCOUNT_INFO.format(
+        user_id=user.id,
+        username=username,
+        full_name=full_name,
+        created_at=created_at,
+    )
 
 
 @router.message(CommandStart())
@@ -23,57 +40,73 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
 
 
 @router.message(Command("help"))
-async def cmd_help(message: Message) -> None:
-    await message.answer(texts.HELP, reply_markup=keyboards.back_to_menu())
+async def cmd_help(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer(texts.HELP, reply_markup=keyboards.main_reply_keyboard())
 
 
 @router.message(Command("cancel"))
 async def cmd_cancel(message: Message, state: FSMContext) -> None:
     await state.clear()
-    await message.answer(texts.CANCELLED, reply_markup=keyboards.main_menu())
+    await message.answer(texts.CANCELLED, reply_markup=keyboards.main_reply_keyboard())
 
 
+# ---------- reply-keyboard menu (bottom buttons) ----------
+@router.message(F.text == texts.BTN_HELP, StateFilter(None))
+async def msg_help(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer(texts.HELP, reply_markup=keyboards.main_reply_keyboard())
+
+
+@router.message(F.text == texts.BTN_ABOUT, StateFilter(None))
+async def msg_about(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer(texts.ABOUT, reply_markup=keyboards.main_reply_keyboard())
+
+
+@router.message(F.text == texts.BTN_MY_ACCOUNT, StateFilter(None))
+async def msg_account(message: Message, db: Database, state: FSMContext) -> None:
+    await state.clear()
+    text = _account_text(message, db)
+    if text:
+        await message.answer(text, reply_markup=keyboards.main_reply_keyboard())
+
+
+# ---------- inline callbacks (still used inside wizards) ----------
 @router.callback_query(F.data == keyboards.CB_MAIN_HOME)
 async def cb_home(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
-    if isinstance(callback.message, Message):
-        await callback.message.edit_text(texts.WELCOME, reply_markup=keyboards.main_menu())
+    if callback.message is not None:
+        await callback.message.answer(
+            texts.WELCOME, reply_markup=keyboards.main_reply_keyboard()
+        )
     await callback.answer()
 
 
 @router.callback_query(F.data == keyboards.CB_MAIN_HELP)
-async def cb_help(callback: CallbackQuery) -> None:
+async def cb_help(callback: CallbackQuery, state: FSMContext) -> None:
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(texts.HELP, reply_markup=keyboards.back_to_menu())
+        await callback.message.answer(
+            texts.HELP, reply_markup=keyboards.main_reply_keyboard()
+        )
     await callback.answer()
 
 
 @router.callback_query(F.data == keyboards.CB_MAIN_ABOUT)
-async def cb_about(callback: CallbackQuery) -> None:
+async def cb_about(callback: CallbackQuery, state: FSMContext) -> None:
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(texts.ABOUT, reply_markup=keyboards.back_to_menu())
+        await callback.message.answer(
+            texts.ABOUT, reply_markup=keyboards.main_reply_keyboard()
+        )
     await callback.answer()
 
 
 @router.callback_query(F.data == keyboards.CB_MAIN_ACCOUNT)
-async def cb_account(callback: CallbackQuery, db: Database) -> None:
-    user = callback.from_user
-    if user is None:
+async def cb_account(callback: CallbackQuery, db: Database, state: FSMContext) -> None:
+    if not isinstance(callback.message, Message):
         await callback.answer()
         return
-
-    row = db.get_user(user.id)
-    created_at = row["created_at"] if row else "—"
-
-    full_name = " ".join(p for p in [user.first_name, user.last_name] if p) or "—"
-    username = f"@{user.username}" if user.username else "—"
-
-    text = texts.ACCOUNT_INFO.format(
-        user_id=user.id,
-        username=username,
-        full_name=full_name,
-        created_at=created_at,
-    )
-    if isinstance(callback.message, Message):
-        await callback.message.edit_text(text, reply_markup=keyboards.back_to_menu())
+    text = _account_text(callback.message, db)
+    if text:
+        await callback.message.answer(text, reply_markup=keyboards.main_reply_keyboard())
     await callback.answer()

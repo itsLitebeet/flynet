@@ -24,22 +24,31 @@ class SupportFlow(StatesGroup):
     waiting_for_message = State()
 
 
+async def _open_support_message(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await state.set_state(SupportFlow.waiting_for_message)
+    await message.answer(".", reply_markup=keyboards.hide_reply_keyboard())
+    await message.answer(texts.SUPPORT_PROMPT, reply_markup=keyboards.cancel_support())
+
+
+@router.message(F.text == texts.BTN_SUPPORT, StateFilter(None))
+async def msg_open_support(message: Message, state: FSMContext) -> None:
+    await _open_support_message(message, state)
+
+
 @router.callback_query(F.data == keyboards.CB_MAIN_SUPPORT)
 async def cb_open_support(callback: CallbackQuery, state: FSMContext) -> None:
-    await state.set_state(SupportFlow.waiting_for_message)
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(
-            texts.SUPPORT_PROMPT, reply_markup=keyboards.cancel_support()
-        )
+        await _open_support_message(callback.message, state)
     await callback.answer()
 
 
 @router.callback_query(F.data == keyboards.CB_CANCEL_SUPPORT)
 async def cb_cancel_support(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
-    if isinstance(callback.message, Message):
-        await callback.message.edit_text(
-            texts.CANCELLED, reply_markup=keyboards.main_menu()
+    if callback.message is not None:
+        await callback.message.answer(
+            texts.CANCELLED, reply_markup=keyboards.main_reply_keyboard()
         )
     await callback.answer()
 
@@ -67,7 +76,7 @@ async def on_support_message(
 
     ticket_id = db.create_ticket(user_id=user.id, message=text)
     await state.clear()
-    await message.answer(texts.SUPPORT_SENT, reply_markup=keyboards.main_menu())
+    await message.answer(texts.SUPPORT_SENT, reply_markup=keyboards.main_reply_keyboard())
 
     full_name = " ".join(p for p in [user.first_name, user.last_name] if p) or "—"
     notify = texts.NEW_TICKET_NOTIFY.format(

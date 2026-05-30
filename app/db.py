@@ -159,6 +159,9 @@ class Database:
         """
         self._ensure_column("locations", "sub_url_template", "TEXT")
         self._ensure_column("orders", "nickname", "TEXT")
+        # Legacy status from an earlier version — hard-delete on upgrade.
+        with self._cursor() as cur:
+            cur.execute("DELETE FROM orders WHERE status = 'panel_removed'")
 
     def _seed_defaults(self) -> None:
         with self._cursor() as cur:
@@ -423,13 +426,12 @@ class Database:
     def list_user_orders(self, user_id: int, limit: int = 50) -> list[sqlite3.Row]:
         """Orders visible to the buyer in «سرویس‌های من».
 
-        Excludes panel_removed — those were cleared after manual deletion on
-        3x-ui and should not appear in the buyer UI.
+        Hides declined orders (buyers should not see rejected purchases).
         """
         with self._cursor() as cur:
             cur.execute(
                 "SELECT * FROM orders WHERE user_id = ? "
-                "AND status != 'panel_removed' "
+                "AND status != 'declined' "
                 "ORDER BY created_at DESC LIMIT ?",
                 (user_id, limit),
             )
@@ -498,21 +500,15 @@ class Database:
                 )
             return list(cur.fetchall())
 
-    def mark_order_panel_removed(self, order_id: int) -> bool:
-        """Clear panel linkage when the client was deleted manually on 3x-ui.
-
-        Keeps the order row for history (price, user, dates) but drops xui_*
-        fields so My Services no longer offers live panel actions.
-        """
+    def delete_order(self, order_id: int) -> bool:
         with self._cursor() as cur:
-            cur.execute(
-                "UPDATE orders SET status = 'panel_removed', "
-                "xui_email = NULL, xui_sub_id = NULL, xui_client_uuid = NULL, "
-                "sub_links = NULL, updated_at = datetime('now') "
-                "WHERE id = ? AND status = 'provisioned'",
-                (order_id,),
-            )
+            cur.execute("DELETE FROM orders WHERE id = ?", (order_id,))
             return cur.rowcount > 0
+
+    def delete_orders_by_status(self, status: str) -> int:
+        with self._cursor() as cur:
+            cur.execute("DELETE FROM orders WHERE status = ?", (status,))
+            return cur.rowcount
 
     # ---------- tickets ----------
     def create_ticket(self, user_id: int, message: str) -> int:

@@ -16,6 +16,17 @@ def format_price(toman: int) -> str:
     return f"{toman:,} تومان"
 
 
+def format_card_number(card: str) -> str:
+    """Digits only — no dashes or spaces (easier to copy in banking apps)."""
+    return "".join(ch for ch in card if ch.isdigit()) or card
+
+
+def format_payment_amount(toman: int) -> str:
+    """Payment line for copy-paste: toman + rial (۱ تومان = ۱۰ ریال)."""
+    rial = toman * 10
+    return f"<code>{toman} تومان یا {rial} ریال</code>"
+
+
 def calc_price(volume_gb: int, duration_days: int,
                base: int, per_gb: int, per_day: int) -> int:
     return int(base + per_gb * volume_gb + per_day * duration_days)
@@ -74,7 +85,6 @@ STATUS_BADGE = {
     "approved":         "✅ تأییدشده",
     "declined":         "❌ ردشده",
     "provisioned":      "🟢 فعال",
-    "panel_removed":    "🗑 حذف از پنل",
     "failed":           "⚠️ خطا",
 }
 
@@ -152,7 +162,7 @@ WELCOME = (
     "🛡️ <b>به ربات NetFly خوش آمدید</b>\n\n"
     "اینجا می‌توانید سرویس‌های پرسرعت و امن وی‌پی‌ان ما را خریداری "
     "و مدیریت کنید.\n\n"
-    "از منوی زیر یکی از گزینه‌ها را انتخاب کنید 👇"
+    "از <b>دکمه‌های پایین صفحه</b> یکی از گزینه‌ها را انتخاب کنید 👇"
 )
 
 HELP = (
@@ -229,7 +239,7 @@ ORDER_REVIEW = (
 
 ORDER_PAYMENT_INSTRUCTIONS = (
     "💳 <b>دستور پرداخت — سفارش #{order_id}</b>\n\n"
-    "لطفاً مبلغ <b>{price}</b> را به کارت زیر واریز کنید:\n\n"
+    "لطفاً مبلغ {amount} را به کارت زیر واریز کنید:\n\n"
     "<code>{card_number}</code>\n"
     "به نام: <b>{card_holder}</b>\n\n"
     "✅ پس از واریز، <b>اسکرین‌شات رسید</b> را در همین چت ارسال کنید "
@@ -325,9 +335,10 @@ ADMIN_HELP = (
     "/togglelocation &lt;id&gt;\n"
     "/setsuburl &lt;id&gt; &lt;template&gt; — تنظیم لینک اشتراک\n\n"
     "<b>همگام‌سازی پنل:</b>\n"
-    "/clearorder &lt;order_id&gt; — پاک کردن یک سفارش (کلاینت را از پنل حذف کرده‌اید)\n"
-    "/syncpanel — بررسی همه لوکیشن‌ها و پاک کردن سفارش‌های یتیم\n"
-    "/syncpanel &lt;location_id&gt; — فقط یک لوکیشن"
+    "/clearorder &lt;order_id&gt; — حذف یک سفارش از دیتابیس\n"
+    "/syncpanel — حذف سفارش‌های یتیم (پنل) + همه رد‌شده‌ها\n"
+    "/syncpanel &lt;location_id&gt; — فقط یک لوکیشن\n"
+    "/cleardeclined — حذف همه سفارش‌های رد‌شده"
 )
 
 ADMIN_STATS = (
@@ -337,16 +348,17 @@ ADMIN_STATS = (
     "⏳ در انتظار پرداخت: <b>{awaiting_payment}</b>\n"
     "🔍 در انتظار بررسی: <b>{awaiting_review}</b>\n"
     "🎉 فعال‌شده: <b>{provisioned}</b>\n"
-    "🗑 حذف از پنل: <b>{panel_removed}</b>\n"
     "❌ رد‌شده: <b>{declined}</b>\n"
     "⚠️ خطا در فعال‌سازی: <b>{failed}</b>\n"
     "💬 تیکت‌های پشتیبانی: <b>{tickets}</b>"
 )
 
-CLEAR_ORDER_USAGE   = "❗ استفاده: <code>/clearorder &lt;order_id&gt;</code>"
-CLEAR_ORDER_OK      = "✅ سفارش <code>#{id}</code> از پنل جدا شد (وضعیت: حذف از پنل)."
-CLEAR_ORDER_SKIP    = "❗ سفارش <code>#{id}</code> یافت نشد یا وضعیت آن «فعال» نیست."
+CLEAR_ORDER_USAGE    = "❗ استفاده: <code>/clearorder &lt;order_id&gt;</code>"
+CLEAR_ORDER_OK       = "✅ سفارش <code>#{id}</code> از دیتابیس حذف شد."
 CLEAR_ORDER_NOTFOUND = "❗ سفارشی با این شناسه پیدا نشد."
+
+CLEAR_DECLINED_OK    = "✅ <b>{count}</b> سفارش رد‌شده از دیتابیس حذف شد."
+CLEAR_DECLINED_NONE  = "ℹ️ سفارش رد‌شده‌ای در دیتابیس نیست."
 
 SYNC_PANEL_USAGE    = (
     "❗ استفاده:\n"
@@ -354,11 +366,15 @@ SYNC_PANEL_USAGE    = (
     "<code>/syncpanel 2</code> — فقط لوکیشن ۲"
 )
 SYNC_PANEL_START    = "⏳ در حال همگام‌سازی با پنل..."
-SYNC_PANEL_NONE     = "✅ همه سفارش‌های فعال در پنل موجودند. موردی برای پاک‌سازی نبود."
-SYNC_PANEL_DONE     = (
-    "✅ همگام‌سازی پایان یافت.\n"
-    "پاک‌شده: <b>{count}</b> سفارش\n"
-    "شناسه‌ها: <code>{ids}</code>"
+SYNC_PANEL_NONE = (
+    "✅ همه سفارش‌های فعال در پنل موجودند.\n"
+    "سفارش رد‌شده حذف‌شده: <b>{declined}</b>"
+)
+SYNC_PANEL_DONE = (
+    "✅ همگام‌سازی پایان یافت.\n\n"
+    "🗑 حذف از دیتابیس (یتیم پنل): <b>{orphan_count}</b>\n"
+    "<code>{orphan_ids}</code>\n\n"
+    "❌ حذف سفارش‌های رد‌شده: <b>{declined}</b>"
 )
 SYNC_PANEL_LOC_ERR  = "⚠️ خطا در لوکیشن <code>#{id}</code> ({name}):\n<code>{error}</code>"
 
