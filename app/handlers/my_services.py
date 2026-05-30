@@ -3,11 +3,10 @@
 Lets a buyer:
   * see all their orders (active, pending, disabled, etc.) with status badges
   * view the connection info (sub link + per-inbound configs)
-  * view live usage from the 3x-ui panel
+  * live usage on the service detail page (refresh button)
   * disable / re-enable a service
-  * rename a service (local nickname only)
-  * regenerate the configs (disable old client on panel + create a new one
-    with the remaining traffic + same expiry — old links stop working)
+  * rename a service (panel client id + optional display label)
+  * regenerate configs (disable old client, new id with remaining traffic)
 """
 
 from __future__ import annotations
@@ -26,7 +25,7 @@ from aiogram.types import CallbackQuery, Message
 
 from app import keyboards, texts
 from app.db import Database
-from app.xui import XuiClient, XuiError, build_client_email
+from app.xui import ClientUsage, XuiClient, XuiError, email_from_user_label
 
 
 router = Router(name="my_services")
@@ -80,8 +79,51 @@ def _service_list_label(row) -> str:
     return f"{badge} #{row['id']} · {row['location_name']} · {row['volume_gb']}GB/{row['duration_days']}d{nick}"
 
 
-def _build_detail_text(row) -> str:
+def _format_usage_block(usage: ClientUsage) -> str:
+    total_str = (
+        texts.VIEW_USAGE_UNLIMITED_TRAFFIC
+        if usage.is_unlimited_traffic
+        else texts.format_bytes(usage.total_bytes)
+    )
+    remaining_str = (
+        texts.VIEW_USAGE_UNLIMITED_TRAFFIC
+        if usage.is_unlimited_traffic
+        else texts.format_bytes(usage.remaining_bytes)
+    )
+    absolute, time_left = _format_expiry(usage.expiry_time_ms)
+    enabled_str = (
+        texts.VIEW_USAGE_ENABLED if usage.enable else texts.VIEW_USAGE_DISABLED
+    )
+    return texts.SERVICE_DETAIL_USAGE_BLOCK.format(
+        enabled=enabled_str,
+        used=texts.format_bytes(usage.used_bytes),
+        total=total_str,
+        remaining=remaining_str,
+        expiry=absolute,
+        time_left=time_left,
+    )
+
+
+def _build_detail_text(
+    row,
+    *,
+    usage: ClientUsage | None = None,
+    usage_error: str | None = None,
+) -> str:
     nickname_part = f" — «{escape(row['nickname'])}»" if (row["nickname"] or "") else ""
+    panel_id_line = ""
+    if row["xui_email"]:
+        panel_id_line = f"🆔 شناسه پنل: <code>{escape(str(row['xui_email']))}</code>\n"
+
+    usage_block = ""
+    if str(row["status"]) == "provisioned":
+        if usage_error:
+            usage_block = texts.SERVICE_DETAIL_USAGE_ERROR.format(
+                error=escape(usage_error)
+            )
+        elif usage is not None:
+            usage_block = _format_usage_block(usage)
+
     return texts.SERVICE_DETAIL.format(
         order_id=row["id"],
         nickname_part=nickname_part,
@@ -90,8 +132,70 @@ def _build_detail_text(row) -> str:
         days=int(row["duration_days"]),
         price=texts.format_price(int(row["price"])),
         status=_status_badge(str(row["status"])),
+        panel_id_line=panel_id_line,
+        usage_block=usage_block,
         created_at=str(row["created_at"]),
     )
+
+
+async def _fetch_panel_usage(row, location) -> tuple[ClientUsage | None, str | None]:
+    if not row["xui_email"]:
+        return None, "اطلاعات پنل موجود نیست"
+    try:
+        async with XuiClient(location.base_url, location.api_token) as xui:
+            return await xui.get_usage(str(row["xui_email"])), None
+    except XuiError as exc:
+        return None, str(exc)
+    except Exception as exc:  # noqa: BLE001
+        log.exception("Usage fetch failed for order %s", row["id"])
+        return None, str(exc)
+
+
+async def _show_service_detail(
+    callback: CallbackQuery,
+    db: Database,
+    order_id: int,
+    user_id: int,
+    *,
+    refresh: bool = False,
+) -> None:
+    row = _own_order_or_none(db, order_id, user_id)
+    if row is None:
+        await callback.answer("سرویس یافت نشد.", show_alert=True)
+        return
+
+    provisioned = str(row["status"]) == "provisioned"
+    usage: ClientUsage | None = None
+    usage_error: str | None = None
+    enabled = True
+
+    if provisioned:
+        location = db.get_location(int(row["location_id"]))
+        if location is None:
+            usage_error = "لوکیشن یافت نشد"
+        else:
+            usage, usage_error = await _fetch_panel_usage(row, location)
+            if usage is not None:
+                enabled = usage.enable
+
+    text = _build_detail_text(row, usage=usage, usage_error=usage_error)
+    if not provisioned:
+        text += texts.SERVICE_NOT_PROVISIONED_ACTIONS
+
+    await _edit_or_answer(
+        callback,
+        text,
+        keyboards.my_service_detail(
+            order_id, provisioned=provisioned, enabled=enabled
+        ),
+    )
+    if refresh:
+        if usage_error:
+            await callback.answer("⚠️ بروزرسانی ناموفق", show_alert=True)
+        else:
+            await callback.answer("✅ بروزرسانی شد")
+    else:
+        await callback.answer()
 
 
 def _own_order_or_none(db: Database, order_id: int, user_id: int):
@@ -145,25 +249,7 @@ async def cb_my_service_detail(callback: CallbackQuery, db: Database) -> None:
     except ValueError:
         await callback.answer()
         return
-
-    row = _own_order_or_none(db, order_id, user.id)
-    if row is None:
-        await callback.answer("سرویس یافت نشد.", show_alert=True)
-        return
-
-    text = _build_detail_text(row)
-    provisioned = str(row["status"]) == "provisioned"
-    if not provisioned:
-        text += texts.SERVICE_NOT_PROVISIONED_ACTIONS
-
-    # We don't know the live enabled state without an API call; assume
-    # enabled and let the toggle handler reconcile if needed. Cheap & correct
-    # for the common case.
-    await _edit_or_answer(
-        callback, text,
-        keyboards.my_service_detail(order_id, provisioned=provisioned, enabled=True),
-    )
-    await callback.answer()
+    await _show_service_detail(callback, db, order_id, user.id, refresh=False)
 
 
 # ---------- view configs ----------
@@ -203,15 +289,17 @@ async def cb_view_configs(callback: CallbackQuery, db: Database) -> None:
     await callback.answer()
 
 
-# ---------- view usage ----------
-@router.callback_query(F.data.startswith(keyboards.CB_MY_USAGE_PREFIX))
-async def cb_view_usage(callback: CallbackQuery, db: Database) -> None:
+# ---------- refresh usage on detail page ----------
+@router.callback_query(F.data.startswith(keyboards.CB_MY_REFRESH_USAGE_PREFIX))
+async def cb_refresh_usage(callback: CallbackQuery, db: Database) -> None:
     user = callback.from_user
     if user is None:
         await callback.answer()
         return
     try:
-        order_id = int((callback.data or "").removeprefix(keyboards.CB_MY_USAGE_PREFIX))
+        order_id = int(
+            (callback.data or "").removeprefix(keyboards.CB_MY_REFRESH_USAGE_PREFIX)
+        )
     except ValueError:
         await callback.answer()
         return
@@ -221,54 +309,7 @@ async def cb_view_usage(callback: CallbackQuery, db: Database) -> None:
         await callback.answer("این سرویس فعال نیست.", show_alert=True)
         return
 
-    location = db.get_location(int(row["location_id"]))
-    if location is None or not row["xui_email"]:
-        await callback.answer("اطلاعات کافی نیست.", show_alert=True)
-        return
-
-    await callback.answer("⏳ در حال دریافت اطلاعات از پنل...")
-    try:
-        async with XuiClient(location.base_url, location.api_token) as xui:
-            usage = await xui.get_usage(str(row["xui_email"]))
-    except XuiError as exc:
-        await _edit_or_answer(
-            callback,
-            texts.VIEW_USAGE_FETCH_FAILED.format(error=escape(str(exc))),
-            keyboards.back_to_service(order_id),
-        )
-        return
-    except Exception as exc:  # noqa: BLE001
-        log.exception("Unexpected error fetching usage for order %s", order_id)
-        await _edit_or_answer(
-            callback,
-            texts.VIEW_USAGE_FETCH_FAILED.format(error=escape(str(exc))),
-            keyboards.back_to_service(order_id),
-        )
-        return
-
-    total_str = (
-        texts.VIEW_USAGE_UNLIMITED_TRAFFIC
-        if usage.is_unlimited_traffic
-        else texts.format_bytes(usage.total_bytes)
-    )
-    remaining_str = (
-        texts.VIEW_USAGE_UNLIMITED_TRAFFIC
-        if usage.is_unlimited_traffic
-        else texts.format_bytes(usage.remaining_bytes)
-    )
-    absolute, time_left = _format_expiry(usage.expiry_time_ms)
-    enabled_str = texts.VIEW_USAGE_ENABLED if usage.enable else texts.VIEW_USAGE_DISABLED
-
-    text = texts.VIEW_USAGE_TITLE.format(
-        order_id=order_id,
-        enabled=enabled_str,
-        used=texts.format_bytes(usage.used_bytes),
-        total=total_str,
-        remaining=remaining_str,
-        expiry=absolute,
-        time_left=time_left,
-    )
-    await _edit_or_answer(callback, text, keyboards.back_to_service(order_id))
+    await _show_service_detail(callback, db, order_id, user.id, refresh=True)
 
 
 # ---------- toggle (disable/enable) ----------
@@ -370,6 +411,12 @@ async def on_nickname_received(
         await state.clear()
         return
 
+    row = _own_order_or_none(db, order_id, message.from_user.id)
+    if row is None:
+        await state.clear()
+        await message.answer("سرویس یافت نشد.")
+        return
+
     nick = (message.text or "").strip()
     if nick == "-":
         db.set_order_nickname(order_id, None)
@@ -383,9 +430,57 @@ async def on_nickname_received(
         await message.answer(texts.RENAME_TOO_LONG)
         return
 
+    new_panel_id: str | None = None
+    if row["status"] == "provisioned" and row["xui_email"]:
+        new_panel_id = email_from_user_label(nick, order_id)
+        if new_panel_id is None:
+            await message.answer(texts.RENAME_INVALID_LABEL)
+            return
+
+        old_email = str(row["xui_email"])
+        location = db.get_location(int(row["location_id"]))
+        if location is None:
+            await message.answer(texts.RENAME_PANEL_FAILED.format(error="لوکیشن یافت نشد"))
+            return
+
+        try:
+            async with XuiClient(location.base_url, location.api_token) as xui:
+                if new_panel_id != old_email:
+                    await xui.rename_client_email(old_email, new_panel_id)
+                    sub_id, client_uuid = await xui.resolve_client_identity(new_panel_id)
+                    links = await xui.get_sub_links(sub_id) if sub_id else []
+                    db.update_order_xui(
+                        order_id=order_id,
+                        email=new_panel_id,
+                        sub_id=sub_id,
+                        client_uuid=client_uuid or row["xui_client_uuid"],
+                        sub_links=links or json.loads(row["sub_links"] or "[]"),
+                    )
+        except XuiError as exc:
+            await message.answer(
+                texts.RENAME_PANEL_FAILED.format(error=escape(str(exc)))
+            )
+            return
+        except Exception as exc:  # noqa: BLE001
+            log.exception("Rename panel email failed for order %s", order_id)
+            await message.answer(
+                texts.RENAME_PANEL_FAILED.format(error=escape(str(exc)))
+            )
+            return
+
     db.set_order_nickname(order_id, nick or None)
     await state.clear()
-    await message.answer(texts.RENAME_OK, reply_markup=keyboards.main_reply_keyboard())
+    if new_panel_id:
+        await message.answer(
+            texts.RENAME_OK_PANEL.format(
+                label=escape(nick), panel_id=escape(new_panel_id)
+            ),
+            reply_markup=keyboards.main_reply_keyboard(),
+        )
+    else:
+        await message.answer(
+            texts.RENAME_OK, reply_markup=keyboards.main_reply_keyboard()
+        )
 
 
 # ---------- regenerate (destructive) ----------
@@ -444,63 +539,14 @@ async def cb_regen_confirm(callback: CallbackQuery, db: Database) -> None:
 
     try:
         async with XuiClient(location.base_url, location.api_token) as xui:
-            # Fetch remaining quota + expiry from the panel; fall back gracefully.
-            try:
-                usage = await xui.get_usage(old_email)
-                remaining_bytes = (
-                    usage.remaining_bytes
-                    if not usage.is_unlimited_traffic
-                    else int(row["volume_gb"]) * 1024 ** 3
-                )
-                remaining_gb = max(1, remaining_bytes // (1024 ** 3))
-                expiry_ms = (
-                    usage.expiry_time_ms
-                    if usage.expiry_time_ms > 0
-                    else int((time.time() + int(row["duration_days"]) * 86400) * 1000)
-                )
-            except XuiError:
-                # If we can't read usage, regenerate with the original budget.
-                remaining_gb = int(row["volume_gb"])
-                expiry_ms = int((time.time() + int(row["duration_days"]) * 86400) * 1000)
-
-            # Step 1: disable the old client so its links stop working.
-            try:
-                await xui.update_client(email=old_email, enable=False)
-            except XuiError as exc:
-                log.warning("Could not disable old client %s during regen: %s",
-                            old_email, exc)
-
-            # Step 2: create a new client with a fresh email.
-            #         We append a regen counter so we never clash.
-            n_regens = 1
-            base_email = build_client_email(user_id, order_id)
-            new_email = old_email if old_email == base_email else base_email
-            if new_email == old_email:
-                # First regen ever for this order; bump suffix
-                new_email = f"{base_email}_r{n_regens}"
-            while await xui.client_exists(new_email):
-                n_regens += 1
-                new_email = f"{base_email}_r{n_regens}"
-
-            add_resp = await xui.add_client(
-                email=new_email,
-                volume_gb=remaining_gb,
-                duration_days=1,  # ignored — we overwrite expiryTime via update below
+            result = await xui.regenerate_client(
+                old_email=old_email,
+                order_id=order_id,
                 inbound_ids=location.inbound_ids,
                 tg_user_id=user_id,
+                volume_gb_fallback=int(row["volume_gb"]),
+                duration_days_fallback=int(row["duration_days"]),
             )
-            # Step 3: align expiry to the original (so user doesn't gain time).
-            try:
-                await xui.update_client(email=new_email, expiry_time_ms=expiry_ms)
-            except XuiError as exc:
-                log.warning("Could not align expiry on regen for %s: %s", new_email, exc)
-
-            # Step 4: resolve subId/uuid via list (preferred) + sub links.
-            new_sub_id, new_uuid = await xui.resolve_client_identity(
-                new_email, add_resp=add_resp
-            )
-            new_uuid = new_uuid or ""
-            new_links = await xui.get_sub_links(new_sub_id) if new_sub_id else []
     except Exception as exc:  # noqa: BLE001 — any failure → tell user, leave DB alone
         log.exception("Regen failed for order %s", order_id)
         await _edit_or_answer(
@@ -512,11 +558,13 @@ async def cb_regen_confirm(callback: CallbackQuery, db: Database) -> None:
 
     db.update_order_xui(
         order_id=order_id,
-        email=new_email,
-        sub_id=new_sub_id,
-        client_uuid=new_uuid,
-        sub_links=new_links,
+        email=result.email,
+        sub_id=result.sub_id,
+        client_uuid=result.client_uuid,
+        sub_links=result.sub_links,
     )
+    new_sub_id = result.sub_id
+    new_links = result.sub_links
 
     sub_url = location.render_sub_url(new_sub_id)
     configs_block = texts.format_configs_block(

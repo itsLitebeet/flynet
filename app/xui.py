@@ -21,6 +21,7 @@ uses a different header (e.g. `X-API-Token`), edit `_auth_headers` below.
 from __future__ import annotations
 
 import logging
+import re
 import time
 import uuid as _uuid
 from dataclasses import dataclass
@@ -97,9 +98,20 @@ def _gb_to_bytes(gb: int) -> int:
     return gb * GIB_IN_BYTES
 
 
-def build_client_email(user_id: int, order_id: int) -> str:
-    """A unique identifier for the 3x-ui client (panel uses 'email' as the key)."""
-    return f"netfly_{user_id}_{order_id}"
+def build_client_email(order_id: int) -> str:
+    """Short unique panel client id (3x-ui uses the ``email`` field as the primary key)."""
+    return f"nf{order_id}"
+
+
+_EMAIL_LABEL_RE = re.compile(r"[^a-z0-9_-]+")
+
+
+def email_from_user_label(label: str, order_id: int, *, max_suffix: int = 20) -> str | None:
+    """Turn a user-chosen label into a panel-safe client id, e.g. ``nf9-phone``."""
+    cleaned = _EMAIL_LABEL_RE.sub("", label.strip().lower().replace(" ", "-"))
+    if not cleaned or len(cleaned) > max_suffix:
+        return None
+    return f"nf{order_id}-{cleaned}"
 
 
 def _extract_sub_id(obj: Any) -> str | None:
@@ -299,12 +311,24 @@ class XuiClient:
         duration_days: int,
         inbound_ids: list[int],
         tg_user_id: int,
+        expiry_time_ms: int | None = None,
+        total_bytes: int | None = None,
     ) -> dict[str, Any]:
+        total = (
+            int(total_bytes)
+            if total_bytes is not None
+            else _gb_to_bytes(volume_gb)
+        )
+        expiry = (
+            int(expiry_time_ms)
+            if expiry_time_ms is not None
+            else _expiry_ms_from_days(duration_days)
+        )
         body = {
             "client": {
                 "email": email,
-                "totalGB": _gb_to_bytes(volume_gb),
-                "expiryTime": _expiry_ms_from_days(duration_days),
+                "totalGB": total,
+                "expiryTime": expiry,
                 "tgId": tg_user_id,
                 "limitIp": 0,
                 "enable": True,
@@ -317,6 +341,15 @@ class XuiClient:
             params={"email": email},
             json_body=body,
         )
+
+    async def allocate_regen_email(self, order_id: int) -> str:
+        """Pick a free client id for regen: nf9, nf9r1, nf9r2, …"""
+        base = build_client_email(order_id)
+        for i in range(0, 50):
+            candidate = base if i == 0 else f"{base}r{i}"
+            if not await self.client_exists(candidate):
+                return candidate
+        raise XuiError("too many regenerations for this order")
 
     async def get_client(self, email: str) -> dict[str, Any]:
         return await self._request("GET", f"/panel/api/clients/get/{email}")
@@ -371,33 +404,66 @@ class XuiClient:
 
         return sub_id, client_uuid
 
+    def _client_update_body(
+        self, client: dict[str, Any], *, new_email: str | None = None
+    ) -> dict[str, Any]:
+        """Build a full update payload so the panel does not wipe unset fields."""
+        def _as_int(v: Any) -> int:
+            try:
+                return int(v)
+            except (TypeError, ValueError):
+                return 0
+
+        enable = client.get("enable")
+        if not isinstance(enable, bool):
+            enable = True
+        return {
+            "email": new_email or str(client.get("email", "")),
+            "totalGB": _as_int(client.get("totalGB")),
+            "expiryTime": _as_int(client.get("expiryTime")),
+            "tgId": _as_int(client.get("tgId")),
+            "enable": enable,
+        }
+
     async def update_client(
         self,
         *,
         email: str,
+        new_email: str | None = None,
         volume_gb: int | None = None,
+        total_bytes: int | None = None,
         expiry_time_ms: int | None = None,
         tg_user_id: int | None = None,
         enable: bool | None = None,
     ) -> dict[str, Any]:
-        """Update a client. Only non-None fields are sent.
+        """Update a client; merges with current panel state before applying changes."""
+        client = await self.find_client(email)
+        if client is None:
+            raise XuiError(f"client not found: {email}")
 
-        Note: 3x-ui's update endpoint as documented requires the email AND
-        all fields it wants to overwrite. We always send `email` so the
-        panel knows which client we mean.
-        """
-        body: dict[str, Any] = {"email": email}
-        if volume_gb is not None:
+        body = self._client_update_body(client, new_email=new_email)
+        if total_bytes is not None:
+            body["totalGB"] = int(total_bytes)
+        elif volume_gb is not None:
             body["totalGB"] = _gb_to_bytes(volume_gb)
         if expiry_time_ms is not None:
-            body["expiryTime"] = expiry_time_ms
+            body["expiryTime"] = int(expiry_time_ms)
         if tg_user_id is not None:
             body["tgId"] = tg_user_id
         if enable is not None:
             body["enable"] = enable
+
         return await self._request(
             "POST", f"/panel/api/clients/update/{email}", json_body=body
         )
+
+    async def rename_client_email(self, old_email: str, new_email: str) -> None:
+        """Change the panel client identifier (``email`` field) in place."""
+        if old_email == new_email:
+            return
+        if await self.client_exists(new_email):
+            raise XuiError(f"client id already taken: {new_email}")
+        await self.update_client(email=old_email, new_email=new_email)
 
     async def get_usage(self, email: str) -> ClientUsage:
         """Read a client's traffic + limits.
@@ -420,6 +486,64 @@ class XuiClient:
         return []
 
     # ---------- high-level orchestration ----------
+    async def regenerate_client(
+        self,
+        *,
+        old_email: str,
+        order_id: int,
+        inbound_ids: list[int],
+        tg_user_id: int,
+        volume_gb_fallback: int,
+        duration_days_fallback: int,
+    ) -> ProvisionedClient:
+        """Disable old client and create a new one with remaining quota + same expiry."""
+        usage = await self.get_usage(old_email)
+        if usage.is_unlimited_traffic or usage.total_bytes <= 0:
+            total_bytes = _gb_to_bytes(volume_gb_fallback)
+        else:
+            total_bytes = max(0, usage.remaining_bytes)
+
+        if usage.expiry_time_ms > 0:
+            expiry_ms = usage.expiry_time_ms
+        else:
+            expiry_ms = _expiry_ms_from_days(duration_days_fallback)
+
+        new_email = await self.allocate_regen_email(order_id)
+        try:
+            await self.update_client(email=old_email, enable=False)
+        except XuiError as exc:
+            log.warning("Could not disable %s before regen: %s", old_email, exc)
+
+        add_resp = await self.add_client(
+            email=new_email,
+            volume_gb=volume_gb_fallback,
+            duration_days=duration_days_fallback,
+            inbound_ids=inbound_ids,
+            tg_user_id=tg_user_id,
+            expiry_time_ms=expiry_ms,
+            total_bytes=total_bytes,
+        )
+        sub_id, client_uuid = await self.resolve_client_identity(
+            new_email, add_resp=add_resp
+        )
+        if not client_uuid:
+            client_uuid = str(_uuid.uuid4())
+
+        sub_links: list[str] = []
+        if sub_id:
+            try:
+                sub_links = await self.get_sub_links(sub_id)
+            except XuiError as exc:
+                log.warning("get_sub_links failed for %s: %s", sub_id, exc)
+
+        return ProvisionedClient(
+            email=new_email,
+            sub_id=sub_id,
+            client_uuid=client_uuid,
+            sub_links=sub_links,
+            raw_get_response=None,
+        )
+
     async def provision(
         self,
         *,

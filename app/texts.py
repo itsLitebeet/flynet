@@ -61,8 +61,8 @@ BTN_DECLINE    = "❌ رد پرداخت"
 BTN_VIEW_USER  = "👤 پروفایل کاربر"
 
 # My services
-BTN_VIEW_CONFIGS = "📋 مشاهده لینک‌ها"
-BTN_VIEW_USAGE   = "📊 مصرف و وضعیت"
+BTN_VIEW_CONFIGS  = "📋 مشاهده لینک‌ها"
+BTN_REFRESH_USAGE = "🔄 بروزرسانی مصرف"
 BTN_TOGGLE_OFF   = "⏸ توقف موقت"
 BTN_TOGGLE_ON    = "▶️ فعال‌سازی"
 BTN_RENAME       = "✏️ تغییر نام"
@@ -99,11 +99,26 @@ SERVICE_LIST_ITEM = (
 SERVICE_DETAIL = (
     "📦 <b>سرویس #{order_id}</b>{nickname_part}\n\n"
     "📍 لوکیشن: <b>{location}</b>\n"
-    "💾 حجم: <b>{volume} گیگابایت</b>\n"
-    "📅 مدت اعتبار: <b>{days} روز</b>\n"
+    "💾 حجم سفارش: <b>{volume} گیگابایت</b>\n"
+    "📅 مدت سفارش: <b>{days} روز</b>\n"
     "💰 مبلغ: <b>{price}</b>\n"
     "🏷 وضعیت: <b>{status}</b>\n"
+    "{panel_id_line}"
+    "{usage_block}"
     "🗓 تاریخ ثبت: {created_at}"
+)
+
+SERVICE_DETAIL_USAGE_BLOCK = (
+    "📊 <b>مصرف و اعتبار (زنده)</b>\n"
+    "🔌 اتصال: <b>{enabled}</b>\n"
+    "💾 مصرف: <b>{used}</b> از <b>{total}</b>\n"
+    "📈 باقیمانده: <b>{remaining}</b>\n"
+    "⏳ اعتبار تا: <b>{expiry}</b> ({time_left})\n\n"
+)
+
+SERVICE_DETAIL_USAGE_ERROR = (
+    "📊 <b>مصرف و اعتبار</b>\n"
+    "⚠️ دریافت از پنل ناموفق: <code>{error}</code>\n\n"
 )
 
 SERVICE_NOT_PROVISIONED_ACTIONS = (
@@ -137,12 +152,23 @@ TOGGLE_FAILED      = "⚠️ تغییر وضعیت ممکن نشد:\n<code>{erro
 
 RENAME_PROMPT = (
     "✏️ <b>تغییر نام سرویس #{order_id}</b>\n\n"
-    "یک نام دلخواه برای این سرویس بفرستید (مثلاً «گوشی»، «مک‌بوک»).\n"
-    "حداکثر ۳۰ کاراکتر. برای حذف نام: کلمه <code>-</code> را بفرستید.\n"
-    "برای انصراف: /cancel"
+    "یک نام کوتاه بفرستید (فقط حروف انگلیسی، عدد، <code>-</code> و <code>_</code>).\n"
+    "مثال: <code>phone</code> → شناسه پنل: <code>nf{order_id}-phone</code>\n\n"
+    "حداکثر ۳۰ کاراکتر. حذف نام محلی: <code>-</code>\n"
+    "انصراف: /cancel"
 )
 RENAME_TOO_LONG = "❗ نام نباید بیشتر از ۳۰ کاراکتر باشد."
-RENAME_OK       = "✅ نام سرویس به‌روز شد."
+RENAME_INVALID_LABEL = (
+    "❗ نام نامعتبر است.\n"
+    "فقط حروف انگلیسی کوچک، عدد، خط‌تیره و زیرخط مجاز است."
+)
+RENAME_PANEL_FAILED = "⚠️ تغییر نام روی پنل ناموفق بود:\n<code>{error}</code>"
+RENAME_OK = "✅ نام نمایشی سرویس به‌روز شد."
+RENAME_OK_PANEL = (
+    "✅ نام سرویس به‌روز شد.\n"
+    "🏷 برچسب: <b>{label}</b>\n"
+    "🆔 شناسه پنل: <code>{panel_id}</code>"
+)
 RENAME_CLEARED  = "✅ نام سرویس حذف شد."
 
 REGEN_CONFIRM = (

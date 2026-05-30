@@ -64,7 +64,7 @@ CB_PURGE_CANCEL         = "adm:prg:no"
 CB_MY_LIST                  = "my:list"
 CB_MY_DETAIL_PREFIX         = "my:o:"        # my:o:<order_id>
 CB_MY_CONFIGS_PREFIX        = "my:cfg:"      # my:cfg:<order_id>
-CB_MY_USAGE_PREFIX          = "my:use:"      # my:use:<order_id>
+CB_MY_REFRESH_USAGE_PREFIX  = "my:ref:"      # my:ref:<order_id> — refresh usage on detail
 CB_MY_TOGGLE_PREFIX         = "my:tog:"      # my:tog:<order_id>
 CB_MY_RENAME_PREFIX         = "my:ren:"      # my:ren:<order_id>
 CB_MY_REGEN_PREFIX          = "my:rg:"       # my:rg:<order_id>      (asks confirmation)
@@ -248,7 +248,10 @@ def my_service_detail(order_id: int, *, provisioned: bool, enabled: bool) -> Inl
     if provisioned:
         rows.append([
             InlineKeyboardButton(text=texts.BTN_VIEW_CONFIGS, callback_data=f"{CB_MY_CONFIGS_PREFIX}{order_id}"),
-            InlineKeyboardButton(text=texts.BTN_VIEW_USAGE,   callback_data=f"{CB_MY_USAGE_PREFIX}{order_id}"),
+            InlineKeyboardButton(
+                text=texts.BTN_REFRESH_USAGE,
+                callback_data=f"{CB_MY_REFRESH_USAGE_PREFIX}{order_id}",
+            ),
         ])
         toggle_text = texts.BTN_TOGGLE_OFF if enabled else texts.BTN_TOGGLE_ON
         rows.append([

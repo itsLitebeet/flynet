@@ -115,7 +115,7 @@ async def cb_accept_order(
         await bot.send_message(int(order["user_id"]), texts.ORDER_PROVISION_FAILED_USER)
         return
 
-    email = build_client_email(int(order["user_id"]), order_id)
+    email = build_client_email(order_id)
 
     try:
         async with XuiClient(location.base_url, location.api_token) as xui:
