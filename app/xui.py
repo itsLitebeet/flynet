@@ -97,9 +97,14 @@ def _extract_uuid(obj: Any) -> str | None:
 
 class XuiClient:
     def __init__(self, base_url: str, api_token: str) -> None:
+        # NOTE: We deliberately do NOT use httpx's `base_url=` here.
+        # httpx joins request paths using RFC 3986 rules, which means a
+        # request path starting with "/" (all of ours do) replaces any path
+        # component of base_url. That breaks 3x-ui panels that live behind a
+        # secret path prefix like https://host/SECRET — the prefix would be
+        # silently dropped. Instead we build the full URL by string concat.
         self.base_url = base_url.rstrip("/")
         self._client = httpx.AsyncClient(
-            base_url=self.base_url,
             headers=_auth_headers(api_token),
             timeout=REQUEST_TIMEOUT,
             verify=True,
@@ -123,24 +128,27 @@ class XuiClient:
         params: dict[str, Any] | None = None,
         json_body: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        if not path.startswith("/"):
+            path = "/" + path
+        url = f"{self.base_url}{path}"
         try:
-            resp = await self._client.request(method, path, params=params, json=json_body)
+            resp = await self._client.request(method, url, params=params, json=json_body)
         except httpx.HTTPError as exc:
-            raise XuiError(f"HTTP error calling {method} {path}: {exc}") from exc
+            raise XuiError(f"HTTP error calling {method} {url}: {exc}") from exc
 
         if resp.status_code >= 400:
             raise XuiError(
-                f"{method} {path} returned HTTP {resp.status_code}: {resp.text[:300]}"
+                f"{method} {url} returned HTTP {resp.status_code}: {resp.text[:300]}"
             )
 
         try:
             data = resp.json()
         except ValueError as exc:
-            raise XuiError(f"Non-JSON response from {path}: {resp.text[:300]}") from exc
+            raise XuiError(f"Non-JSON response from {url}: {resp.text[:300]}") from exc
 
         if isinstance(data, dict) and data.get("success") is False:
             msg = data.get("msg") or "request failed"
-            raise XuiError(f"{method} {path} failed: {msg}")
+            raise XuiError(f"{method} {url} failed: {msg}")
         return data if isinstance(data, dict) else {"obj": data}
 
     # ---------- public API ----------

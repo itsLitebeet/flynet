@@ -207,6 +207,18 @@ async def cmd_locations(message: Message, settings: Settings, db: Database) -> N
     await message.answer("\n\n".join(lines))
 
 
+def _normalize_panel_url(raw: str) -> str:
+    """Strip trailing slashes and a trailing /panel suffix if present.
+
+    Users often paste the full panel URL (https://host/SECRET/panel) but the
+    XuiClient appends '/panel/api/...' itself, so we need the root only.
+    """
+    url = raw.strip().rstrip("/")
+    if url.endswith("/panel"):
+        url = url[: -len("/panel")]
+    return url
+
+
 @router.message(Command("addlocation"))
 async def cmd_addlocation(
     message: Message, command: CommandObject, settings: Settings, db: Database
@@ -222,6 +234,7 @@ async def cmd_addlocation(
         return
 
     name, base_url, api_token, inbound_str = parts
+    base_url = _normalize_panel_url(base_url)
     try:
         inbound_ids = [int(x.strip()) for x in inbound_str.split(",") if x.strip()]
     except ValueError:
@@ -233,7 +246,11 @@ async def cmd_addlocation(
 
     loc_id = db.add_location(name=name, base_url=base_url, api_token=api_token,
                               inbound_ids=inbound_ids)
-    await message.answer(texts.ADD_LOC_OK.format(name=escape(name), id=loc_id))
+    await message.answer(
+        texts.ADD_LOC_OK.format(name=escape(name), id=loc_id)
+        + f"\n\n🔗 base_url:\n<code>{escape(base_url)}</code>"
+        + f"\n📡 inbounds: <code>{','.join(str(i) for i in inbound_ids)}</code>"
+    )
 
 
 @router.message(Command("dellocation"))
