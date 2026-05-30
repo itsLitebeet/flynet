@@ -466,15 +466,11 @@ async def cb_regen_confirm(callback: CallbackQuery, db: Database) -> None:
             if new_email == old_email:
                 # First regen ever for this order; bump suffix
                 new_email = f"{base_email}_r{n_regens}"
-            while True:
-                try:
-                    await xui.get_client(new_email)
-                    n_regens += 1
-                    new_email = f"{base_email}_r{n_regens}"
-                except XuiError:
-                    break  # not found → safe to use
+            while await xui.client_exists(new_email):
+                n_regens += 1
+                new_email = f"{base_email}_r{n_regens}"
 
-            await xui.add_client(
+            add_resp = await xui.add_client(
                 email=new_email,
                 volume_gb=remaining_gb,
                 duration_days=1,  # ignored — we overwrite expiryTime via update below
@@ -487,11 +483,11 @@ async def cb_regen_confirm(callback: CallbackQuery, db: Database) -> None:
             except XuiError as exc:
                 log.warning("Could not align expiry on regen for %s: %s", new_email, exc)
 
-            # Step 4: fetch subId/uuid + sub links for the new client.
-            new_get = await xui.get_client(new_email)
-            from app.xui import _extract_sub_id, _extract_uuid
-            new_sub_id = _extract_sub_id(new_get)
-            new_uuid = _extract_uuid(new_get) or ""
+            # Step 4: resolve subId/uuid via list (preferred) + sub links.
+            new_sub_id, new_uuid = await xui.resolve_client_identity(
+                new_email, add_resp=add_resp
+            )
+            new_uuid = new_uuid or ""
             new_links = await xui.get_sub_links(new_sub_id) if new_sub_id else []
     except Exception as exc:  # noqa: BLE001 — any failure → tell user, leave DB alone
         log.exception("Regen failed for order %s", order_id)

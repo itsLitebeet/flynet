@@ -2,9 +2,17 @@
 
 The endpoints implemented here mirror the spec the user provided:
 
+    GET  /panel/api/clients/list                  -> { success, obj: [ {client}, ... ] }
     POST /panel/api/clients/add?email=<email>     body: { client: {...}, inboundIds: [...] }
     GET  /panel/api/clients/get/{email}           -> { success, obj }
+    POST /panel/api/clients/update/{email}        body: { email, totalGB?, expiryTime?, ... }
     GET  /panel/api/clients/subLinks/{subId}      -> { success, obj: [link, ...] }
+
+The `list` endpoint is the most reliable source of truth: each item is a full
+client object including subId, uuid, totalGB, expiryTime, enable, inboundIds
+and a nested `traffic` block ({up, down, enable}). The `get/{email}` endpoint
+returns `obj` as an opaque string in some forks, so we prefer `list` whenever
+we need usage / subId / uuid and only fall back to `get`.
 
 Auth is sent as a Bearer token in the `Authorization` header. If your fork
 uses a different header (e.g. `X-API-Token`), edit `_auth_headers` below.
@@ -164,6 +172,51 @@ def _parse_usage(raw: Any) -> ClientUsage:
     )
 
 
+def _sub_id_from_client(client: dict[str, Any]) -> str | None:
+    sub = client.get("subId")
+    return str(sub) if sub else None
+
+
+def _uuid_from_client(client: dict[str, Any]) -> str | None:
+    uid = client.get("uuid")
+    return str(uid) if uid else None
+
+
+def _usage_from_client(client: dict[str, Any]) -> ClientUsage:
+    """Parse usage from a single client object as returned by /clients/list.
+
+    The list item shape is well-defined:
+        { id, email, subId, uuid, totalGB, expiryTime, enable,
+          inboundIds: [...], traffic: { up, down, enable } }
+    so we read the known fields directly (with safe fallbacks).
+    """
+    traffic = client.get("traffic")
+    if isinstance(traffic, dict):
+        up = traffic.get("up", 0)
+        down = traffic.get("down", 0)
+    else:
+        up = client.get("up", 0)
+        down = client.get("down", 0)
+
+    def _as_int(v: Any) -> int:
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return 0
+
+    enable = client.get("enable")
+    if not isinstance(enable, bool):
+        enable = True
+
+    return ClientUsage(
+        up_bytes=_as_int(up),
+        down_bytes=_as_int(down),
+        total_bytes=_as_int(client.get("totalGB")),
+        expiry_time_ms=_as_int(client.get("expiryTime")),
+        enable=enable,
+    )
+
+
 def _extract_uuid(obj: Any) -> str | None:
     if isinstance(obj, dict):
         if "uuid" in obj and obj["uuid"]:
@@ -268,6 +321,56 @@ class XuiClient:
     async def get_client(self, email: str) -> dict[str, Any]:
         return await self._request("GET", f"/panel/api/clients/get/{email}")
 
+    async def list_clients(self) -> list[dict[str, Any]]:
+        """Return all clients as full objects (see module docstring for shape)."""
+        data = await self._request("GET", "/panel/api/clients/list")
+        obj = data.get("obj")
+        if isinstance(obj, list):
+            return [c for c in obj if isinstance(c, dict)]
+        return []
+
+    async def find_client(self, email: str) -> dict[str, Any] | None:
+        """Find a single client object by its email (the panel's primary key)."""
+        for client in await self.list_clients():
+            if str(client.get("email", "")) == email:
+                return client
+        return None
+
+    async def client_exists(self, email: str) -> bool:
+        return await self.find_client(email) is not None
+
+    async def resolve_client_identity(
+        self, email: str, *, add_resp: dict[str, Any] | None = None
+    ) -> tuple[str | None, str | None]:
+        """Return (subId, uuid) for a client, using the most reliable sources first.
+
+        1) Fields echoed in the add response (if provided).
+        2) A matching entry from /clients/list (structured, includes subId/uuid).
+        3) /clients/get/{email} as a last resort (obj may be an opaque string).
+        """
+        sub_id = _extract_sub_id(add_resp) if add_resp else None
+        client_uuid = _extract_uuid(add_resp) if add_resp else None
+
+        if sub_id and client_uuid:
+            return sub_id, client_uuid
+
+        client = await self.find_client(email)
+        if client is not None:
+            sub_id = sub_id or _sub_id_from_client(client)
+            client_uuid = client_uuid or _uuid_from_client(client)
+
+        if sub_id and client_uuid:
+            return sub_id, client_uuid
+
+        try:
+            get_resp = await self.get_client(email)
+            sub_id = sub_id or _extract_sub_id(get_resp)
+            client_uuid = client_uuid or _extract_uuid(get_resp)
+        except XuiError as exc:
+            log.warning("get_client identity fallback failed for %s: %s", email, exc)
+
+        return sub_id, client_uuid
+
     async def update_client(
         self,
         *,
@@ -297,6 +400,15 @@ class XuiClient:
         )
 
     async def get_usage(self, email: str) -> ClientUsage:
+        """Read a client's traffic + limits.
+
+        Prefers /clients/list (full, well-structured objects) and only falls
+        back to /clients/get/{email} if the client isn't in the list.
+        """
+        client = await self.find_client(email)
+        if client is not None:
+            return _usage_from_client(client)
+        # Fallback: the opaque get/{email} response.
         data = await self.get_client(email)
         return _parse_usage(data)
 
@@ -321,9 +433,8 @@ class XuiClient:
 
         Steps:
           1) POST /clients/add
-          2) Try to read subId/uuid from the add response.
-          3) If missing, GET /clients/get/{email} to fetch them.
-          4) GET /clients/subLinks/{subId} for the actual config URIs.
+          2) Resolve subId/uuid (add response → /clients/list → /clients/get).
+          3) GET /clients/subLinks/{subId} for the actual config URIs.
         """
         add_resp = await self.add_client(
             email=email,
@@ -333,17 +444,7 @@ class XuiClient:
             tg_user_id=tg_user_id,
         )
 
-        sub_id = _extract_sub_id(add_resp)
-        client_uuid = _extract_uuid(add_resp)
-        get_resp: dict[str, Any] | None = None
-
-        if not sub_id or not client_uuid:
-            try:
-                get_resp = await self.get_client(email)
-                sub_id = sub_id or _extract_sub_id(get_resp)
-                client_uuid = client_uuid or _extract_uuid(get_resp)
-            except XuiError as exc:
-                log.warning("get_client fallback failed for %s: %s", email, exc)
+        sub_id, client_uuid = await self.resolve_client_identity(email, add_resp=add_resp)
 
         # Some panels generate the UUID server-side and don't echo it; that's fine.
         if not client_uuid:
@@ -361,5 +462,5 @@ class XuiClient:
             sub_id=sub_id,
             client_uuid=client_uuid,
             sub_links=sub_links,
-            raw_get_response=get_resp,
+            raw_get_response=None,
         )
