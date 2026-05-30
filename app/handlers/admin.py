@@ -268,11 +268,13 @@ async def cmd_dellocation(
         await message.answer(texts.DEL_LOC_USAGE)
         return
 
-    ok = db.delete_location(loc_id)
-    if not ok:
+    result = db.remove_location(loc_id)
+    if result == "not_found":
         await message.answer(texts.DEL_LOC_NOTFOUND)
-        return
-    await message.answer(texts.DEL_LOC_OK.format(id=loc_id))
+    elif result == "disabled":
+        await message.answer(texts.DEL_LOC_DISABLED.format(id=loc_id))
+    else:
+        await message.answer(texts.DEL_LOC_OK.format(id=loc_id))
 
 
 @router.message(Command("togglelocation"))

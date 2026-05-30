@@ -231,10 +231,34 @@ class Database:
             )
             return int(cur.lastrowid or 0)
 
-    def delete_location(self, location_id: int) -> bool:
+    def remove_location(self, location_id: int) -> str:
+        """Hard-delete a location, or disable it if orders still reference it.
+
+        Returns one of:
+          - 'not_found' — no such location
+          - 'deleted'   — removed from the DB (no orders referenced it)
+          - 'disabled'  — kept in DB but marked enabled=0 (orders depend on it)
+
+        We never break the FK because the admin review flow looks up the
+        location's panel credentials when provisioning an Accept'd order,
+        so silently dropping the row would brick any pending orders.
+        """
         with self._cursor() as cur:
+            cur.execute("SELECT id FROM locations WHERE id = ?", (location_id,))
+            if cur.fetchone() is None:
+                return "not_found"
+            cur.execute(
+                "SELECT COUNT(*) AS c FROM orders WHERE location_id = ?",
+                (location_id,),
+            )
+            has_orders = int(cur.fetchone()["c"]) > 0
+            if has_orders:
+                cur.execute(
+                    "UPDATE locations SET enabled = 0 WHERE id = ?", (location_id,)
+                )
+                return "disabled"
             cur.execute("DELETE FROM locations WHERE id = ?", (location_id,))
-            return cur.rowcount > 0
+            return "deleted"
 
     def set_location_enabled(self, location_id: int, enabled: bool) -> bool:
         with self._cursor() as cur:

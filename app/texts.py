@@ -246,9 +246,14 @@ ADD_LOC_USAGE   = (
     "MY_API_TOKEN | 3,5</code>"
 )
 ADD_LOC_OK      = "✅ لوکیشن «{name}» با شناسه <code>{id}</code> اضافه شد."
-DEL_LOC_USAGE   = "❗ استفاده: <code>/dellocation &lt;id&gt;</code>"
-DEL_LOC_OK      = "✅ لوکیشن <code>{id}</code> حذف شد."
-DEL_LOC_NOTFOUND = "❗ لوکیشنی با این شناسه پیدا نشد."
+DEL_LOC_USAGE     = "❗ استفاده: <code>/dellocation &lt;id&gt;</code>"
+DEL_LOC_OK        = "✅ لوکیشن <code>{id}</code> حذف شد."
+DEL_LOC_DISABLED  = (
+    "ℹ️ لوکیشن <code>{id}</code> سفارش‌های ثبت‌شده دارد و قابل حذف کامل نیست؛ "
+    "به‌جای حذف، <b>غیرفعال</b> شد و دیگر در لیست کاربر نمایش داده نمی‌شود.\n\n"
+    "اگر می‌خواهید کاملاً پاک شود، ابتدا سفارش‌های مرتبط را از دیتابیس حذف کنید."
+)
+DEL_LOC_NOTFOUND  = "❗ لوکیشنی با این شناسه پیدا نشد."
 TOGGLE_LOC_USAGE = "❗ استفاده: <code>/togglelocation &lt;id&gt;</code>"
 TOGGLE_LOC_OK    = "✅ لوکیشن <code>{id}</code> اکنون <b>{state}</b> است."
 LOC_LIST_EMPTY  = "هیچ لوکیشنی ثبت نشده است. با <code>/addlocation</code> یکی اضافه کنید."
