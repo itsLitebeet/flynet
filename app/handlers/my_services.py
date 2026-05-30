@@ -98,6 +98,8 @@ def _own_order_or_none(db: Database, order_id: int, user_id: int):
     row = db.get_order(order_id)
     if row is None or int(row["user_id"]) != user_id:
         return None
+    if str(row["status"]) == "panel_removed":
+        return None
     return row
 
 
@@ -142,11 +144,8 @@ async def cb_my_service_detail(callback: CallbackQuery, db: Database) -> None:
         return
 
     text = _build_detail_text(row)
-    status = str(row["status"])
-    provisioned = status == "provisioned"
-    if status == "panel_removed":
-        text += texts.SERVICE_PANEL_REMOVED_NOTE
-    elif not provisioned:
+    provisioned = str(row["status"]) == "provisioned"
+    if not provisioned:
         text += texts.SERVICE_NOT_PROVISIONED_ACTIONS
 
     # We don't know the live enabled state without an API call; assume

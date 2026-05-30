@@ -421,9 +421,15 @@ class Database:
             return cur.fetchone()
 
     def list_user_orders(self, user_id: int, limit: int = 50) -> list[sqlite3.Row]:
+        """Orders visible to the buyer in «سرویس‌های من».
+
+        Excludes panel_removed — those were cleared after manual deletion on
+        3x-ui and should not appear in the buyer UI.
+        """
         with self._cursor() as cur:
             cur.execute(
                 "SELECT * FROM orders WHERE user_id = ? "
+                "AND status != 'panel_removed' "
                 "ORDER BY created_at DESC LIMIT ?",
                 (user_id, limit),
             )

@@ -95,9 +95,6 @@ SERVICE_DETAIL = (
 SERVICE_NOT_PROVISIONED_ACTIONS = (
     "\n\nℹ️ این سرویس هنوز فعال نشده، بنابراین گزینه‌های مدیریت در دسترس نیستند."
 )
-SERVICE_PANEL_REMOVED_NOTE = (
-    "\n\n🗑 این سرویس از پنل حذف شده است. برای اتصال مجدد، سرویس جدید خریداری کنید."
-)
 
 VIEW_CONFIGS_TITLE = (
     "🔗 <b>اطلاعات اتصال — سرویس #{order_id}</b>\n\n{configs_block}"
