@@ -247,7 +247,12 @@ def my_service_detail(order_id: int, *, provisioned: bool, enabled: bool) -> Inl
     rows: list[list[InlineKeyboardButton]] = []
     if provisioned:
         rows.append([
-            InlineKeyboardButton(text=texts.BTN_VIEW_CONFIGS, callback_data=f"{CB_MY_CONFIGS_PREFIX}{order_id}"),
+            InlineKeyboardButton(
+                text=texts.BTN_VIEW_CONFIGS,
+                callback_data=f"{CB_MY_CONFIGS_PREFIX}{order_id}",
+            ),
+        ])
+        rows.append([
             InlineKeyboardButton(
                 text=texts.BTN_REFRESH_USAGE,
                 callback_data=f"{CB_MY_REFRESH_USAGE_PREFIX}{order_id}",
