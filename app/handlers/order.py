@@ -12,7 +12,7 @@ import logging
 from html import escape
 
 from aiogram import Bot, F, Router
-from aiogram.filters import StateFilter
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
@@ -47,9 +47,26 @@ async def _edit_or_answer(callback: CallbackQuery, text: str, reply_markup=None)
         await callback.message.answer(text, reply_markup=reply_markup)
 
 
-def _calc_price_for(db: Database, volume_gb: int, duration_days: int) -> int:
-    base, per_gb, per_day = db.get_pricing()
+def _calc_price_for(
+    db: Database, volume_gb: int, duration_days: int, location_id: int
+) -> int:
+    base, per_gb, per_day = db.get_pricing_for_location(location_id)
     return texts.calc_price(volume_gb, duration_days, base, per_gb, per_day)
+
+
+async def _abort_order_flow(
+    message: Message, state: FSMContext, db: Database
+) -> None:
+    """User cancelled mid-purchase — drop the unpaid order row if one was created."""
+    data = await state.get_data()
+    order_id = int(data.get("order_id") or 0)
+    if order_id:
+        row = db.get_order(order_id)
+        # Only delete while still waiting for payment (not after receipt sent).
+        if row is not None and str(row["status"]) == "awaiting_payment":
+            db.delete_order(order_id)
+    await state.clear()
+    await message.answer(texts.CANCELLED, reply_markup=keyboards.main_reply_keyboard())
 
 
 async def _show_locations(callback: CallbackQuery, db: Database, state: FSMContext) -> None:
@@ -86,7 +103,12 @@ async def _show_durations(callback: CallbackQuery, state: FSMContext,
 
 async def _show_review(callback: CallbackQuery, state: FSMContext, db: Database) -> None:
     data = await state.get_data()
-    price = _calc_price_for(db, int(data["volume_gb"]), int(data["duration_days"]))
+    price = _calc_price_for(
+        db,
+        int(data["volume_gb"]),
+        int(data["duration_days"]),
+        int(data["location_id"]),
+    )
     await state.update_data(price=price)
     await state.set_state(OrderFlow.reviewing)
     await _edit_or_answer(
@@ -299,13 +321,19 @@ async def cb_confirm_order(
 
 
 # ---------- back/cancel ----------
+@router.message(Command("cancel"), StateFilter(OrderFlow))
+async def cmd_cancel_order(message: Message, state: FSMContext, db: Database) -> None:
+    await _abort_order_flow(message, state, db)
+
+
 @router.callback_query(F.data == keyboards.CB_ORDER_CANCEL)
-async def cb_cancel_anywhere(callback: CallbackQuery, state: FSMContext) -> None:
-    await state.clear()
-    if callback.message is not None:
-        await callback.message.answer(
-            texts.CANCELLED, reply_markup=keyboards.main_reply_keyboard()
-        )
+async def cb_cancel_anywhere(
+    callback: CallbackQuery, state: FSMContext, db: Database
+) -> None:
+    if isinstance(callback.message, Message):
+        await _abort_order_flow(callback.message, state, db)
+    else:
+        await state.clear()
     await callback.answer()
 
 
@@ -344,8 +372,7 @@ async def on_receipt_photo(
     data = await state.get_data()
     order_id = int(data.get("order_id", 0))
     if not order_id or message.photo is None:
-        await state.clear()
-        await message.answer(texts.CANCELLED, reply_markup=keyboards.main_reply_keyboard())
+        await _abort_order_flow(message, state, db)
         return
 
     # Highest-resolution photo size is last.

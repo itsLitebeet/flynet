@@ -209,9 +209,21 @@ async def cmd_locations(message: Message, settings: Settings, db: Database) -> N
                 base_url=escape(loc.base_url),
                 inbounds=",".join(str(i) for i in loc.inbound_ids) or "—",
                 sub_template=escape(loc.sub_url_template) if loc.sub_url_template else "—",
+                pricing=escape(_location_pricing_label(db, loc)),
             )
         )
     await message.answer("\n\n".join(lines))
+
+
+def _location_pricing_label(db: Database, loc) -> str:
+    base, per_gb, per_day = db.get_pricing_for_location(loc.id)
+    uses_global = (
+        loc.price_base is None
+        and loc.price_per_gb is None
+        and loc.price_per_day is None
+    )
+    tag = "پیش‌فرض" if uses_global else "اختصاصی"
+    return f"{tag} — {texts.format_pricing_formula(base, per_gb, per_day)}"
 
 
 def _normalize_panel_url(raw: str) -> str:
@@ -265,15 +277,69 @@ async def cmd_addlocation(
         inbound_ids=inbound_ids,
         sub_url_template=sub_url_template,
     )
+    loc = db.get_location(loc_id)
+    pricing = escape(_location_pricing_label(db, loc)) if loc else "—"
     extra_sub_line = (
         f"\n🔔 sub: <code>{escape(sub_url_template)}</code>"
         if sub_url_template else ""
     )
     await message.answer(
-        texts.ADD_LOC_OK.format(name=escape(name), id=loc_id)
+        texts.ADD_LOC_OK.format(name=escape(name), id=loc_id, pricing=pricing)
         + f"\n\n🔗 base_url:\n<code>{escape(base_url)}</code>"
         + f"\n📡 inbounds: <code>{','.join(str(i) for i in inbound_ids)}</code>"
         + extra_sub_line
+    )
+
+
+@router.message(Command("setlocationprice"))
+async def cmd_setlocationprice(
+    message: Message, command: CommandObject, settings: Settings, db: Database
+) -> None:
+    if not _require_admin(message, settings):
+        await message.answer(texts.NOT_ADMIN)
+        return
+
+    parts = (command.args or "").split()
+    if len(parts) < 2:
+        await message.answer(texts.SET_LOC_PRICE_USAGE)
+        return
+    try:
+        loc_id = int(parts[0])
+    except ValueError:
+        await message.answer(texts.SET_LOC_PRICE_USAGE)
+        return
+
+    loc = db.get_location(loc_id)
+    if loc is None:
+        await message.answer(texts.DEL_LOC_NOTFOUND)
+        return
+
+    if parts[1] == "-":
+        db.set_location_pricing(loc_id, price_base=None, price_per_gb=None, price_per_day=None)
+        await message.answer(
+            texts.SET_LOC_PRICE_DEFAULT_OK.format(id=loc_id, name=escape(loc.name))
+        )
+        return
+
+    if len(parts) != 4:
+        await message.answer(texts.SET_LOC_PRICE_USAGE)
+        return
+    try:
+        base, per_gb, per_day = (int(p) for p in parts[1:4])
+    except ValueError:
+        await message.answer(texts.SET_LOC_PRICE_USAGE)
+        return
+    if min(base, per_gb, per_day) < 0:
+        await message.answer(texts.SET_LOC_PRICE_USAGE)
+        return
+
+    db.set_location_pricing(
+        loc_id, price_base=base, price_per_gb=per_gb, price_per_day=per_day
+    )
+    await message.answer(
+        texts.SET_LOC_PRICE_OK.format(
+            id=loc_id, name=escape(loc.name), base=base, per_gb=per_gb, per_day=per_day
+        )
     )
 
 

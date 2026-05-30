@@ -22,14 +22,18 @@ def format_card_number(card: str) -> str:
 
 
 def format_payment_amount(toman: int) -> str:
-    """Payment line for copy-paste: toman + rial (۱ تومان = ۱۰ ریال)."""
+    """Payment line: only the numeric amounts are monospace (easy to copy)."""
     rial = toman * 10
-    return f"<code>{toman} تومان یا {rial} ریال</code>"
+    return f"<code>{toman}</code> تومان یا <code>{rial}</code> ریال"
 
 
 def calc_price(volume_gb: int, duration_days: int,
                base: int, per_gb: int, per_day: int) -> int:
     return int(base + per_gb * volume_gb + per_day * duration_days)
+
+
+def format_pricing_formula(base: int, per_gb: int, per_day: int) -> str:
+    return f"base {base:,} + {per_gb:,}/GB + {per_day:,}/day"
 
 
 def format_bytes(n: int) -> str:
@@ -325,7 +329,9 @@ ADMIN_HELP = (
     "/broadcast &lt;متن&gt; — ارسال همگانی\n\n"
     "<b>تنظیمات:</b>\n"
     "/setcard &lt;شماره کارت&gt; | &lt;نام صاحب کارت&gt;\n"
-    "/setprice &lt;base&gt; &lt;per_gb&gt; &lt;per_day&gt;\n"
+    "/setprice &lt;base&gt; &lt;per_gb&gt; &lt;per_day&gt; — قیمت پیش‌فرض (لوکیشن‌های جدید)\n"
+    "/setlocationprice &lt;id&gt; &lt;base&gt; &lt;per_gb&gt; &lt;per_day&gt; — قیمت یک لوکیشن\n"
+    "/setlocationprice &lt;id&gt; - — بازگشت لوکیشن به قیمت پیش‌فرض\n"
     "/showsettings — نمایش تنظیمات فعلی\n\n"
     "<b>لوکیشن‌ها:</b>\n"
     "/locations — لیست لوکیشن‌ها\n"
@@ -408,9 +414,22 @@ SHOW_SETTINGS      = (
     "⚙️ <b>تنظیمات فعلی</b>\n\n"
     "💳 شماره کارت: <code>{card_number}</code>\n"
     "👤 صاحب کارت: <b>{card_holder}</b>\n\n"
-    "💰 base = <b>{base}</b>\n"
-    "💰 per_gb = <b>{per_gb}</b>\n"
-    "💰 per_day = <b>{per_day}</b>"
+    "💰 قیمت پیش‌فرض (لوکیشن جدید / fallback):\n"
+    "base = <b>{base}</b> | per_gb = <b>{per_gb}</b> | per_day = <b>{per_day}</b>"
+)
+
+SET_LOC_PRICE_USAGE = (
+    "❗ استفاده:\n"
+    "<code>/setlocationprice 2 25000 10000 2000</code>\n\n"
+    "برای استفاده از قیمت پیش‌فرض سراسری:\n"
+    "<code>/setlocationprice 2 -</code>"
+)
+SET_LOC_PRICE_OK = (
+    "✅ قیمت لوکیشن <code>#{id}</code> «{name}»:\n"
+    "base = <b>{base}</b> | per_gb = <b>{per_gb}</b> | per_day = <b>{per_day}</b>"
+)
+SET_LOC_PRICE_DEFAULT_OK = (
+    "✅ لوکیشن <code>#{id}</code> «{name}» از قیمت پیش‌فرض سراسری استفاده می‌کند."
 )
 ADD_LOC_USAGE   = (
     "❗ استفاده:\n"
@@ -419,7 +438,10 @@ ADD_LOC_USAGE   = (
     "می‌توانید فیلد پنجم اختیاری را برای لینک اشتراک اضافه کنید:\n"
     "<code>... | 3,5 | https://panel.example.com:2096/sub/{subId}</code>"
 )
-ADD_LOC_OK      = "✅ لوکیشن «{name}» با شناسه <code>{id}</code> اضافه شد."
+ADD_LOC_OK      = (
+    "✅ لوکیشن «{name}» با شناسه <code>{id}</code> اضافه شد.\n"
+    "💰 قیمت: {pricing}"
+)
 
 SET_SUBURL_USAGE = (
     "❗ استفاده:\n"
@@ -456,7 +478,8 @@ LOC_LIST_ITEM   = (
     "• <code>#{id}</code> {state_emoji} <b>{name}</b>\n"
     "    base: <code>{base_url}</code>\n"
     "    inbounds: <code>{inbounds}</code>\n"
-    "    sub: <code>{sub_template}</code>"
+    "    sub: <code>{sub_template}</code>\n"
+    "    💰 {pricing}"
 )
 
 PENDING_EMPTY  = "هیچ سفارشی در انتظار بررسی نیست."

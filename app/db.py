@@ -31,6 +31,9 @@ CREATE TABLE IF NOT EXISTS locations (
     api_token         TEXT NOT NULL,
     inbound_ids       TEXT NOT NULL,      -- JSON array of integers
     sub_url_template  TEXT,                -- e.g. https://host:2096/sub/{subId}
+    price_base        INTEGER,             -- NULL = use global default from settings
+    price_per_gb      INTEGER,
+    price_per_day     INTEGER,
     enabled           INTEGER NOT NULL DEFAULT 1,
     created_at        TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -90,6 +93,9 @@ class Location:
     api_token: str
     inbound_ids: list[int]
     sub_url_template: str | None
+    price_base: int | None
+    price_per_gb: int | None
+    price_per_day: int | None
     enabled: bool
 
     def render_sub_url(self, sub_id: str | None) -> str | None:
@@ -111,6 +117,13 @@ def _row_to_location(row: sqlite3.Row) -> Location:
         sub_url_template = row["sub_url_template"]
     except (IndexError, KeyError):
         pass
+    def _opt_int(key: str) -> int | None:
+        try:
+            v = row[key]
+            return int(v) if v is not None else None
+        except (IndexError, KeyError, TypeError, ValueError):
+            return None
+
     return Location(
         id=int(row["id"]),
         name=str(row["name"]),
@@ -118,6 +131,9 @@ def _row_to_location(row: sqlite3.Row) -> Location:
         api_token=str(row["api_token"]),
         inbound_ids=[int(x) for x in inbound_ids],
         sub_url_template=str(sub_url_template) if sub_url_template else None,
+        price_base=_opt_int("price_base"),
+        price_per_gb=_opt_int("price_per_gb"),
+        price_per_day=_opt_int("price_per_day"),
         enabled=bool(row["enabled"]),
     )
 
@@ -132,6 +148,7 @@ class Database:
         self._conn.commit()
         self._migrate()
         self._seed_defaults()
+        self._backfill_location_pricing()
 
     @contextmanager
     def _cursor(self) -> Iterator[sqlite3.Cursor]:
@@ -158,10 +175,22 @@ class Database:
         to additive evolution.
         """
         self._ensure_column("locations", "sub_url_template", "TEXT")
+        self._ensure_column("locations", "price_base", "INTEGER")
+        self._ensure_column("locations", "price_per_gb", "INTEGER")
+        self._ensure_column("locations", "price_per_day", "INTEGER")
         self._ensure_column("orders", "nickname", "TEXT")
         # Legacy status from an earlier version — hard-delete on upgrade.
         with self._cursor() as cur:
             cur.execute("DELETE FROM orders WHERE status = 'panel_removed'")
+
+    def _backfill_location_pricing(self) -> None:
+        base, per_gb, per_day = self.get_pricing()
+        with self._cursor() as cur:
+            cur.execute(
+                "UPDATE locations SET price_base = ?, price_per_gb = ?, price_per_day = ? "
+                "WHERE price_base IS NULL",
+                (base, per_gb, per_day),
+            )
 
     def _seed_defaults(self) -> None:
         with self._cursor() as cur:
@@ -249,11 +278,23 @@ class Database:
             return default
 
     def get_pricing(self) -> tuple[int, int, int]:
-        """Returns (base, per_gb, per_day) in toman."""
+        """Global default pricing (base, per_gb, per_day) in toman."""
         return (
             self.get_int_setting("price_base", 0),
             self.get_int_setting("price_per_gb", 0),
             self.get_int_setting("price_per_day", 0),
+        )
+
+    def get_pricing_for_location(self, location_id: int) -> tuple[int, int, int]:
+        """Resolved pricing for a location (custom or global fallback per field)."""
+        g_base, g_per_gb, g_per_day = self.get_pricing()
+        loc = self.get_location(location_id)
+        if loc is None:
+            return g_base, g_per_gb, g_per_day
+        return (
+            loc.price_base if loc.price_base is not None else g_base,
+            loc.price_per_gb if loc.price_per_gb is not None else g_per_gb,
+            loc.price_per_day if loc.price_per_day is not None else g_per_day,
         )
 
     # ---------- locations ----------
@@ -264,15 +305,48 @@ class Database:
         api_token: str,
         inbound_ids: list[int],
         sub_url_template: str | None = None,
+        *,
+        price_base: int | None = None,
+        price_per_gb: int | None = None,
+        price_per_day: int | None = None,
     ) -> int:
+        if price_base is None:
+            price_base, price_per_gb, price_per_day = self.get_pricing()
         with self._cursor() as cur:
             cur.execute(
                 "INSERT INTO locations "
-                "(name, base_url, api_token, inbound_ids, sub_url_template) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (name, base_url, api_token, json.dumps(inbound_ids), sub_url_template),
+                "(name, base_url, api_token, inbound_ids, sub_url_template, "
+                "price_base, price_per_gb, price_per_day) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    name,
+                    base_url,
+                    api_token,
+                    json.dumps(inbound_ids),
+                    sub_url_template,
+                    price_base,
+                    price_per_gb,
+                    price_per_day,
+                ),
             )
             return int(cur.lastrowid or 0)
+
+    def set_location_pricing(
+        self,
+        location_id: int,
+        *,
+        price_base: int | None,
+        price_per_gb: int | None,
+        price_per_day: int | None,
+    ) -> bool:
+        """Set custom pricing. Pass all None to revert to global defaults."""
+        with self._cursor() as cur:
+            cur.execute(
+                "UPDATE locations SET price_base = ?, price_per_gb = ?, price_per_day = ? "
+                "WHERE id = ?",
+                (price_base, price_per_gb, price_per_day, location_id),
+            )
+            return cur.rowcount > 0
 
     def set_location_sub_url_template(
         self, location_id: int, template: str | None
