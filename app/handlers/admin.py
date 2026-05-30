@@ -19,7 +19,7 @@ from app.handlers.admin_helpers import (
     run_clear_declined,
     run_sync_panel,
 )
-from app.handlers.admin_panel import send_dashboard, send_pending_list
+from app.handlers.admin_panel import send_base_plans, send_dashboard, send_pending_list
 
 
 router = Router(name="admin")
@@ -154,6 +154,127 @@ async def cmd_showsettings(message: Message, settings: Settings, db: Database) -
         await message.answer(texts.NOT_ADMIN)
         return
     await message.answer(format_settings_text(db))
+
+
+# ---------- base buy plans (volume / duration presets) ----------
+@router.message(Command("plans"))
+async def cmd_plans(message: Message, settings: Settings, db: Database) -> None:
+    if not _require_admin(message, settings):
+        await message.answer(texts.NOT_ADMIN)
+        return
+    await send_base_plans(message, db)
+
+
+@router.message(Command("addvolume"))
+async def cmd_add_volume(
+    message: Message, command: CommandObject, settings: Settings, db: Database
+) -> None:
+    if not _require_admin(message, settings):
+        await message.answer(texts.NOT_ADMIN)
+        return
+    raw = (command.args or "").strip()
+    if not raw:
+        await message.answer(texts.ADMIN_PLAN_USAGE)
+        return
+    try:
+        gb = int(raw)
+    except ValueError:
+        await message.answer(texts.ADMIN_PLAN_INVALID)
+        return
+    ok, reason = db.add_volume_preset(gb)
+    if not ok:
+        msg = {
+            "exists": texts.ADMIN_PLAN_EXISTS,
+            "invalid": texts.ADMIN_PLAN_INVALID,
+            "max": texts.ADMIN_PLAN_MAX,
+        }.get(reason, texts.ADMIN_PLAN_INVALID)
+        await message.answer(msg)
+        return
+    await message.answer(texts.ADMIN_PLAN_VOL_ADDED.format(gb=gb))
+
+
+@router.message(Command("delvolume"))
+async def cmd_del_volume(
+    message: Message, command: CommandObject, settings: Settings, db: Database
+) -> None:
+    if not _require_admin(message, settings):
+        await message.answer(texts.NOT_ADMIN)
+        return
+    raw = (command.args or "").strip()
+    if not raw:
+        await message.answer(texts.ADMIN_PLAN_USAGE)
+        return
+    try:
+        gb = int(raw)
+    except ValueError:
+        await message.answer(texts.ADMIN_PLAN_INVALID)
+        return
+    ok, reason = db.remove_volume_preset(gb)
+    if not ok:
+        msg = {
+            "missing": texts.ADMIN_PLAN_NOT_FOUND,
+            "last": texts.ADMIN_PLAN_LAST,
+            "invalid": texts.ADMIN_PLAN_INVALID,
+        }.get(reason, texts.ADMIN_PLAN_INVALID)
+        await message.answer(msg)
+        return
+    await message.answer(texts.ADMIN_PLAN_VOL_REMOVED.format(gb=gb))
+
+
+@router.message(Command("addduration"))
+async def cmd_add_duration(
+    message: Message, command: CommandObject, settings: Settings, db: Database
+) -> None:
+    if not _require_admin(message, settings):
+        await message.answer(texts.NOT_ADMIN)
+        return
+    raw = (command.args or "").strip()
+    if not raw:
+        await message.answer(texts.ADMIN_PLAN_USAGE)
+        return
+    try:
+        days = int(raw)
+    except ValueError:
+        await message.answer(texts.ADMIN_PLAN_INVALID)
+        return
+    ok, reason = db.add_duration_preset(days)
+    if not ok:
+        msg = {
+            "exists": texts.ADMIN_PLAN_EXISTS,
+            "invalid": texts.ADMIN_PLAN_INVALID,
+            "max": texts.ADMIN_PLAN_MAX,
+        }.get(reason, texts.ADMIN_PLAN_INVALID)
+        await message.answer(msg)
+        return
+    await message.answer(texts.ADMIN_PLAN_DUR_ADDED.format(days=days))
+
+
+@router.message(Command("delduration"))
+async def cmd_del_duration(
+    message: Message, command: CommandObject, settings: Settings, db: Database
+) -> None:
+    if not _require_admin(message, settings):
+        await message.answer(texts.NOT_ADMIN)
+        return
+    raw = (command.args or "").strip()
+    if not raw:
+        await message.answer(texts.ADMIN_PLAN_USAGE)
+        return
+    try:
+        days = int(raw)
+    except ValueError:
+        await message.answer(texts.ADMIN_PLAN_INVALID)
+        return
+    ok, reason = db.remove_duration_preset(days)
+    if not ok:
+        msg = {
+            "missing": texts.ADMIN_PLAN_NOT_FOUND,
+            "last": texts.ADMIN_PLAN_LAST,
+            "invalid": texts.ADMIN_PLAN_INVALID,
+        }.get(reason, texts.ADMIN_PLAN_INVALID)
+        await message.answer(msg)
+        return
+    await message.answer(texts.ADMIN_PLAN_DUR_REMOVED.format(days=days))
 
 
 # ---------- locations ----------

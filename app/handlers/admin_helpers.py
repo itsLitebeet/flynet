@@ -51,6 +51,12 @@ def format_stats_text(db: Database) -> str:
     )
 
 
+def format_base_plans_text(db: Database) -> str:
+    volumes = ", ".join(f"{g} GB" for g in db.get_volume_presets()) or "—"
+    durations = ", ".join(f"{d} روز" for d in db.get_duration_presets()) or "—"
+    return texts.ADMIN_PLANS_HEADER.format(volumes=volumes, durations=durations)
+
+
 def format_settings_text(db: Database) -> str:
     base, per_gb, per_day = db.get_pricing()
     return texts.ADMIN_SETTINGS_VIEW.format(

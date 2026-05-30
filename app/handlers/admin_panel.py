@@ -13,6 +13,7 @@ from app.config import Settings
 from app.db import Database
 from app.handlers.admin_helpers import (
     admin_from_message,
+    format_base_plans_text,
     format_settings_text,
     format_stats_text,
     is_admin,
@@ -68,7 +69,17 @@ async def send_pending_list(message: Message, db: Database) -> None:
 async def send_settings(message: Message, db: Database) -> None:
     await message.answer(
         texts.ADMIN_SETTINGS_MENU + "\n\n" + format_settings_text(db),
-        reply_markup=keyboards.admin_home_inline(),
+        reply_markup=keyboards.admin_settings_inline(),
+    )
+
+
+async def send_base_plans(message: Message, db: Database) -> None:
+    await message.answer(
+        format_base_plans_text(db),
+        reply_markup=keyboards.admin_plans_keyboard(
+            db.get_volume_presets(),
+            db.get_duration_presets(),
+        ),
     )
 
 
@@ -239,6 +250,88 @@ async def cb_admin_settings(
     if isinstance(callback.message, Message):
         await send_settings(callback.message, db)
     await callback.answer()
+
+
+@router.callback_query(F.data == keyboards.CB_ADM_PLANS)
+async def cb_admin_plans(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
+        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+        return
+    if isinstance(callback.message, Message):
+        text = format_base_plans_text(db)
+        markup = keyboards.admin_plans_keyboard(
+            db.get_volume_presets(),
+            db.get_duration_presets(),
+        )
+        try:
+            await callback.message.edit_text(text, reply_markup=markup)
+        except Exception:  # noqa: BLE001
+            await send_base_plans(callback.message, db)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith(keyboards.CB_ADM_VOL_DEL_PREFIX))
+async def cb_admin_del_volume(
+    callback: CallbackQuery, settings: Settings, db: Database
+) -> None:
+    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
+        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+        return
+    raw = (callback.data or "").removeprefix(keyboards.CB_ADM_VOL_DEL_PREFIX)
+    try:
+        gb = int(raw)
+    except ValueError:
+        await callback.answer()
+        return
+    ok, reason = db.remove_volume_preset(gb)
+    if not ok:
+        msg = {
+            "missing": texts.ADMIN_PLAN_NOT_FOUND,
+            "last": texts.ADMIN_PLAN_LAST,
+        }.get(reason, texts.ADMIN_PLAN_INVALID)
+        await callback.answer(msg, show_alert=True)
+        return
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text(
+            format_base_plans_text(db),
+            reply_markup=keyboards.admin_plans_keyboard(
+                db.get_volume_presets(),
+                db.get_duration_presets(),
+            ),
+        )
+    await callback.answer(texts.ADMIN_PLAN_VOL_REMOVED.format(gb=gb))
+
+
+@router.callback_query(F.data.startswith(keyboards.CB_ADM_DUR_DEL_PREFIX))
+async def cb_admin_del_duration(
+    callback: CallbackQuery, settings: Settings, db: Database
+) -> None:
+    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
+        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+        return
+    raw = (callback.data or "").removeprefix(keyboards.CB_ADM_DUR_DEL_PREFIX)
+    try:
+        days = int(raw)
+    except ValueError:
+        await callback.answer()
+        return
+    ok, reason = db.remove_duration_preset(days)
+    if not ok:
+        msg = {
+            "missing": texts.ADMIN_PLAN_NOT_FOUND,
+            "last": texts.ADMIN_PLAN_LAST,
+        }.get(reason, texts.ADMIN_PLAN_INVALID)
+        await callback.answer(msg, show_alert=True)
+        return
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text(
+            format_base_plans_text(db),
+            reply_markup=keyboards.admin_plans_keyboard(
+                db.get_volume_presets(),
+                db.get_duration_presets(),
+            ),
+        )
+    await callback.answer(texts.ADMIN_PLAN_DUR_REMOVED.format(days=days))
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_TOOLS)

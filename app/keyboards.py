@@ -54,6 +54,9 @@ CB_ADM_LOC_DETAIL_PREFIX = "adm:ld:"    # adm:ld:<location_id>
 CB_ADM_LOC_TOGGLE_PREFIX = "adm:lt:"    # adm:lt:<location_id>
 CB_ADM_TOOL_SYNC         = "adm:tsync"
 CB_ADM_TOOL_CLEAR        = "adm:tclr"
+CB_ADM_PLANS             = "adm:plans"
+CB_ADM_VOL_DEL_PREFIX    = "adm:vd:"   # adm:vd:<gb>
+CB_ADM_DUR_DEL_PREFIX    = "adm:dd:"   # adm:dd:<days>
 CB_ADM_LOC_PURGE_PREFIX  = "adm:pg:"   # adm:pg:<location_id> → purge confirm
 
 # Admin destructive actions (require explicit confirmation)
@@ -159,32 +162,40 @@ def locations(locations: list[Location]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def volumes() -> InlineKeyboardMarkup:
+def _chunk_buttons(
+    buttons: list[InlineKeyboardButton], per_row: int = 3
+) -> list[list[InlineKeyboardButton]]:
+    rows: list[list[InlineKeyboardButton]] = []
     row: list[InlineKeyboardButton] = []
-    for gb in texts.VOLUME_PRESETS_GB:
-        row.append(
-            InlineKeyboardButton(text=f"{gb} GB", callback_data=f"{CB_VOL_PREFIX}{gb}")
-        )
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            row,
-            [InlineKeyboardButton(text=texts.BTN_CUSTOM, callback_data=CB_VOL_CUSTOM)],
-            [InlineKeyboardButton(text=texts.BTN_BACK,   callback_data=CB_ORDER_BACK_LOC)],
-        ]
-    )
+    for btn in buttons:
+        row.append(btn)
+        if len(row) >= per_row:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    return rows
 
 
-def durations() -> InlineKeyboardMarkup:
-    row = [
-        InlineKeyboardButton(text=f"{d} روزه", callback_data=f"{CB_DUR_PREFIX}{d}")
-        for d in texts.DURATION_PRESETS_DAYS
+def volumes(volume_presets_gb: list[int]) -> InlineKeyboardMarkup:
+    preset_btns = [
+        InlineKeyboardButton(text=f"{gb} GB", callback_data=f"{CB_VOL_PREFIX}{gb}")
+        for gb in volume_presets_gb
     ]
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            row,
-            [InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ORDER_BACK_VOL)],
-        ]
-    )
+    rows = _chunk_buttons(preset_btns, per_row=3)
+    rows.append([InlineKeyboardButton(text=texts.BTN_CUSTOM, callback_data=CB_VOL_CUSTOM)])
+    rows.append([InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ORDER_BACK_LOC)])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def durations(duration_presets_days: list[int]) -> InlineKeyboardMarkup:
+    preset_btns = [
+        InlineKeyboardButton(text=f"{d} روزه", callback_data=f"{CB_DUR_PREFIX}{d}")
+        for d in duration_presets_days
+    ]
+    rows = _chunk_buttons(preset_btns, per_row=3)
+    rows.append([InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ORDER_BACK_VOL)])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def confirm_order() -> InlineKeyboardMarkup:
@@ -377,6 +388,47 @@ def admin_dashboard_inline() -> InlineKeyboardMarkup:
             ],
         ]
     )
+
+
+def admin_settings_inline() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📋 پلن‌های پایه",
+                    callback_data=CB_ADM_PLANS,
+                ),
+            ],
+            [
+                InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME),
+            ],
+        ]
+    )
+
+
+def admin_plans_keyboard(
+    volume_presets: list[int], duration_presets: list[int]
+) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    for gb in volume_presets:
+        rows.append([
+            InlineKeyboardButton(
+                text=f"❌ حذف {gb} GB",
+                callback_data=f"{CB_ADM_VOL_DEL_PREFIX}{gb}",
+            )
+        ])
+    for days in duration_presets:
+        rows.append([
+            InlineKeyboardButton(
+                text=f"❌ حذف {days} روز",
+                callback_data=f"{CB_ADM_DUR_DEL_PREFIX}{days}",
+            )
+        ])
+    rows.append([
+        InlineKeyboardButton(text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_PLANS),
+        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_SETTINGS),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def admin_tools_inline() -> InlineKeyboardMarkup:

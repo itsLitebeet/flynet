@@ -79,17 +79,24 @@ async def _show_locations(callback: CallbackQuery, db: Database, state: FSMConte
     await _edit_or_answer(callback, texts.ORDER_PICK_LOCATION, keyboards.locations(locs))
 
 
-async def _show_volumes(callback: CallbackQuery, state: FSMContext, location_name: str) -> None:
+async def _show_volumes(
+    callback: CallbackQuery, state: FSMContext, location_name: str, db: Database
+) -> None:
     await state.set_state(OrderFlow.picking_volume)
     await _edit_or_answer(
         callback,
         texts.ORDER_PICK_VOLUME.format(location=escape(location_name)),
-        keyboards.volumes(),
+        keyboards.volumes(db.get_volume_presets()),
     )
 
 
-async def _show_durations(callback: CallbackQuery, state: FSMContext,
-                           location_name: str, volume_gb: int) -> None:
+async def _show_durations(
+    callback: CallbackQuery,
+    state: FSMContext,
+    location_name: str,
+    volume_gb: int,
+    db: Database,
+) -> None:
     await state.set_state(OrderFlow.picking_duration)
     await _edit_or_answer(
         callback,
@@ -97,7 +104,7 @@ async def _show_durations(callback: CallbackQuery, state: FSMContext,
             location=escape(location_name),
             volume=volume_gb,
         ),
-        keyboards.durations(),
+        keyboards.durations(db.get_duration_presets()),
     )
 
 
@@ -176,7 +183,7 @@ async def cb_pick_location(callback: CallbackQuery, state: FSMContext, db: Datab
         location_name=loc.name,
         inbound_ids=loc.inbound_ids,
     )
-    await _show_volumes(callback, state, loc.name)
+    await _show_volumes(callback, state, loc.name, db)
     await callback.answer()
 
 
@@ -202,7 +209,7 @@ async def cb_volume_custom(callback: CallbackQuery, state: FSMContext) -> None:
     StateFilter(OrderFlow.picking_volume),
     F.data.startswith(keyboards.CB_VOL_PREFIX),
 )
-async def cb_volume_preset(callback: CallbackQuery, state: FSMContext) -> None:
+async def cb_volume_preset(callback: CallbackQuery, state: FSMContext, db: Database) -> None:
     raw = (callback.data or "").removeprefix(keyboards.CB_VOL_PREFIX)
     if raw == "custom":
         return  # handled by the other callback above
@@ -211,18 +218,18 @@ async def cb_volume_preset(callback: CallbackQuery, state: FSMContext) -> None:
     except ValueError:
         await callback.answer()
         return
-    if gb not in texts.VOLUME_PRESETS_GB:
+    if gb not in db.get_volume_presets():
         await callback.answer()
         return
 
     await state.update_data(volume_gb=gb)
     data = await state.get_data()
-    await _show_durations(callback, state, str(data["location_name"]), gb)
+    await _show_durations(callback, state, str(data["location_name"]), gb, db)
     await callback.answer()
 
 
 @router.message(StateFilter(OrderFlow.entering_custom_vol))
-async def on_custom_volume(message: Message, state: FSMContext) -> None:
+async def on_custom_volume(message: Message, state: FSMContext, db: Database) -> None:
     raw = (message.text or "").strip()
     try:
         gb = int(raw)
@@ -251,7 +258,7 @@ async def on_custom_volume(message: Message, state: FSMContext) -> None:
             location=escape(str(data["location_name"])),
             volume=gb,
         ),
-        reply_markup=keyboards.durations(),
+        reply_markup=keyboards.durations(db.get_duration_presets()),
     )
 
 
@@ -267,7 +274,7 @@ async def cb_pick_duration(callback: CallbackQuery, state: FSMContext, db: Datab
     except ValueError:
         await callback.answer()
         return
-    if days not in texts.DURATION_PRESETS_DAYS:
+    if days not in db.get_duration_presets():
         await callback.answer()
         return
 
@@ -344,19 +351,19 @@ async def cb_back_to_locations(callback: CallbackQuery, state: FSMContext, db: D
 
 
 @router.callback_query(F.data == keyboards.CB_ORDER_BACK_VOL)
-async def cb_back_to_volumes(callback: CallbackQuery, state: FSMContext) -> None:
+async def cb_back_to_volumes(callback: CallbackQuery, state: FSMContext, db: Database) -> None:
     data = await state.get_data()
     loc_name = str(data.get("location_name", "—"))
-    await _show_volumes(callback, state, loc_name)
+    await _show_volumes(callback, state, loc_name, db)
     await callback.answer()
 
 
 @router.callback_query(F.data == keyboards.CB_ORDER_BACK_DUR)
-async def cb_back_to_duration(callback: CallbackQuery, state: FSMContext) -> None:
+async def cb_back_to_duration(callback: CallbackQuery, state: FSMContext, db: Database) -> None:
     data = await state.get_data()
     loc_name = str(data.get("location_name", "—"))
     vol_gb = int(data.get("volume_gb", 0))
-    await _show_durations(callback, state, loc_name, vol_gb)
+    await _show_durations(callback, state, loc_name, vol_gb, db)
     await callback.answer()
 
 

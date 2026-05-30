@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 
-# ---------- order presets ----------
-VOLUME_PRESETS_GB: list[int] = [1, 2, 5, 10]      # buttons; "Custom" is a separate option
-DURATION_PRESETS_DAYS: list[int] = [3, 7, 30]
+# ---------- order presets (defaults until admin changes them in DB) ----------
+DEFAULT_VOLUME_PRESETS_GB: list[int] = [1, 2, 5, 10]
+DEFAULT_DURATION_PRESETS_DAYS: list[int] = [3, 7, 30]
+# Back-compat aliases
+VOLUME_PRESETS_GB = DEFAULT_VOLUME_PRESETS_GB
+DURATION_PRESETS_DAYS = DEFAULT_DURATION_PRESETS_DAYS
 
 CUSTOM_VOLUME_MIN_GB = 1
 CUSTOM_VOLUME_MAX_GB = 500
@@ -380,7 +383,36 @@ ADMIN_SETTINGS_VIEW = (
 
 ADMIN_SETTINGS_MENU = (
     "⚙️ <b>تنظیمات</b>\n\n"
-    "برای تغییر، دستورات زیر را در چت بفرستید (مثال‌ها در راهنما)."
+    "برای کارت و قیمت از دستورات متنی استفاده کنید.\n"
+    "پلن‌های حجم و مدت خرید را از دکمه «پلن‌های پایه» مدیریت کنید."
+)
+
+ADMIN_PLANS_HEADER = (
+    "📋 <b>پلن‌های پایه خرید</b>\n\n"
+    "این گزینه‌ها در فلو «خرید سرویس» به کاربر نشان داده می‌شوند "
+    "(گزینه «حجم دلخواه» همیشه باقی می‌ماند).\n\n"
+    "<b>حجم (گیگابایت):</b> {volumes}\n"
+    "<b>مدت (روز):</b> {durations}\n\n"
+    "برای <b>افزودن</b>:\n"
+    "<code>/addvolume 5</code> — مثلاً ۵ گیگ\n"
+    "<code>/addduration 14</code> — مثلاً ۱۴ روز\n\n"
+    "روی دکمه‌های زیر بزنید تا یک پلن <b>حذف</b> شود."
+)
+
+ADMIN_PLAN_VOL_REMOVED  = "✅ پلن حجم <b>{gb} GB</b> حذف شد."
+ADMIN_PLAN_VOL_ADDED    = "✅ پلن حجم <b>{gb} GB</b> اضافه شد."
+ADMIN_PLAN_DUR_REMOVED  = "✅ پلن مدت <b>{days} روز</b> حذف شد."
+ADMIN_PLAN_DUR_ADDED    = "✅ پلن مدت <b>{days} روز</b> اضافه شد."
+ADMIN_PLAN_EXISTS       = "ℹ️ این پلن از قبل وجود دارد."
+ADMIN_PLAN_NOT_FOUND    = "ℹ️ این پلن در لیست نیست."
+ADMIN_PLAN_INVALID      = "❗ مقدار نامعتبر است."
+ADMIN_PLAN_LAST         = "❗ حداقل یک پلن باید باقی بماند."
+ADMIN_PLAN_MAX          = "❗ حداکثر تعداد پلن‌ها پر است."
+ADMIN_PLAN_USAGE        = (
+    "❗ استفاده:\n"
+    "<code>/addvolume 5</code> | <code>/delvolume 5</code>\n"
+    "<code>/addduration 14</code> | <code>/delduration 14</code>\n"
+    "<code>/plans</code> — نمایش لیست"
 )
 
 ADMIN_TOOLS_MENU = (
@@ -439,6 +471,10 @@ ADMIN_HELP = (
     "/setlocationprice &lt;id&gt; &lt;base&gt; &lt;per_gb&gt; &lt;per_day&gt; — قیمت یک لوکیشن\n"
     "/setlocationprice &lt;id&gt; - — بازگشت لوکیشن به قیمت پیش‌فرض\n"
     "/showsettings — نمایش تنظیمات فعلی\n\n"
+    "<b>پلن‌های پایه خرید:</b>\n"
+    "/plans — حجم و مدت پیش‌فرض در فلو خرید\n"
+    "/addvolume &lt;gb&gt; | /delvolume &lt;gb&gt;\n"
+    "/addduration &lt;days&gt; | /delduration &lt;days&gt;\n\n"
     "<b>لوکیشن‌ها:</b>\n"
     "/locations — لیست لوکیشن‌ها\n"
     "/addlocation &lt;name&gt; | &lt;base_url&gt; | &lt;api_token&gt; | &lt;inbound_id1,id2&gt;\n"

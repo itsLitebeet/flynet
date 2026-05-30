@@ -84,6 +84,11 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "price_per_day": "1500",    # toman per day
 }
 
+# JSON lists in settings — seeded from app.texts defaults on first run.
+SETTING_VOLUME_PRESETS = "volume_presets_gb"
+SETTING_DURATION_PRESETS = "duration_presets_days"
+MAX_PLAN_PRESETS = 12
+
 
 @dataclass(frozen=True)
 class Location:
@@ -183,6 +188,19 @@ class Database:
         # Legacy status from an earlier version — hard-delete on upgrade.
         with self._cursor() as cur:
             cur.execute("DELETE FROM orders WHERE status = 'panel_removed'")
+        # Base buy plans (volume/duration buttons) — seed if missing on upgrade.
+        from app import texts
+
+        plan_defaults = {
+            SETTING_VOLUME_PRESETS: json.dumps(texts.DEFAULT_VOLUME_PRESETS_GB),
+            SETTING_DURATION_PRESETS: json.dumps(texts.DEFAULT_DURATION_PRESETS_DAYS),
+        }
+        with self._cursor() as cur:
+            for k, v in plan_defaults.items():
+                cur.execute(
+                    "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+                    (k, v),
+                )
 
     def _backfill_location_pricing(self) -> None:
         base, per_gb, per_day = self.get_pricing()
@@ -194,8 +212,14 @@ class Database:
             )
 
     def _seed_defaults(self) -> None:
+        from app import texts
+
+        extras = {
+            SETTING_VOLUME_PRESETS: json.dumps(texts.DEFAULT_VOLUME_PRESETS_GB),
+            SETTING_DURATION_PRESETS: json.dumps(texts.DEFAULT_DURATION_PRESETS_DAYS),
+        }
         with self._cursor() as cur:
-            for k, v in DEFAULT_SETTINGS.items():
+            for k, v in {**DEFAULT_SETTINGS, **extras}.items():
                 cur.execute(
                     "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
                     (k, v),
@@ -285,6 +309,81 @@ class Database:
             self.get_int_setting("price_per_gb", 0),
             self.get_int_setting("price_per_day", 0),
         )
+
+    def _get_int_list_setting(self, key: str, fallback: list[int]) -> list[int]:
+        raw = self.get_setting(key)
+        if not raw:
+            return list(fallback)
+        try:
+            data = json.loads(raw)
+            if not isinstance(data, list):
+                return list(fallback)
+            out = sorted({int(x) for x in data if int(x) > 0})
+            return out if out else list(fallback)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return list(fallback)
+
+    def _set_int_list_setting(self, key: str, values: list[int]) -> None:
+        clean = sorted({int(v) for v in values if int(v) > 0})
+        self.set_setting(key, json.dumps(clean))
+
+    def get_volume_presets(self) -> list[int]:
+        from app import texts
+
+        return self._get_int_list_setting(
+            SETTING_VOLUME_PRESETS, texts.DEFAULT_VOLUME_PRESETS_GB
+        )
+
+    def get_duration_presets(self) -> list[int]:
+        from app import texts
+
+        return self._get_int_list_setting(
+            SETTING_DURATION_PRESETS, texts.DEFAULT_DURATION_PRESETS_DAYS
+        )
+
+    def add_volume_preset(self, gb: int) -> tuple[bool, str]:
+        if gb < 1 or gb > 500:
+            return False, "invalid"
+        presets = self.get_volume_presets()
+        if gb in presets:
+            return False, "exists"
+        if len(presets) >= MAX_PLAN_PRESETS:
+            return False, "max"
+        presets.append(gb)
+        self._set_int_list_setting(SETTING_VOLUME_PRESETS, presets)
+        return True, "ok"
+
+    def remove_volume_preset(self, gb: int) -> tuple[bool, str]:
+        presets = self.get_volume_presets()
+        if gb not in presets:
+            return False, "missing"
+        if len(presets) <= 1:
+            return False, "last"
+        presets.remove(gb)
+        self._set_int_list_setting(SETTING_VOLUME_PRESETS, presets)
+        return True, "ok"
+
+    def add_duration_preset(self, days: int) -> tuple[bool, str]:
+        if days < 1 or days > 3650:
+            return False, "invalid"
+        presets = self.get_duration_presets()
+        if days in presets:
+            return False, "exists"
+        if len(presets) >= MAX_PLAN_PRESETS:
+            return False, "max"
+        presets.append(days)
+        self._set_int_list_setting(SETTING_DURATION_PRESETS, presets)
+        return True, "ok"
+
+    def remove_duration_preset(self, days: int) -> tuple[bool, str]:
+        presets = self.get_duration_presets()
+        if days not in presets:
+            return False, "missing"
+        if len(presets) <= 1:
+            return False, "last"
+        presets.remove(days)
+        self._set_int_list_setting(SETTING_DURATION_PRESETS, presets)
+        return True, "ok"
 
     def get_pricing_for_location(self, location_id: int) -> tuple[int, int, int]:
         """Resolved pricing for a location (custom or global fallback per field)."""
