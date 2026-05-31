@@ -151,11 +151,20 @@ async def cmd_listservices(
         await message.answer(texts.LIST_SERVICES_EMPTY)
         return
 
+    from app.pricing import format_price_with_offer
+
     filter_line = f" — لوکیشن <code>#{loc_filter}</code>" if loc_filter else ""
     lines = [texts.LIST_SERVICES_HEADER.format(filter_line=filter_line)]
+    offer = db.get_offer_config()
     for pkg in packages:
         loc = db.get_location(pkg.location_id)
         loc_name = escape(loc.name) if loc else "—"
+        base = int(pkg.price)
+        final = db.resolve_price(base)
+        if offer.is_active and final < base:
+            price_label = format_price_with_offer(base, final)
+        else:
+            price_label = texts.format_price(base)
         lines.append(
             texts.LIST_SERVICES_LINE.format(
                 id=pkg.id,
@@ -163,7 +172,7 @@ async def cmd_listservices(
                 loc_name=loc_name,
                 volume=pkg.volume_gb,
                 days=pkg.duration_days,
-                price=texts.format_price(pkg.price),
+                price=price_label,
             )
         )
     mode = "روشن ✅" if db.is_manual_purchase_enabled() else "خاموش ❌"

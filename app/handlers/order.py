@@ -54,11 +54,19 @@ async def _edit_or_answer(callback: CallbackQuery, text: str, reply_markup=None)
         await callback.message.answer(text, reply_markup=reply_markup)
 
 
-def _calc_price_for(
+def _calc_base_price_for(
     db: Database, volume_gb: int, duration_days: int, location_id: int
 ) -> int:
     base, per_gb, per_day = db.get_pricing_for_location(location_id)
     return texts.calc_price(volume_gb, duration_days, base, per_gb, per_day)
+
+
+def _calc_price_for(
+    db: Database, volume_gb: int, duration_days: int, location_id: int
+) -> int:
+    return db.resolve_price(
+        _calc_base_price_for(db, volume_gb, duration_days, location_id)
+    )
 
 
 async def _clear_plan_selection(state: FSMContext) -> None:
@@ -91,12 +99,13 @@ def _resolve_order_terms(
         pkg = db.get_service_package(package_id)
         if pkg is None or not pkg.enabled or pkg.location_id != location_id:
             return None
+        final_price = db.resolve_price(pkg.price)
         return (
             location_id,
             location_name,
             pkg.volume_gb,
             pkg.duration_days,
-            pkg.price,
+            final_price,
         )
 
     try:
@@ -165,11 +174,22 @@ async def _show_packages(
         return
 
     await state.update_data(purchase_mode=PURCHASE_MODE_PACKAGES)
+    from app.pricing import describe_offer
+
+    offer = db.get_offer_config()
+    offer_banner = (
+        texts.ORDER_OFFER_BANNER.format(offer_desc=describe_offer(offer))
+        if offer.is_active
+        else ""
+    )
     await state.set_state(OrderFlow.picking_package)
     await _edit_or_answer(
         callback,
-        texts.ORDER_PICK_PACKAGE.format(location=escape(location_name)),
-        keyboards.service_packages(packages),
+        texts.ORDER_PICK_PACKAGE.format(
+            location=escape(location_name),
+            offer_banner=offer_banner,
+        ),
+        keyboards.service_packages(packages, db),
     )
 
 
@@ -204,29 +224,42 @@ async def _show_durations(
 
 
 async def _show_review(callback: CallbackQuery, state: FSMContext, db: Database) -> None:
+    from app.pricing import describe_offer, format_price_with_offer
+
     data = await state.get_data()
     mode = str(data.get("purchase_mode", PURCHASE_MODE_LEGACY))
-    if mode == PURCHASE_MODE_PACKAGES and data.get("price") is not None:
-        price = int(data["price"])
+    loc_id = int(data["location_id"])
+    vol = int(data["volume_gb"])
+    days = int(data["duration_days"])
+
+    if mode == PURCHASE_MODE_PACKAGES:
+        pkg_id = int(data.get("package_id") or 0)
+        pkg = db.get_service_package(pkg_id) if pkg_id else None
+        base_price = pkg.price if pkg else int(data.get("price") or 0)
         back_cb = keyboards.CB_ORDER_BACK_PKG
     else:
-        price = _calc_price_for(
-            db,
-            int(data["volume_gb"]),
-            int(data["duration_days"]),
-            int(data["location_id"]),
-        )
-        await state.update_data(price=price)
+        base_price = _calc_base_price_for(db, vol, days, loc_id)
         back_cb = keyboards.CB_ORDER_BACK_DUR
+
+    price = db.resolve_price(base_price)
+    await state.update_data(price=price)
+
+    offer = db.get_offer_config()
+    offer_line = (
+        texts.ORDER_REVIEW_OFFER_LINE.format(offer_desc=describe_offer(offer))
+        if offer.is_active and price < base_price
+        else ""
+    )
 
     await state.set_state(OrderFlow.reviewing)
     await _edit_or_answer(
         callback,
         texts.ORDER_REVIEW.format(
             location=escape(str(data["location_name"])),
-            volume=int(data["volume_gb"]),
-            days=int(data["duration_days"]),
-            price=texts.format_price(price),
+            volume=vol,
+            days=days,
+            offer_line=offer_line,
+            price=format_price_with_offer(base_price, price),
         ),
         keyboards.confirm_order(back_callback=back_cb),
     )
@@ -320,7 +353,7 @@ async def cb_pick_package(callback: CallbackQuery, state: FSMContext, db: Databa
     await state.update_data(
         volume_gb=pkg.volume_gb,
         duration_days=pkg.duration_days,
-        price=pkg.price,
+        price=db.resolve_price(pkg.price),
         package_id=pkg.id,
         purchase_mode=PURCHASE_MODE_PACKAGES,
     )

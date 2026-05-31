@@ -104,6 +104,9 @@ SETTING_DURATION_PRESETS = "duration_presets_days"
 SETTING_TEST_ENABLED = "test_feature_enabled"
 SETTING_MANUAL_PURCHASE = "manual_purchase_enabled"
 SETTING_LOG_CHANNEL = "log_channel_id"
+SETTING_OFFER_ENABLED = "offer_enabled"
+SETTING_OFFER_KIND = "offer_kind"       # none | percent | amount | fixed
+SETTING_OFFER_VALUE = "offer_value"
 MAX_PLAN_PRESETS = 12
 TEST_VOLUME_BYTES = 100 * 1024 * 1024
 
@@ -268,6 +271,15 @@ class Database:
                 "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
                 (SETTING_LOG_CHANNEL, "0"),
             )
+            for k, v in (
+                (SETTING_OFFER_ENABLED, "0"),
+                (SETTING_OFFER_KIND, "none"),
+                (SETTING_OFFER_VALUE, "0"),
+            ):
+                cur.execute(
+                    "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+                    (k, v),
+                )
 
     def _backfill_location_pricing(self) -> None:
         base, per_gb, per_day = self.get_pricing()
@@ -287,6 +299,9 @@ class Database:
             SETTING_TEST_ENABLED: "0",
             SETTING_MANUAL_PURCHASE: "0",
             SETTING_LOG_CHANNEL: "0",
+            SETTING_OFFER_ENABLED: "0",
+            SETTING_OFFER_KIND: "none",
+            SETTING_OFFER_VALUE: "0",
         }
         with self._cursor() as cur:
             for k, v in {**DEFAULT_SETTINGS, **extras}.items():
@@ -577,6 +592,35 @@ class Database:
 
     def set_manual_purchase_enabled(self, enabled: bool) -> None:
         self.set_setting(SETTING_MANUAL_PURCHASE, "1" if enabled else "0")
+
+    def get_offer_config(self):
+        from app.pricing import OfferConfig
+
+        enabled = self.get_setting(SETTING_OFFER_ENABLED, "0") == "1"
+        kind = (self.get_setting(SETTING_OFFER_KIND, "none") or "none").strip()
+        if kind not in ("percent", "amount", "fixed"):
+            kind = "none"
+        value = self.get_int_setting(SETTING_OFFER_VALUE, 0)
+        if not enabled or kind == "none" or value <= 0:
+            return OfferConfig(False, "none", 0)
+        return OfferConfig(True, kind, value)
+
+    def set_global_offer(self, kind: str, value: int) -> None:
+        if kind not in ("percent", "amount", "fixed"):
+            raise ValueError("invalid offer kind")
+        self.set_setting(SETTING_OFFER_ENABLED, "1")
+        self.set_setting(SETTING_OFFER_KIND, kind)
+        self.set_setting(SETTING_OFFER_VALUE, str(value))
+
+    def clear_global_offer(self) -> None:
+        self.set_setting(SETTING_OFFER_ENABLED, "0")
+        self.set_setting(SETTING_OFFER_KIND, "none")
+        self.set_setting(SETTING_OFFER_VALUE, "0")
+
+    def resolve_price(self, base_price: int) -> int:
+        from app.pricing import apply_offer
+
+        return apply_offer(base_price, self.get_offer_config())
 
     def get_log_channel_id(self) -> int | None:
         raw = self.get_setting(SETTING_LOG_CHANNEL)

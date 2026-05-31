@@ -32,9 +32,19 @@ def format_service_package_volume(volume_gb: int) -> str:
     return _truncate_btn(f"{volume_gb} گیگابایت")
 
 
-def format_service_package_term(duration_days: int, price: int) -> str:
+def format_service_package_term(
+    duration_days: int,
+    price: int,
+    *,
+    base_price: int | None = None,
+) -> str:
     """Left-hand button: e.g. 30 روزه - 378,000 تومان"""
-    return _truncate_btn(f"{duration_days} روزه - {price:,} تومان")
+    from app.pricing import format_button_price
+
+    if base_price is not None and base_price > price:
+        amount = format_button_price(base_price, price)
+        return _truncate_btn(f"{duration_days} روزه · {amount}")
+    return _truncate_btn(f"{duration_days} روزه · {price:,}")
 
 
 def format_card_number(card: str) -> str:
@@ -312,8 +322,11 @@ NO_LOCATIONS_USER = (
 
 ORDER_PICK_PACKAGE = (
     "📦 لوکیشن: <b>{location}</b>\n\n"
+    "{offer_banner}"
     "📋 <b>پلن مورد نظر را انتخاب کنید:</b>"
 )
+
+ORDER_OFFER_BANNER = "🎁 <b>{offer_desc}</b>\n\n"
 
 ORDER_NO_PACKAGES = (
     "⛔ برای این لوکیشن هنوز پلنی تعریف نشده.\n"
@@ -348,9 +361,12 @@ ORDER_REVIEW = (
     "📦 لوکیشن: <b>{location}</b>\n"
     "💾 حجم: <b>{volume} گیگابایت</b>\n"
     "📅 مدت اعتبار: <b>{days} روز</b>\n"
+    "{offer_line}"
     "💰 مبلغ قابل پرداخت: <b>{price}</b>\n\n"
     "در صورت تأیید، دستور پرداخت برای شما ارسال می‌شود."
 )
+
+ORDER_REVIEW_OFFER_LINE = "🎁 تخفیف: <b>{offer_desc}</b>\n"
 
 ORDER_PAYMENT_INSTRUCTIONS = (
     "💳 <b>دستور پرداخت — سفارش #{order_id}</b>\n\n"
@@ -474,10 +490,52 @@ ADMIN_SETTINGS_VIEW = (
     "👤 صاحب کارت: <b>{card_holder}</b>\n\n"
     "💰 قیمت پیش‌فرض:\n"
     "base = <b>{base}</b> | per_gb = <b>{per_gb}</b> | per_day = <b>{per_day}</b>\n\n"
+    "🎁 تخفیف سراسری: <b>{offer_desc}</b>\n\n"
     "<b>ویرایش با دستور:</b>\n"
     "<code>/setcard 6037... | نام</code>\n"
-    "<code>/setprice 20000 8000 1500</code>"
+    "<code>/setprice 20000 8000 1500</code>\n"
+    "<code>/setoffer 20</code> — ۲۰٪ تخفیف · <code>/setoffer off 5000</code> — مبلغ کم‌شده"
 )
+
+ADMIN_OFFER_MENU = (
+    "🎁 <b>تخفیف سراسری</b>\n\n"
+    "وضعیت فعلی: <b>{offer_desc}</b>\n\n"
+    "روی هر سرویس (پلن‌ها و خرید فرمولی) اعمال می‌شود.\n"
+    "سرویس تست رایگان تحت تأثیر نیست."
+)
+
+ADMIN_OFFER_PERCENT_PROMPT = (
+    "📉 <b>تخفیف درصدی</b>\n\n"
+    "عدد ۱ تا ۹۹ را بفرستید (مثلاً <code>20</code> برای ۲۰٪ تخفیف).\n"
+    "انصراف: <code>/cancel</code>"
+)
+
+ADMIN_OFFER_AMOUNT_PROMPT = (
+    "💵 <b>تخفیف مبلغی</b>\n\n"
+    "مبلغ تومان که از هر قیمت کم می‌شود را بفرستید (مثلاً <code>50000</code>).\n"
+    "انصراف: <code>/cancel</code>"
+)
+
+ADMIN_OFFER_FIXED_PROMPT = (
+    "🏷 <b>قیمت ثابت برای همه</b>\n\n"
+    "قیمت نهایی هر سرویس را به تومان بفرستید (مثلاً <code>99000</code>).\n"
+    "انصراف: <code>/cancel</code>"
+)
+
+ADMIN_OFFER_SET_OK = "✅ تخفیف سراسری فعال شد: <b>{offer_desc}</b>"
+ADMIN_OFFER_CLEARED = "✅ تخفیف سراسری غیرفعال شد."
+ADMIN_OFFER_INVALID = "❗ مقدار نامعتبر است."
+ADMIN_OFFER_USAGE = (
+    "❗ <b>تخفیف سراسری</b>\n\n"
+    "<code>/setoffer 20</code> — ۲۰٪ تخفیف\n"
+    "<code>/setoffer percent 20</code>\n"
+    "<code>/setoffer off 50000</code> — ۵۰٬۰۰۰ تومان کمتر از هر قیمت\n"
+    "<code>/setoffer amount 50000</code>\n"
+    "<code>/setoffer price 99000</code> — همه سرویس‌ها = ۹۹٬۰۰۰ تومان\n"
+    "<code>/setoffer clear</code> — خاموش"
+)
+
+ADMIN_BTN_OFFER = "🎁 تخفیف سراسری"
 
 ADMIN_SETTINGS_MENU = (
     "⚙️ <b>تنظیمات</b>\n\n"
@@ -671,6 +729,7 @@ ADMIN_HELP = (
     "<b>تنظیمات:</b>\n"
     "/setcard &lt;شماره کارت&gt; | &lt;نام صاحب کارت&gt;\n"
     "/setprice &lt;base&gt; &lt;per_gb&gt; &lt;per_day&gt; — قیمت پیش‌فرض (لوکیشن‌های جدید)\n"
+    "/setoffer 20 — ۲۰٪ تخفیف سراسری · /setoffer clear — خاموش\n"
     "/setlocationprice &lt;id&gt; &lt;base&gt; &lt;per_gb&gt; &lt;per_day&gt; — قیمت یک لوکیشن\n"
     "/setlocationprice &lt;id&gt; - — بازگشت لوکیشن به قیمت پیش‌فرض\n"
     "/showsettings — نمایش تنظیمات فعلی\n\n"

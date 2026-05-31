@@ -78,6 +78,12 @@ CB_ADM_ADDSVC_HELP       = "adm:hsvc"
 CB_ADM_EDITSVC_HELP      = "adm:hesvc"
 CB_ADM_SETTINGS_REFRESH  = "adm:setrf"
 CB_ADM_PLAN_ADD_HINT     = "adm:phint"
+CB_ADM_OFFER             = "adm:offer"
+CB_ADM_OFFER_CLEAR       = "adm:ofclr"
+CB_ADM_OFFER_PCT_PREFIX  = "adm:ofp:"   # adm:ofp:20 → 20%
+CB_ADM_OFFER_PCT_CUSTOM  = "adm:ofpc"
+CB_ADM_OFFER_AMOUNT      = "adm:ofamt"
+CB_ADM_OFFER_FIXED       = "adm:offix"
 CB_ADM_ORDER_VIEW_PREFIX = "adm:ov:"    # adm:ov:<order_id>
 CB_ADM_ORDER_ENABLE_PREFIX   = "adm:oen:"   # adm:oen:<order_id>
 CB_ADM_ORDER_DISABLE_PREFIX  = "adm:odis:"  # adm:odis:<order_id>
@@ -265,15 +271,19 @@ def durations(duration_presets_days: list[int]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def service_packages(packages: list) -> InlineKeyboardMarkup:
+def service_packages(packages: list, db) -> InlineKeyboardMarkup:
     """One plan per row: two buttons (volume + term/price), same callback each."""
     rows: list[list[InlineKeyboardButton]] = []
     for pkg in packages:
         cb = f"{CB_SVC_PREFIX}{pkg.id}"
+        base = int(pkg.price)
+        final = db.resolve_price(base)
         rows.append([
             InlineKeyboardButton(
                 text=texts.format_service_package_term(
-                    pkg.duration_days, pkg.price
+                    pkg.duration_days,
+                    final,
+                    base_price=base if final < base else None,
                 ),
                 callback_data=cb,
             ),
@@ -542,9 +552,60 @@ def admin_dashboard_inline() -> InlineKeyboardMarkup:
     )
 
 
+def admin_offer_inline(db) -> InlineKeyboardMarkup:
+    """`db` — Database for refresh button state."""
+    presets = [10, 15, 20, 25, 30]
+    pct_row = [
+        InlineKeyboardButton(
+            text=f"{p}٪",
+            callback_data=f"{CB_ADM_OFFER_PCT_PREFIX}{p}",
+        )
+        for p in presets
+    ]
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            pct_row,
+            [
+                InlineKeyboardButton(
+                    text="✏️ درصد دلخواه",
+                    callback_data=CB_ADM_OFFER_PCT_CUSTOM,
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="💵 کم کردن مبلغ",
+                    callback_data=CB_ADM_OFFER_AMOUNT,
+                ),
+                InlineKeyboardButton(
+                    text="🏷 قیمت ثابت همه",
+                    callback_data=CB_ADM_OFFER_FIXED,
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="❌ خاموش کردن تخفیف",
+                    callback_data=CB_ADM_OFFER_CLEAR,
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_OFFER
+                ),
+                InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_SETTINGS),
+            ],
+        ]
+    )
+
+
 def admin_settings_inline() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.ADMIN_BTN_OFFER,
+                    callback_data=CB_ADM_OFFER,
+                ),
+            ],
             [
                 InlineKeyboardButton(
                     text=texts.ADMIN_BTN_SETCARD_HELP,

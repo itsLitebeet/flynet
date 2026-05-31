@@ -58,6 +58,8 @@ def format_base_plans_text(db: Database) -> str:
 
 
 def format_settings_text(db: Database) -> str:
+    from app.pricing import describe_offer
+
     base, per_gb, per_day = db.get_pricing()
     return texts.ADMIN_SETTINGS_VIEW.format(
         card_number=escape(
@@ -67,6 +69,7 @@ def format_settings_text(db: Database) -> str:
         base=base,
         per_gb=per_gb,
         per_day=per_day,
+        offer_desc=describe_offer(db.get_offer_config()),
     )
 
 
