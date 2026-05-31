@@ -276,15 +276,10 @@ def service_packages(packages: list, db) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for pkg in packages:
         cb = f"{CB_SVC_PREFIX}{pkg.id}"
-        base = int(pkg.price)
-        final = db.resolve_price(base)
+        final = db.resolve_price(int(pkg.price))
         rows.append([
             InlineKeyboardButton(
-                text=texts.format_service_package_term(
-                    pkg.duration_days,
-                    final,
-                    base_price=base if final < base else None,
-                ),
+                text=texts.format_service_package_term(pkg.duration_days, final),
                 callback_data=cb,
             ),
             InlineKeyboardButton(

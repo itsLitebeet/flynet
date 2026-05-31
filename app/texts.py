@@ -32,18 +32,8 @@ def format_service_package_volume(volume_gb: int) -> str:
     return _truncate_btn(f"{volume_gb} گیگابایت")
 
 
-def format_service_package_term(
-    duration_days: int,
-    price: int,
-    *,
-    base_price: int | None = None,
-) -> str:
-    """Left-hand button: e.g. 30 روزه - 378,000 تومان"""
-    from app.pricing import format_button_price
-
-    if base_price is not None and base_price > price:
-        amount = format_button_price(base_price, price)
-        return _truncate_btn(f"{duration_days} روزه · {amount}")
+def format_service_package_term(duration_days: int, price: int) -> str:
+    """Left-hand button: e.g. 30 روزه - 378,000 تومان (final price only)."""
     return _truncate_btn(f"{duration_days} روزه · {price:,}")
 
 
@@ -322,11 +312,8 @@ NO_LOCATIONS_USER = (
 
 ORDER_PICK_PACKAGE = (
     "📦 لوکیشن: <b>{location}</b>\n\n"
-    "{offer_banner}"
     "📋 <b>پلن مورد نظر را انتخاب کنید:</b>"
 )
-
-ORDER_OFFER_BANNER = "🎁 <b>{offer_desc}</b>\n\n"
 
 ORDER_NO_PACKAGES = (
     "⛔ برای این لوکیشن هنوز پلنی تعریف نشده.\n"
@@ -361,12 +348,9 @@ ORDER_REVIEW = (
     "📦 لوکیشن: <b>{location}</b>\n"
     "💾 حجم: <b>{volume} گیگابایت</b>\n"
     "📅 مدت اعتبار: <b>{days} روز</b>\n"
-    "{offer_line}"
     "💰 مبلغ قابل پرداخت: <b>{price}</b>\n\n"
     "در صورت تأیید، دستور پرداخت برای شما ارسال می‌شود."
 )
-
-ORDER_REVIEW_OFFER_LINE = "🎁 تخفیف: <b>{offer_desc}</b>\n"
 
 ORDER_PAYMENT_INSTRUCTIONS = (
     "💳 <b>دستور پرداخت — سفارش #{order_id}</b>\n\n"

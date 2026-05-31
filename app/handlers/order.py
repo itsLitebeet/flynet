@@ -174,21 +174,10 @@ async def _show_packages(
         return
 
     await state.update_data(purchase_mode=PURCHASE_MODE_PACKAGES)
-    from app.pricing import describe_offer
-
-    offer = db.get_offer_config()
-    offer_banner = (
-        texts.ORDER_OFFER_BANNER.format(offer_desc=describe_offer(offer))
-        if offer.is_active
-        else ""
-    )
     await state.set_state(OrderFlow.picking_package)
     await _edit_or_answer(
         callback,
-        texts.ORDER_PICK_PACKAGE.format(
-            location=escape(location_name),
-            offer_banner=offer_banner,
-        ),
+        texts.ORDER_PICK_PACKAGE.format(location=escape(location_name)),
         keyboards.service_packages(packages, db),
     )
 
@@ -224,8 +213,6 @@ async def _show_durations(
 
 
 async def _show_review(callback: CallbackQuery, state: FSMContext, db: Database) -> None:
-    from app.pricing import describe_offer, format_price_with_offer
-
     data = await state.get_data()
     mode = str(data.get("purchase_mode", PURCHASE_MODE_LEGACY))
     loc_id = int(data["location_id"])
@@ -244,13 +231,6 @@ async def _show_review(callback: CallbackQuery, state: FSMContext, db: Database)
     price = db.resolve_price(base_price)
     await state.update_data(price=price)
 
-    offer = db.get_offer_config()
-    offer_line = (
-        texts.ORDER_REVIEW_OFFER_LINE.format(offer_desc=describe_offer(offer))
-        if offer.is_active and price < base_price
-        else ""
-    )
-
     await state.set_state(OrderFlow.reviewing)
     await _edit_or_answer(
         callback,
@@ -258,8 +238,7 @@ async def _show_review(callback: CallbackQuery, state: FSMContext, db: Database)
             location=escape(str(data["location_name"])),
             volume=vol,
             days=days,
-            offer_line=offer_line,
-            price=format_price_with_offer(base_price, price),
+            price=texts.format_price(price),
         ),
         keyboards.confirm_order(back_callback=back_cb),
     )
