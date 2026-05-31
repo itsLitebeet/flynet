@@ -428,18 +428,32 @@ USER_BANNED = "⛔ دسترسی شما به ربات مسدود شده است."
 # ---------- admin panel (buttons) ----------
 ADMIN_BTN_DASHBOARD = "📊 داشبورد"
 ADMIN_BTN_PENDING   = "🔍 بررسی پرداخت‌ها"
+ADMIN_BTN_ORDERS    = "📦 سفارش‌ها"
 ADMIN_BTN_SETTINGS  = "⚙️ تنظیمات"
 ADMIN_BTN_LOCATIONS = "📍 لوکیشن‌ها"
 ADMIN_BTN_TOOLS     = "🛠 ابزارها"
 ADMIN_BTN_USERS     = "👥 کاربران"
 ADMIN_BTN_PANEL     = "🏠 پنل ادمین"
 ADMIN_BTN_REFRESH   = "🔄 بروزرسانی"
+ADMIN_BTN_SERVICES  = "🛒 پلن‌های فروش"
+ADMIN_BTN_ORDER_LOOKUP = "🔎 جستجوی سفارش"
+ADMIN_BTN_TOGGLE_MANUAL = "🔀 خرید از دکمه‌ها"
+ADMIN_BTN_LOG_CHANNEL = "📋 کانال لاگ"
+ADMIN_BTN_TOGGLE_TEST = "🧪 دکمه تست"
+ADMIN_BTN_ADD_LOC_HELP = "➕ افزودن لوکیشن"
+ADMIN_BTN_ADD_SVC_HELP = "➕ افزودن پلن"
+ADMIN_BTN_EDIT_SVC_HELP = "✏️ ویرایش پلن"
+ADMIN_BTN_SETCARD_HELP = "💳 تنظیم کارت"
+ADMIN_BTN_SETPRICE_HELP = "💰 تنظیم قیمت"
+ADMIN_BTN_ORDER_MANAGE = "⚙️ سفارش"
 
 ADMIN_PANEL_HOME = (
     "🛠 <b>پنل مدیریت NetFly</b>\n\n"
     "از <b>دکمه‌های پایین صفحه</b> یا منوی زیر استفاده کنید.\n"
-    "دستورات متنی همچنان کار می‌کنند — <code>/admin</code> برای راهنمای کامل."
+    "بیشتر کارها بدون تایپ دستور انجام می‌شود."
 )
+
+ADMIN_HOME_STATS = "{stats}"
 
 ADMIN_DASHBOARD_HEADER = (
     "📊 <b>داشبورد</b>\n\n"
@@ -460,9 +474,30 @@ ADMIN_SETTINGS_VIEW = (
 
 ADMIN_SETTINGS_MENU = (
     "⚙️ <b>تنظیمات</b>\n\n"
-    "برای کارت و قیمت از دستورات متنی استفاده کنید.\n"
-    "پلن‌های حجم و مدت خرید را از دکمه «پلن‌های پایه» مدیریت کنید."
+    "کارت و قیمت پیش‌فرض را با دکمه‌های راهنما تنظیم کنید.\n"
+    "پلن‌های پایه (حجم/مدت) و پلن‌های فروش (خرید دستی) جداگانه‌اند.\n\n"
+    "{settings_block}"
 )
+
+ADMIN_ORDERS_MENU = (
+    "📦 <b>سفارش‌ها</b>\n\n"
+    "• <b>بررسی پرداخت‌ها</b> — رسیدهای در انتظار تأیید\n"
+    "• <b>جستجوی سفارش</b> — جزئیات و مدیریت پنل (<code>/order</code>)\n"
+)
+
+ADMIN_SERVICES_MENU = (
+    "🛒 <b>پلن‌های فروش (خرید دستی)</b>\n\n"
+    "حالت خرید از دکمه‌ها: <b>{manual_mode}</b>\n\n"
+    "{packages_block}"
+)
+
+ADMIN_ORDER_LOOKUP_PROMPT = (
+    "🔎 <b>جستجوی سفارش</b>\n\n"
+    "شناسه سفارش را بفرستید (عدد، مثل <code>42</code>).\n\n"
+    "انصراف: دکمه زیر یا <code>/cancel</code>"
+)
+
+ADMIN_ORDER_LOOKUP_NOTFOUND = "❗ سفارشی با شناسه <code>{order_id}</code> یافت نشد."
 
 ADMIN_PLANS_HEADER = (
     "📋 <b>پلن‌های پایه خرید</b>\n\n"
@@ -494,7 +529,9 @@ ADMIN_PLAN_USAGE        = (
 
 ADMIN_TOOLS_MENU = (
     "🛠 <b>ابزارها</b>\n\n"
-    "از دکمه‌های زیر استفاده کنید یا دستور متنی بفرستید."
+    "📋 کانال لاگ: <b>{log_channel}</b>\n"
+    "🧪 دکمه اشتراک تست: <b>{test_sub}</b>\n\n"
+    "همگام‌سازی پنل، پاکسازی و همگانی از دکمه‌های زیر."
 )
 
 ADMIN_LOCATIONS_MENU = (

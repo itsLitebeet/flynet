@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from aiogram import Bot, Router
+from aiogram import Bot, F, Router
 from aiogram.filters import Command, CommandObject, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, Message
 
-from app import texts
+from app import keyboards, texts
 from app.config import Settings
 from app.db import Database
 from app.handlers.admin_helpers import admin_from_message
@@ -19,6 +19,14 @@ router = Router(name="log_channel")
 
 class LogChannelFlow(StatesGroup):
     waiting_channel = State()
+
+
+async def start_log_channel_wizard(message: Message, state: FSMContext) -> None:
+    await state.set_state(LogChannelFlow.waiting_channel)
+    await message.answer(
+        texts.LOG_CHANNEL_PROMPT,
+        reply_markup=keyboards.admin_flow_cancel_inline(back_data=keyboards.CB_ADM_TOOLS),
+    )
 
 
 @router.message(Command("logchannel"), StateFilter(None))
@@ -52,14 +60,21 @@ async def cmd_logchannel(
             return
         return
 
-    await state.set_state(LogChannelFlow.waiting_channel)
-    await message.answer(texts.LOG_CHANNEL_PROMPT)
+    await start_log_channel_wizard(message, state)
 
 
 @router.message(Command("cancel"), StateFilter(LogChannelFlow))
-async def cmd_cancel_logchannel(message: Message, state: FSMContext) -> None:
+@router.callback_query(
+    F.data == keyboards.CB_ADM_FLOW_CANCEL, StateFilter(LogChannelFlow)
+)
+async def cancel_logchannel(
+    event: Message | CallbackQuery, state: FSMContext
+) -> None:
     await state.clear()
-    await message.answer(texts.CANCELLED)
+    if isinstance(event, CallbackQuery):
+        await event.answer(texts.CANCELLED)
+    else:
+        await event.answer(texts.CANCELLED)
 
 
 @router.message(StateFilter(LogChannelFlow.waiting_channel))

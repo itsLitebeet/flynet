@@ -54,6 +54,24 @@ CB_ADM_USERS                 = "adm:usr"
 CB_ADM_USERS_PAGE_PREFIX     = "adm:usrp:"   # adm:usrp:<page>
 CB_ADM_USER_DETAIL_PREFIX    = "adm:u:"      # adm:u:<user_id>
 CB_ADM_CMD_HELP          = "adm:cmdhelp"
+CB_ADM_ORDERS            = "adm:orders"
+CB_ADM_ORDER_LOOKUP      = "adm:olookup"
+CB_ADM_ORDER_MANAGE_PREFIX = "adm:om:"   # adm:om:<order_id>
+CB_ADM_SERVICES          = "adm:svc"
+CB_ADM_TOGGLE_MANUAL     = "adm:tman"
+CB_ADM_SERVICES_REFRESH  = "adm:lsvc"
+CB_ADM_LOG_CHANNEL       = "adm:logch"
+CB_ADM_LOG_CHANNEL_OFF   = "adm:logoff"
+CB_ADM_TOGGLE_TEST       = "adm:ttest"
+CB_ADM_TOGGLE_TEST_LOC_PREFIX = "adm:ttloc:"  # adm:ttloc:<location_id>
+CB_ADM_FLOW_CANCEL       = "adm:fcancel"
+CB_ADM_SETCARD_HELP      = "adm:hcard"
+CB_ADM_SETPRICE_HELP     = "adm:hprice"
+CB_ADM_ADDLOC_HELP       = "adm:hloc"
+CB_ADM_ADDSVC_HELP       = "adm:hsvc"
+CB_ADM_EDITSVC_HELP      = "adm:hesvc"
+CB_ADM_SETTINGS_REFRESH  = "adm:setrf"
+CB_ADM_PLAN_ADD_HINT     = "adm:phint"
 CB_ADM_ORDER_VIEW_PREFIX = "adm:ov:"    # adm:ov:<order_id>
 CB_ADM_ORDER_ENABLE_PREFIX   = "adm:oen:"   # adm:oen:<order_id>
 CB_ADM_ORDER_DISABLE_PREFIX  = "adm:odis:"  # adm:odis:<order_id>
@@ -135,6 +153,7 @@ MAIN_MENU_BUTTONS = frozenset({
 ADMIN_MENU_BUTTONS = frozenset({
     texts.ADMIN_BTN_DASHBOARD,
     texts.ADMIN_BTN_PENDING,
+    texts.ADMIN_BTN_ORDERS,
     texts.ADMIN_BTN_SETTINGS,
     texts.ADMIN_BTN_LOCATIONS,
     texts.ADMIN_BTN_TOOLS,
@@ -390,12 +409,15 @@ def admin_reply_keyboard() -> ReplyKeyboardMarkup:
                 KeyboardButton(text=texts.ADMIN_BTN_PENDING),
             ],
             [
+                KeyboardButton(text=texts.ADMIN_BTN_ORDERS),
+                KeyboardButton(text=texts.ADMIN_BTN_USERS),
+            ],
+            [
                 KeyboardButton(text=texts.ADMIN_BTN_SETTINGS),
                 KeyboardButton(text=texts.ADMIN_BTN_LOCATIONS),
             ],
             [
                 KeyboardButton(text=texts.ADMIN_BTN_TOOLS),
-                KeyboardButton(text=texts.ADMIN_BTN_USERS),
             ],
             [KeyboardButton(text=texts.ADMIN_BTN_PANEL)],
         ],
@@ -418,6 +440,14 @@ def admin_home_inline() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
+                    text=texts.ADMIN_BTN_ORDERS, callback_data=CB_ADM_ORDERS
+                ),
+                InlineKeyboardButton(
+                    text=texts.ADMIN_BTN_USERS, callback_data=CB_ADM_USERS
+                ),
+            ],
+            [
+                InlineKeyboardButton(
                     text=texts.ADMIN_BTN_SETTINGS, callback_data=CB_ADM_SETTINGS
                 ),
                 InlineKeyboardButton(
@@ -428,14 +458,45 @@ def admin_home_inline() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text=texts.ADMIN_BTN_TOOLS, callback_data=CB_ADM_TOOLS
                 ),
-                InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_USERS, callback_data=CB_ADM_USERS
-                ),
             ],
             [
                 InlineKeyboardButton(
                     text=texts.ADMIN_CMD_HELP_BTN, callback_data=CB_ADM_CMD_HELP
                 ),
+            ],
+        ]
+    )
+
+
+def admin_orders_inline() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.ADMIN_BTN_PENDING, callback_data=CB_ADM_PENDING_LIST
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.ADMIN_BTN_ORDER_LOOKUP,
+                    callback_data=CB_ADM_ORDER_LOOKUP,
+                ),
+            ],
+            [
+                InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME),
+            ],
+        ]
+    )
+
+
+def admin_flow_cancel_inline(*, back_data: str = CB_ADM_HOME) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.BTN_CANCEL, callback_data=CB_ADM_FLOW_CANCEL
+                ),
+                InlineKeyboardButton(text=texts.BTN_BACK, callback_data=back_data),
             ],
         ]
     )
@@ -448,6 +509,11 @@ def admin_dashboard_inline() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text=texts.ADMIN_BTN_PENDING, callback_data=CB_ADM_PENDING_LIST
                 ),
+                InlineKeyboardButton(
+                    text=texts.ADMIN_BTN_ORDERS, callback_data=CB_ADM_ORDERS
+                ),
+            ],
+            [
                 InlineKeyboardButton(
                     text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_DASH
                 ),
@@ -466,12 +532,60 @@ def admin_settings_inline() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="📋 پلن‌های پایه",
-                    callback_data=CB_ADM_PLANS,
+                    text=texts.ADMIN_BTN_SETCARD_HELP,
+                    callback_data=CB_ADM_SETCARD_HELP,
+                ),
+                InlineKeyboardButton(
+                    text=texts.ADMIN_BTN_SETPRICE_HELP,
+                    callback_data=CB_ADM_SETPRICE_HELP,
                 ),
             ],
             [
+                InlineKeyboardButton(
+                    text="📋 پلن‌های پایه",
+                    callback_data=CB_ADM_PLANS,
+                ),
+                InlineKeyboardButton(
+                    text=texts.ADMIN_BTN_SERVICES,
+                    callback_data=CB_ADM_SERVICES,
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_SETTINGS_REFRESH
+                ),
                 InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME),
+            ],
+        ]
+    )
+
+
+def admin_services_inline(*, manual_enabled: bool) -> InlineKeyboardMarkup:
+    toggle_label = (
+        "🔀 خاموش کردن خرید دکمه‌ای"
+        if manual_enabled
+        else "🔀 روشن کردن خرید دکمه‌ای"
+    )
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=toggle_label, callback_data=CB_ADM_TOGGLE_MANUAL
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.ADMIN_BTN_ADD_SVC_HELP, callback_data=CB_ADM_ADDSVC_HELP
+                ),
+                InlineKeyboardButton(
+                    text=texts.ADMIN_BTN_EDIT_SVC_HELP, callback_data=CB_ADM_EDITSVC_HELP
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_SERVICES_REFRESH
+                ),
+                InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_SETTINGS),
             ],
         ]
     )
@@ -495,6 +609,11 @@ def admin_plans_keyboard(
                 callback_data=f"{CB_ADM_DUR_DEL_PREFIX}{days}",
             )
         ])
+    rows.append([
+        InlineKeyboardButton(
+            text="➕ راهنمای افزودن", callback_data=CB_ADM_PLAN_ADD_HINT
+        ),
+    ])
     rows.append([
         InlineKeyboardButton(text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_PLANS),
         InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_SETTINGS),
@@ -543,7 +662,10 @@ def admin_users_keyboard(
 
 
 def admin_user_detail_keyboard(
-    user_id: int, *, is_banned: bool = False
+    user_id: int,
+    *,
+    is_banned: bool = False,
+    order_ids: list[int] | None = None,
 ) -> InlineKeyboardMarkup:
     ban_btn = (
         InlineKeyboardButton(
@@ -556,22 +678,35 @@ def admin_user_detail_keyboard(
             callback_data=f"{CB_ADM_USER_BAN_PREFIX}{user_id}",
         )
     )
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
+    rows: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(
+                text=texts.BTN_VIEW_USER,
+                url=f"tg://user?id={user_id}",
+            ),
+        ],
+        [ban_btn],
+    ]
+    if order_ids:
+        order_row: list[InlineKeyboardButton] = []
+        for oid in order_ids[:6]:
+            order_row.append(
                 InlineKeyboardButton(
-                    text=texts.BTN_VIEW_USER,
-                    url=f"tg://user?id={user_id}",
-                ),
-            ],
-            [ban_btn],
-            [
-                InlineKeyboardButton(
-                    text="🔙 لیست کاربران", callback_data=CB_ADM_USERS
-                ),
-            ],
-        ]
-    )
+                    text=f"{texts.ADMIN_BTN_ORDER_MANAGE} #{oid}",
+                    callback_data=f"{CB_ADM_ORDER_MANAGE_PREFIX}{oid}",
+                )
+            )
+            if len(order_row) == 2:
+                rows.append(order_row)
+                order_row = []
+        if order_row:
+            rows.append(order_row)
+    rows.append([
+        InlineKeyboardButton(
+            text="🔙 لیست کاربران", callback_data=CB_ADM_USERS
+        ),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def admin_edit_order_keyboard(
@@ -579,6 +714,7 @@ def admin_edit_order_keyboard(
     *,
     show_panel_actions: bool,
     show_db_delete: bool = True,
+    back_data: str | None = CB_ADM_ORDERS,
 ) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     if show_panel_actions:
@@ -598,6 +734,10 @@ def admin_edit_order_keyboard(
                 text=texts.BTN_ORDER_DELETE,
                 callback_data=f"{CB_ADM_ORDER_DELETE_ASK_PREFIX}{order_id}",
             ),
+        ])
+    if back_data:
+        rows.append([
+            InlineKeyboardButton(text=texts.BTN_BACK, callback_data=back_data),
         ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -649,12 +789,29 @@ def broadcast_cancel_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def admin_tools_inline() -> InlineKeyboardMarkup:
+def admin_tools_inline(*, has_log_channel: bool) -> InlineKeyboardMarkup:
+    log_row: list[InlineKeyboardButton] = [
+        InlineKeyboardButton(
+            text=texts.ADMIN_BTN_LOG_CHANNEL, callback_data=CB_ADM_LOG_CHANNEL
+        ),
+    ]
+    if has_log_channel:
+        log_row.append(
+            InlineKeyboardButton(
+                text="❌ قطع لاگ", callback_data=CB_ADM_LOG_CHANNEL_OFF
+            )
+        )
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
                     text=texts.BTN_ADMIN_BROADCAST, callback_data=CB_ADM_BROADCAST
+                ),
+            ],
+            log_row,
+            [
+                InlineKeyboardButton(
+                    text=texts.ADMIN_BTN_TOGGLE_TEST, callback_data=CB_ADM_TOGGLE_TEST
                 ),
             ],
             [
@@ -671,6 +828,9 @@ def admin_tools_inline() -> InlineKeyboardMarkup:
                 ),
             ],
             [
+                InlineKeyboardButton(
+                    text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_TOOLS
+                ),
                 InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME),
             ],
         ]
@@ -688,7 +848,7 @@ def admin_pending_list(orders: list[dict]) -> InlineKeyboardMarkup:
         ])
     rows.append([
         InlineKeyboardButton(text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_PENDING_LIST),
-        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME),
+        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_ORDERS),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -703,40 +863,56 @@ def admin_locations_list(locs: list[Location]) -> InlineKeyboardMarkup:
                 callback_data=f"{CB_ADM_LOC_DETAIL_PREFIX}{loc.id}",
             )
         ])
+    rows.append(admin_locations_list_footer())
+
+
+def admin_location_detail(
+    location_id: int, *, enabled: bool, is_test: bool = False
+) -> InlineKeyboardMarkup:
+    toggle_label = "🔴 غیرفعال کردن" if enabled else "🟢 فعال کردن"
+    rows: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(
+                text=toggle_label,
+                callback_data=f"{CB_ADM_LOC_TOGGLE_PREFIX}{location_id}",
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text="⚠️ حذف کامل لوکیشن",
+                callback_data=f"{CB_ADM_LOC_PURGE_PREFIX}{location_id}",
+            ),
+        ],
+    ]
+    if is_test:
+        rows.insert(
+            1,
+            [
+                InlineKeyboardButton(
+                    text=texts.ADMIN_BTN_TOGGLE_TEST,
+                    callback_data=f"{CB_ADM_TOGGLE_TEST_LOC_PREFIX}{location_id}",
+                ),
+            ],
+        )
     rows.append([
         InlineKeyboardButton(
-            text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_LOCATIONS_LIST
+            text=texts.ADMIN_BTN_ADD_LOC_HELP, callback_data=CB_ADM_ADDLOC_HELP
         ),
-        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME),
+    ])
+    rows.append([
+        InlineKeyboardButton(
+            text="🔙 لیست لوکیشن‌ها", callback_data=CB_ADM_LOCATIONS_LIST
+        ),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def admin_location_detail(
-    location_id: int, *, enabled: bool
-) -> InlineKeyboardMarkup:
-    toggle_label = "🔴 غیرفعال کردن" if enabled else "🟢 فعال کردن"
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=toggle_label,
-                    callback_data=f"{CB_ADM_LOC_TOGGLE_PREFIX}{location_id}",
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text="⚠️ حذف کامل لوکیشن",
-                    callback_data=f"{CB_ADM_LOC_PURGE_PREFIX}{location_id}",
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text="🔙 لیست لوکیشن‌ها", callback_data=CB_ADM_LOCATIONS_LIST
-                ),
-            ],
-        ]
-    )
+def admin_locations_list_footer() -> list[InlineKeyboardButton]:
+    return [
+        InlineKeyboardButton(
+            text=texts.ADMIN_BTN_ADD_LOC_HELP, callback_data=CB_ADM_ADDLOC_HELP
+        ),
+    ]
 
 
 # ---------- admin review ----------
@@ -749,6 +925,12 @@ def admin_review(order_id: int, user_id: int) -> InlineKeyboardMarkup:
                 ),
                 InlineKeyboardButton(
                     text=texts.BTN_DECLINE, callback_data=f"{CB_ADMIN_DECLINE_PREFIX}{order_id}"
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=f"{texts.ADMIN_BTN_ORDER_MANAGE} #{order_id}",
+                    callback_data=f"{CB_ADM_ORDER_MANAGE_PREFIX}{order_id}",
                 ),
             ],
             [

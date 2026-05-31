@@ -7,6 +7,8 @@ from html import escape
 from aiogram import Bot, F, Router
 from aiogram.enums import ParseMode
 from aiogram.filters import Command, StateFilter
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
 
 from app import keyboards, texts
@@ -22,12 +24,37 @@ from app.handlers.admin_helpers import (
     run_clear_declined,
     run_sync_panel,
 )
+from app.handlers.admin_order import send_admin_order_view
+from app.handlers.admin_ui_helpers import (
+    admin_edit_or_answer,
+    format_services_list_text,
+    format_tools_menu_text,
+)
 from app.handlers.admin_users_ui import format_user_detail, format_users_page
+from app.handlers.log_channel import start_log_channel_wizard
 
 router = Router(name="admin_panel")
 
 
-async def send_admin_home(message: Message, db: Database) -> None:
+class AdminPanelFlow(StatesGroup):
+    waiting_order_id = State()
+
+
+def _admin_home_body(db: Database) -> str:
+    return f"{texts.ADMIN_PANEL_HOME}\n\n{format_stats_text(db)}"
+
+
+async def send_admin_home(
+    message: Message, db: Database, *, edit_in_place: bool = False
+) -> None:
+    if edit_in_place:
+        await admin_edit_or_answer(
+            message,
+            _admin_home_body(db),
+            keyboards.admin_home_inline(),
+            edit_in_place=True,
+        )
+        return
     await message.answer(
         texts.ADMIN_PANEL_HOME,
         reply_markup=keyboards.admin_reply_keyboard(),
@@ -38,17 +65,39 @@ async def send_admin_home(message: Message, db: Database) -> None:
     )
 
 
-async def send_dashboard(message: Message, db: Database) -> None:
+async def send_dashboard(
+    message: Message, db: Database, *, edit_in_place: bool = False
+) -> None:
     body = texts.ADMIN_DASHBOARD_HEADER.format(stats=format_stats_text(db))
-    await message.answer(body, reply_markup=keyboards.admin_dashboard_inline())
+    await admin_edit_or_answer(
+        message,
+        body,
+        keyboards.admin_dashboard_inline(),
+        edit_in_place=edit_in_place,
+    )
 
 
-async def send_pending_list(message: Message, db: Database) -> None:
+async def send_orders_hub(
+    message: Message, *, edit_in_place: bool = False
+) -> None:
+    await admin_edit_or_answer(
+        message,
+        texts.ADMIN_ORDERS_MENU,
+        keyboards.admin_orders_inline(),
+        edit_in_place=edit_in_place,
+    )
+
+
+async def send_pending_list(
+    message: Message, db: Database, *, edit_in_place: bool = False
+) -> None:
     rows = db.pending_orders(limit=20)
     if not rows:
-        await message.answer(
+        await admin_edit_or_answer(
+            message,
             texts.ADMIN_PENDING_EMPTY,
-            reply_markup=keyboards.admin_home_inline(),
+            keyboards.admin_orders_inline(),
+            edit_in_place=edit_in_place,
         )
         return
 
@@ -62,48 +111,127 @@ async def send_pending_list(message: Message, db: Database) -> None:
                 user_id=r["user_id"],
             ),
         })
-    await message.answer(
+    await admin_edit_or_answer(
+        message,
         texts.ADMIN_PENDING_HEADER.format(count=len(rows)),
-        reply_markup=keyboards.admin_pending_list(buttons),
+        keyboards.admin_pending_list(buttons),
+        edit_in_place=edit_in_place,
     )
 
 
-async def send_settings(message: Message, db: Database) -> None:
-    await message.answer(
-        texts.ADMIN_SETTINGS_MENU + "\n\n" + format_settings_text(db),
-        reply_markup=keyboards.admin_settings_inline(),
+async def send_settings(
+    message: Message, db: Database, *, edit_in_place: bool = False
+) -> None:
+    body = texts.ADMIN_SETTINGS_MENU.format(
+        settings_block=format_settings_text(db)
+    )
+    await admin_edit_or_answer(
+        message,
+        body,
+        keyboards.admin_settings_inline(),
+        edit_in_place=edit_in_place,
     )
 
 
-async def send_base_plans(message: Message, db: Database) -> None:
-    await message.answer(
+async def send_services(
+    message: Message, db: Database, *, edit_in_place: bool = False
+) -> None:
+    body = format_services_list_text(db)
+    if len(body) > 4000:
+        body = body[:3900] + "\n\n<i>… برای لیست کامل: <code>/listservices</code></i>"
+    await admin_edit_or_answer(
+        message,
+        body,
+        keyboards.admin_services_inline(
+            manual_enabled=db.is_manual_purchase_enabled()
+        ),
+        edit_in_place=edit_in_place,
+    )
+
+
+async def send_base_plans(
+    message: Message, db: Database, *, edit_in_place: bool = False
+) -> None:
+    await admin_edit_or_answer(
+        message,
         format_base_plans_text(db),
-        reply_markup=keyboards.admin_plans_keyboard(
+        keyboards.admin_plans_keyboard(
             db.get_volume_presets(),
             db.get_duration_presets(),
         ),
+        edit_in_place=edit_in_place,
     )
 
 
-async def send_tools(message: Message) -> None:
-    await message.answer(
-        texts.ADMIN_TOOLS_MENU,
-        reply_markup=keyboards.admin_tools_inline(),
+async def send_tools(
+    message: Message, db: Database, *, edit_in_place: bool = False
+) -> None:
+    await admin_edit_or_answer(
+        message,
+        format_tools_menu_text(db),
+        keyboards.admin_tools_inline(has_log_channel=bool(db.get_log_channel_id())),
+        edit_in_place=edit_in_place,
     )
 
 
-async def send_locations(message: Message, db: Database) -> None:
+async def send_locations(
+    message: Message, db: Database, *, edit_in_place: bool = False
+) -> None:
     locs = db.list_locations(only_enabled=False)
     if not locs:
-        await message.answer(
+        await admin_edit_or_answer(
+            message,
             texts.ADMIN_LOC_EMPTY,
-            reply_markup=keyboards.admin_home_inline(),
+            keyboards.admin_home_inline(),
+            edit_in_place=edit_in_place,
         )
         return
-    await message.answer(
+    await admin_edit_or_answer(
+        message,
         texts.ADMIN_LOCATIONS_MENU.format(count=len(locs)),
-        reply_markup=keyboards.admin_locations_list(locs),
+        keyboards.admin_locations_list(locs),
+        edit_in_place=edit_in_place,
     )
+
+
+async def send_location_detail(
+    message: Message,
+    db: Database,
+    loc_id: int,
+    *,
+    edit_in_place: bool = False,
+) -> bool:
+    loc = db.get_location(loc_id)
+    if loc is None:
+        return False
+
+    sub = escape(loc.sub_url_template) if loc.sub_url_template else "—"
+    test_line = ""
+    if loc.is_test:
+        test_line = (
+            f"\n🧪 <b>لوکیشن تست</b> — {texts.format_test_volume()} · "
+            f"{texts.TEST_DURATION_DAYS} روز · رایگان · "
+            f"دکمه تست: {'روشن' if db.is_test_feature_enabled() else 'خاموش'}\n"
+        )
+    text = texts.ADMIN_LOC_DETAIL.format(
+        id=loc.id,
+        state_emoji="🟢" if loc.enabled else "🔴",
+        name=escape(loc.name),
+        test_line=test_line,
+        base_url=escape(loc.base_url),
+        inbounds=",".join(str(i) for i in loc.inbound_ids) or "—",
+        sub=sub,
+        pricing=escape(location_pricing_label(db, loc)),
+    )
+    await admin_edit_or_answer(
+        message,
+        text,
+        keyboards.admin_location_detail(
+            loc.id, enabled=loc.enabled, is_test=loc.is_test
+        ),
+        edit_in_place=edit_in_place,
+    )
+    return True
 
 
 async def send_users(
@@ -159,7 +287,11 @@ async def send_user_detail(
     if text is None or row is None:
         return False
     is_banned = bool(row["is_banned"])
-    markup = keyboards.admin_user_detail_keyboard(user_id, is_banned=is_banned)
+    orders = db.list_user_orders_admin(user_id, limit=30)
+    order_ids = [int(o["id"]) for o in orders][:6]
+    markup = keyboards.admin_user_detail_keyboard(
+        user_id, is_banned=is_banned, order_ids=order_ids
+    )
     if edit_in_place:
         try:
             await message.edit_text(
@@ -226,12 +358,14 @@ async def admin_menu_buttons(
         await send_dashboard(message, db)
     elif text == texts.ADMIN_BTN_PENDING:
         await send_pending_list(message, db)
+    elif text == texts.ADMIN_BTN_ORDERS:
+        await send_orders_hub(message)
     elif text == texts.ADMIN_BTN_SETTINGS:
         await send_settings(message, db)
     elif text == texts.ADMIN_BTN_LOCATIONS:
         await send_locations(message, db)
     elif text == texts.ADMIN_BTN_TOOLS:
-        await send_tools(message)
+        await send_tools(message, db)
     elif text == texts.ADMIN_BTN_USERS:
         await send_users(message, db, page=0)
 
@@ -243,14 +377,7 @@ async def cb_admin_home(callback: CallbackQuery, settings: Settings, db: Databas
         await callback.answer(texts.NOT_ADMIN, show_alert=True)
         return
     if isinstance(callback.message, Message):
-        await callback.message.answer(
-            texts.ADMIN_PANEL_HOME,
-            reply_markup=keyboards.admin_reply_keyboard(),
-        )
-        await callback.message.answer(
-            format_stats_text(db),
-            reply_markup=keyboards.admin_home_inline(),
-        )
+        await send_admin_home(callback.message, db, edit_in_place=True)
     await callback.answer()
 
 
@@ -260,15 +387,20 @@ async def cb_admin_dash(callback: CallbackQuery, settings: Settings, db: Databas
         await callback.answer(texts.NOT_ADMIN, show_alert=True)
         return
     if isinstance(callback.message, Message):
-        body = texts.ADMIN_DASHBOARD_HEADER.format(stats=format_stats_text(db))
-        try:
-            await callback.message.edit_text(
-                body, reply_markup=keyboards.admin_dashboard_inline()
-            )
-        except Exception:  # noqa: BLE001
-            await callback.message.answer(
-                body, reply_markup=keyboards.admin_dashboard_inline()
-            )
+        await send_dashboard(callback.message, db, edit_in_place=True)
+    await callback.answer()
+
+
+@router.callback_query(F.data == keyboards.CB_ADM_ORDERS)
+async def cb_admin_orders(
+    callback: CallbackQuery, state: FSMContext, settings: Settings
+) -> None:
+    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
+        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+        return
+    await state.clear()
+    if isinstance(callback.message, Message):
+        await send_orders_hub(callback.message, edit_in_place=True)
     await callback.answer()
 
 
@@ -280,7 +412,7 @@ async def cb_admin_pending(
         await callback.answer(texts.NOT_ADMIN, show_alert=True)
         return
     if isinstance(callback.message, Message):
-        await send_pending_list(callback.message, db)
+        await send_pending_list(callback.message, db, edit_in_place=True)
     await callback.answer()
 
 
@@ -292,8 +424,48 @@ async def cb_admin_settings(
         await callback.answer(texts.NOT_ADMIN, show_alert=True)
         return
     if isinstance(callback.message, Message):
-        await send_settings(callback.message, db)
+        await send_settings(callback.message, db, edit_in_place=True)
     await callback.answer()
+
+
+@router.callback_query(F.data == keyboards.CB_ADM_SETTINGS_REFRESH)
+async def cb_admin_settings_refresh(
+    callback: CallbackQuery, settings: Settings, db: Database
+) -> None:
+    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
+        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+        return
+    if isinstance(callback.message, Message):
+        await send_settings(callback.message, db, edit_in_place=True)
+    await callback.answer(texts.ADMIN_BTN_REFRESH)
+
+
+@router.callback_query(F.data == keyboards.CB_ADM_SERVICES)
+@router.callback_query(F.data == keyboards.CB_ADM_SERVICES_REFRESH)
+async def cb_admin_services(
+    callback: CallbackQuery, settings: Settings, db: Database
+) -> None:
+    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
+        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+        return
+    if isinstance(callback.message, Message):
+        await send_services(callback.message, db, edit_in_place=True)
+    await callback.answer()
+
+
+@router.callback_query(F.data == keyboards.CB_ADM_TOGGLE_MANUAL)
+async def cb_admin_toggle_manual(
+    callback: CallbackQuery, settings: Settings, db: Database
+) -> None:
+    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
+        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+        return
+    enabled = not db.is_manual_purchase_enabled()
+    db.set_manual_purchase_enabled(enabled)
+    mode = "پلن ازپیش‌تعریف ✅" if enabled else "فرمول قیمت ❌"
+    if isinstance(callback.message, Message):
+        await send_services(callback.message, db, edit_in_place=True)
+    await callback.answer(f"خرید دستی: {mode}")
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_PLANS)
@@ -302,15 +474,7 @@ async def cb_admin_plans(callback: CallbackQuery, settings: Settings, db: Databa
         await callback.answer(texts.NOT_ADMIN, show_alert=True)
         return
     if isinstance(callback.message, Message):
-        text = format_base_plans_text(db)
-        markup = keyboards.admin_plans_keyboard(
-            db.get_volume_presets(),
-            db.get_duration_presets(),
-        )
-        try:
-            await callback.message.edit_text(text, reply_markup=markup)
-        except Exception:  # noqa: BLE001
-            await send_base_plans(callback.message, db)
+        await send_base_plans(callback.message, db, edit_in_place=True)
     await callback.answer()
 
 
@@ -379,12 +543,14 @@ async def cb_admin_del_duration(
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_TOOLS)
-async def cb_admin_tools(callback: CallbackQuery, settings: Settings) -> None:
+async def cb_admin_tools(
+    callback: CallbackQuery, settings: Settings, db: Database
+) -> None:
     if callback.from_user is None or not is_admin(callback.from_user.id, settings):
         await callback.answer(texts.NOT_ADMIN, show_alert=True)
         return
     if isinstance(callback.message, Message):
-        await send_tools(callback.message)
+        await send_tools(callback.message, db, edit_in_place=True)
     await callback.answer()
 
 
@@ -396,8 +562,178 @@ async def cb_admin_locations(
         await callback.answer(texts.NOT_ADMIN, show_alert=True)
         return
     if isinstance(callback.message, Message):
-        await send_locations(callback.message, db)
+        await send_locations(callback.message, db, edit_in_place=True)
     await callback.answer()
+
+
+# ---------- order lookup FSM ----------
+@router.callback_query(F.data == keyboards.CB_ADM_ORDER_LOOKUP)
+async def cb_admin_order_lookup_start(
+    callback: CallbackQuery, state: FSMContext, settings: Settings
+) -> None:
+    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
+        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+        return
+    if not isinstance(callback.message, Message):
+        await callback.answer()
+        return
+
+    await state.set_state(AdminPanelFlow.waiting_order_id)
+    await admin_edit_or_answer(
+        callback.message,
+        texts.ADMIN_ORDER_LOOKUP_PROMPT,
+        keyboards.admin_flow_cancel_inline(back_data=keyboards.CB_ADM_ORDERS),
+        edit_in_place=True,
+    )
+    await callback.answer()
+
+
+@router.message(Command("cancel"), StateFilter(AdminPanelFlow))
+@router.callback_query(
+    F.data == keyboards.CB_ADM_FLOW_CANCEL, StateFilter(AdminPanelFlow)
+)
+async def admin_panel_flow_cancel(
+    event: Message | CallbackQuery, state: FSMContext, settings: Settings
+) -> None:
+    user_id = event.from_user.id if event.from_user else None
+    if user_id is None or not is_admin(user_id, settings):
+        if isinstance(event, CallbackQuery):
+            await event.answer(texts.NOT_ADMIN, show_alert=True)
+        return
+
+    await state.clear()
+    if isinstance(event, CallbackQuery):
+        if isinstance(event.message, Message):
+            await send_orders_hub(event.message, edit_in_place=True)
+        await event.answer(texts.CANCELLED)
+    else:
+        await event.answer(texts.CANCELLED)
+
+
+@router.message(StateFilter(AdminPanelFlow.waiting_order_id))
+async def admin_panel_order_id_input(
+    message: Message, state: FSMContext, settings: Settings, db: Database
+) -> None:
+    if not admin_from_message(message, settings):
+        await state.clear()
+        await message.answer(texts.NOT_ADMIN)
+        return
+
+    raw = (message.text or "").strip()
+    try:
+        order_id = int(raw)
+    except ValueError:
+        await message.answer(
+            texts.ADMIN_ORDER_LOOKUP_NOTFOUND.format(order_id=escape(raw or "—")),
+            reply_markup=keyboards.admin_flow_cancel_inline(
+                back_data=keyboards.CB_ADM_ORDERS
+            ),
+        )
+        return
+
+    await state.clear()
+    if not await send_admin_order_view(
+        message, db, order_id, manage_header=True
+    ):
+        await message.answer(
+            texts.ADMIN_ORDER_LOOKUP_NOTFOUND.format(order_id=order_id),
+            reply_markup=keyboards.admin_orders_inline(),
+        )
+
+
+_HINT_CALLBACKS = frozenset({
+    keyboards.CB_ADM_SETCARD_HELP,
+    keyboards.CB_ADM_SETPRICE_HELP,
+    keyboards.CB_ADM_ADDLOC_HELP,
+    keyboards.CB_ADM_ADDSVC_HELP,
+    keyboards.CB_ADM_EDITSVC_HELP,
+    keyboards.CB_ADM_PLAN_ADD_HINT,
+})
+
+
+@router.callback_query(F.data.in_(_HINT_CALLBACKS))
+async def cb_admin_hint(callback: CallbackQuery, settings: Settings) -> None:
+    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
+        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+        return
+    hints = {
+        keyboards.CB_ADM_SETCARD_HELP: texts.SET_CARD_USAGE,
+        keyboards.CB_ADM_SETPRICE_HELP: texts.SET_PRICE_USAGE,
+        keyboards.CB_ADM_ADDLOC_HELP: texts.ADD_LOC_USAGE,
+        keyboards.CB_ADM_ADDSVC_HELP: texts.ADD_SERVICE_USAGE,
+        keyboards.CB_ADM_EDITSVC_HELP: texts.EDIT_SERVICE_USAGE,
+        keyboards.CB_ADM_PLAN_ADD_HINT: texts.ADMIN_PLAN_USAGE,
+    }
+    if isinstance(callback.message, Message):
+        await callback.message.answer(hints.get(callback.data or "", texts.ADMIN_HELP))
+    await callback.answer()
+
+
+@router.callback_query(F.data == keyboards.CB_ADM_LOG_CHANNEL)
+async def cb_admin_log_channel(
+    callback: CallbackQuery, state: FSMContext, settings: Settings
+) -> None:
+    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
+        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+        return
+    if not isinstance(callback.message, Message):
+        await callback.answer()
+        return
+    await start_log_channel_wizard(callback.message, state)
+    await callback.answer()
+
+
+@router.callback_query(F.data == keyboards.CB_ADM_LOG_CHANNEL_OFF)
+async def cb_admin_log_channel_off(
+    callback: CallbackQuery, settings: Settings, db: Database
+) -> None:
+    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
+        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+        return
+    db.set_log_channel_id(None)
+    if isinstance(callback.message, Message):
+        await send_tools(callback.message, db, edit_in_place=True)
+    await callback.answer(texts.LOG_CHANNEL_CLEARED)
+
+
+@router.callback_query(F.data == keyboards.CB_ADM_TOGGLE_TEST)
+async def cb_admin_toggle_test(
+    callback: CallbackQuery, settings: Settings, db: Database
+) -> None:
+    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
+        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+        return
+    enabled = not db.is_test_feature_enabled()
+    db.set_test_feature_enabled(enabled)
+    state_word = "روشن ✅" if enabled else "خاموش ❌"
+    if isinstance(callback.message, Message):
+        await send_tools(callback.message, db, edit_in_place=True)
+    await callback.answer(f"دکمه تست: {state_word}")
+
+
+@router.callback_query(F.data.startswith(keyboards.CB_ADM_TOGGLE_TEST_LOC_PREFIX))
+async def cb_admin_toggle_test_from_loc(
+    callback: CallbackQuery, settings: Settings, db: Database
+) -> None:
+    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
+        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+        return
+    raw = (callback.data or "").removeprefix(
+        keyboards.CB_ADM_TOGGLE_TEST_LOC_PREFIX
+    )
+    try:
+        loc_id = int(raw)
+    except ValueError:
+        await callback.answer()
+        return
+    enabled = not db.is_test_feature_enabled()
+    db.set_test_feature_enabled(enabled)
+    state_word = "روشن ✅" if enabled else "خاموش ❌"
+    if isinstance(callback.message, Message):
+        await send_location_detail(
+            callback.message, db, loc_id, edit_in_place=True
+        )
+    await callback.answer(f"دکمه تست: {state_word}")
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_USERS)
@@ -609,36 +945,14 @@ async def cb_admin_loc_detail(
         await callback.answer()
         return
 
-    loc = db.get_location(loc_id)
-    if loc is None:
+    if not isinstance(callback.message, Message):
+        await callback.answer()
+        return
+    if not await send_location_detail(
+        callback.message, db, loc_id, edit_in_place=True
+    ):
         await callback.answer("لوکیشن یافت نشد.", show_alert=True)
         return
-
-    sub = escape(loc.sub_url_template) if loc.sub_url_template else "—"
-    test_line = ""
-    if loc.is_test:
-        test_line = (
-            f"\n🧪 <b>لوکیشن تست</b> — {texts.format_test_volume()} · "
-            f"{texts.TEST_DURATION_DAYS} روز · رایگان · "
-            f"دکمه تست: {'روشن' if db.is_test_feature_enabled() else 'خاموش'}\n"
-        )
-    text = texts.ADMIN_LOC_DETAIL.format(
-        id=loc.id,
-        state_emoji="🟢" if loc.enabled else "🔴",
-        name=escape(loc.name),
-        test_line=test_line,
-        base_url=escape(loc.base_url),
-        inbounds=",".join(str(i) for i in loc.inbound_ids) or "—",
-        sub=sub,
-        pricing=escape(location_pricing_label(db, loc)),
-    )
-    if isinstance(callback.message, Message):
-        await callback.message.answer(
-            text,
-            reply_markup=keyboards.admin_location_detail(
-                loc.id, enabled=loc.enabled
-            ),
-        )
     await callback.answer()
 
 
@@ -667,7 +981,9 @@ async def cb_admin_loc_toggle(
     state_word = "فعال" if new_state else "غیرفعال"
     await callback.answer(f"لوکیشن {state_word} شد ✅")
     if isinstance(callback.message, Message):
-        await send_locations(callback.message, db)
+        await send_location_detail(
+            callback.message, db, loc_id, edit_in_place=True
+        )
 
 
 @router.callback_query(F.data.startswith(keyboards.CB_ADM_LOC_PURGE_PREFIX))

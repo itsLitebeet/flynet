@@ -21,6 +21,39 @@ router = Router(name="admin_order")
 log = logging.getLogger(__name__)
 
 
+async def send_admin_order_view(
+    message: Message,
+    db: Database,
+    order_id: int,
+    *,
+    edit_in_place: bool = False,
+    manage_header: bool = False,
+    back_data: str | None = keyboards.CB_ADM_ORDERS,
+) -> bool:
+    """Show order detail + management keyboard; return False if not found."""
+    from app.handlers.admin_ui_helpers import admin_edit_or_answer
+
+    text = format_admin_order_detail(db, order_id)
+    if text is None:
+        return False
+
+    order = db.get_order(order_id)
+    assert order is not None
+    panel = await _panel_for_order(db, order)
+    if manage_header:
+        text = texts.ADMIN_EDIT_ORDER_HEADER.format(detail=text)
+    markup = keyboards.admin_edit_order_keyboard(
+        order_id,
+        show_panel_actions=panel is not None,
+        show_db_delete=True,
+        back_data=back_data,
+    )
+    await admin_edit_or_answer(
+        message, text, markup, edit_in_place=edit_in_place
+    )
+    return True
+
+
 def _require_admin_msg(message: Message, settings: Settings) -> bool:
     return admin_from_message(message, settings)
 
@@ -54,21 +87,8 @@ async def cmd_order(
         await message.answer(texts.ADMIN_ORDER_USAGE)
         return
 
-    text = format_admin_order_detail(db, order_id)
-    if text is None:
+    if not await send_admin_order_view(message, db, order_id):
         await message.answer(texts.ADMIN_ORDER_NOTFOUND)
-        return
-
-    order = db.get_order(order_id)
-    assert order is not None
-    panel = await _panel_for_order(db, order)
-    markup = keyboards.admin_edit_order_keyboard(
-        order_id,
-        show_panel_actions=panel is not None,
-        show_db_delete=True,
-    )
-
-    await message.answer(text, reply_markup=markup)
 
 
 # ---------- /editorder ----------
@@ -90,20 +110,10 @@ async def cmd_editorder(
         await message.answer(texts.ADMIN_EDIT_ORDER_USAGE)
         return
 
-    order = db.get_order(order_id)
-    if order is None:
+    if not await send_admin_order_view(
+        message, db, order_id, manage_header=True
+    ):
         await message.answer(texts.ADMIN_ORDER_NOTFOUND)
-        return
-
-    text = format_admin_order_detail(db, order_id)
-    assert text is not None
-    panel = await _panel_for_order(db, order)
-    markup = keyboards.admin_edit_order_keyboard(
-        order_id,
-        show_panel_actions=panel is not None,
-        show_db_delete=True,
-    )
-    await message.answer(texts.ADMIN_EDIT_ORDER_HEADER.format(detail=text), reply_markup=markup)
 
 
 # ---------- panel enable / disable ----------
@@ -301,6 +311,34 @@ async def cb_order_delete_cancel(
         return
     if isinstance(callback.message, Message):
         await callback.message.edit_text(texts.ADMIN_ORDER_DELETE_CANCELLED, reply_markup=None)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith(keyboards.CB_ADM_ORDER_MANAGE_PREFIX))
+async def cb_order_manage(
+    callback: CallbackQuery, settings: Settings, db: Database
+) -> None:
+    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
+        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+        return
+    if not isinstance(callback.message, Message):
+        await callback.answer()
+        return
+
+    order_id = _parse_order_id(callback.data, keyboards.CB_ADM_ORDER_MANAGE_PREFIX)
+    if order_id is None:
+        await callback.answer()
+        return
+
+    if not await send_admin_order_view(
+        callback.message,
+        db,
+        order_id,
+        edit_in_place=True,
+        manage_header=True,
+    ):
+        await callback.answer(texts.ADMIN_ORDER_NOTFOUND, show_alert=True)
+        return
     await callback.answer()
 
 
