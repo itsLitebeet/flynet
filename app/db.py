@@ -370,8 +370,9 @@ class Database:
         """All orders for a user (admin view), newest first."""
         with self._cursor() as cur:
             cur.execute(
-                "SELECT id, status, xui_email, location_name, volume_gb, "
-                "duration_days, nickname, price, created_at, updated_at "
+                "SELECT id, status, xui_email, location_id, location_name, "
+                "volume_gb, duration_days, nickname, price, created_at, "
+                "updated_at, is_test "
                 "FROM orders WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?",
                 (user_id, limit),
             )

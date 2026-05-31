@@ -241,7 +241,7 @@ async def send_users(
     *,
     edit_in_place: bool = False,
 ) -> None:
-    text, total_pages, users = format_users_page(db, page)
+    text, total_pages, users = await format_users_page(db, page)
     if not users:
         markup = keyboards.admin_home_inline()
         if edit_in_place:
@@ -283,7 +283,7 @@ async def send_user_detail(
     edit_in_place: bool = False,
 ) -> bool:
     row = db.get_user(user_id)
-    text = format_user_detail(db, user_id)
+    text = await format_user_detail(db, user_id)
     if text is None or row is None:
         return False
     is_banned = bool(row["is_banned"])

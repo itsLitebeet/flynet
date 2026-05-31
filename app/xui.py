@@ -368,6 +368,18 @@ class XuiClient:
             return [c for c in obj if isinstance(c, dict)]
         return []
 
+    async def usage_for_emails(self, emails: set[str]) -> dict[str, ClientUsage]:
+        """Map panel client emails to usage snapshots (one list call)."""
+        if not emails:
+            return {}
+        want = {e for e in emails if e}
+        out: dict[str, ClientUsage] = {}
+        for client in await self.list_clients():
+            email = str(client.get("email", ""))
+            if email in want:
+                out[email] = _usage_from_client(client)
+        return out
+
     async def find_client(self, email: str) -> dict[str, Any] | None:
         """Find a single client object by its email (the panel's primary key)."""
         for client in await self.list_clients():

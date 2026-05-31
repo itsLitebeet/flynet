@@ -114,6 +114,11 @@ STATUS_BADGE = {
     "failed":           "⚠️ خطا",
 }
 
+# Live panel state (admin users list / detail when usage is fetched)
+PANEL_BADGE_EXPIRED = "⏱ منقضی"
+PANEL_BADGE_QUOTA_DONE = "📭 حجم تمام شد"
+PANEL_BADGE_DISABLED = "⏸ غیرفعال در پنل"
+
 SERVICE_LIST_ITEM = (
     "{status_emoji} #{id} — {location} — {volume}GB / {days}d{nickname_part}"
 )
@@ -566,7 +571,8 @@ ADMIN_PENDING_BTN = "🔍 #{id} · {price} · کاربر {user_id}"
 ADMIN_USERS_HEADER = (
     "👥 <b>کاربران و کلاینت‌های پنل</b>\n"
     "صفحه <b>{page}</b> از <b>{pages}</b> — جمع: <b>{total}</b> کاربر\n\n"
-    "روی هر کاربر بزنید برای جزئیات کامل."
+    "روی هر کاربر بزنید برای جزئیات کامل.\n"
+    "<i>وضعیت کلاینت‌های فعال از پنل (مصرف/اعتبار) خوانده می‌شود.</i>"
 )
 ADMIN_USERS_EMPTY = "هیچ کاربری در ربات ثبت نشده است."
 
