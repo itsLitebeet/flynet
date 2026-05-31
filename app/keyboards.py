@@ -55,6 +55,13 @@ CB_ADM_USERS_PAGE_PREFIX     = "adm:usrp:"   # adm:usrp:<page>
 CB_ADM_USER_DETAIL_PREFIX    = "adm:u:"      # adm:u:<user_id>
 CB_ADM_CMD_HELP          = "adm:cmdhelp"
 CB_ADM_ORDER_VIEW_PREFIX = "adm:ov:"    # adm:ov:<order_id>
+CB_ADM_ORDER_ENABLE_PREFIX   = "adm:oen:"   # adm:oen:<order_id>
+CB_ADM_ORDER_DISABLE_PREFIX  = "adm:odis:"  # adm:odis:<order_id>
+CB_ADM_ORDER_DELETE_ASK_PREFIX = "adm:odelask:"  # adm:odelask:<order_id>
+CB_ADM_ORDER_DELETE_OK_PREFIX  = "adm:odelok:"   # adm:odelok:<order_id>
+CB_ADM_ORDER_DELETE_CANCEL     = "adm:odelno"
+CB_ADM_USER_BAN_PREFIX       = "adm:ban:"   # adm:ban:<user_id>
+CB_ADM_USER_UNBAN_PREFIX     = "adm:unban:" # adm:unban:<user_id>
 CB_ADM_LOC_DETAIL_PREFIX = "adm:ld:"    # adm:ld:<location_id>
 CB_ADM_LOC_TOGGLE_PREFIX = "adm:lt:"    # adm:lt:<location_id>
 CB_ADM_TOOL_SYNC         = "adm:tsync"
@@ -535,7 +542,20 @@ def admin_users_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def admin_user_detail_keyboard(user_id: int) -> InlineKeyboardMarkup:
+def admin_user_detail_keyboard(
+    user_id: int, *, is_banned: bool = False
+) -> InlineKeyboardMarkup:
+    ban_btn = (
+        InlineKeyboardButton(
+            text=texts.BTN_USER_UNBAN,
+            callback_data=f"{CB_ADM_USER_UNBAN_PREFIX}{user_id}",
+        )
+        if is_banned
+        else InlineKeyboardButton(
+            text=texts.BTN_USER_BAN,
+            callback_data=f"{CB_ADM_USER_BAN_PREFIX}{user_id}",
+        )
+    )
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -544,9 +564,55 @@ def admin_user_detail_keyboard(user_id: int) -> InlineKeyboardMarkup:
                     url=f"tg://user?id={user_id}",
                 ),
             ],
+            [ban_btn],
             [
                 InlineKeyboardButton(
                     text="🔙 لیست کاربران", callback_data=CB_ADM_USERS
+                ),
+            ],
+        ]
+    )
+
+
+def admin_edit_order_keyboard(
+    order_id: int,
+    *,
+    show_panel_actions: bool,
+    show_db_delete: bool = True,
+) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    if show_panel_actions:
+        rows.append([
+            InlineKeyboardButton(
+                text=texts.BTN_ORDER_ENABLE,
+                callback_data=f"{CB_ADM_ORDER_ENABLE_PREFIX}{order_id}",
+            ),
+            InlineKeyboardButton(
+                text=texts.BTN_ORDER_DISABLE,
+                callback_data=f"{CB_ADM_ORDER_DISABLE_PREFIX}{order_id}",
+            ),
+        ])
+    if show_db_delete:
+        rows.append([
+            InlineKeyboardButton(
+                text=texts.BTN_ORDER_DELETE,
+                callback_data=f"{CB_ADM_ORDER_DELETE_ASK_PREFIX}{order_id}",
+            ),
+        ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_order_delete_confirm(order_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.BTN_ORDER_DELETE_CONFIRM,
+                    callback_data=f"{CB_ADM_ORDER_DELETE_OK_PREFIX}{order_id}",
+                ),
+                InlineKeyboardButton(
+                    text=texts.BTN_CANCEL,
+                    callback_data=CB_ADM_ORDER_DELETE_CANCEL,
                 ),
             ],
         ]

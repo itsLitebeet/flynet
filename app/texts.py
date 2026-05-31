@@ -586,6 +586,11 @@ ADMIN_HELP = (
     "<b>لاگ:</b>\n"
     "/logchannel — اتصال کانال لاگ (سفارش، رسید، تأیید/رد، تست، تیکت)\n"
     "/logchannel off — خاموش\n\n"
+    "<b>سفارش و کاربر:</b>\n"
+    "/order &lt;id&gt; — جزئیات سفارش\n"
+    "/editorder &lt;id&gt; — فعال/غیرفعال/حذف پنل+ربات\n"
+    "/ban &lt;user_id&gt; | /unban &lt;user_id&gt;\n"
+    "/editservice &lt;pkg_id&gt; &lt;gb&gt; &lt;days&gt; &lt;toman&gt;\n\n"
     "<b>لوکیشن‌ها:</b>\n"
     "/locations — لیست لوکیشن‌ها\n"
     "/addlocation &lt;name&gt; | &lt;base_url&gt; | &lt;api_token&gt; | &lt;inbound_id1,id2&gt;\n"
@@ -784,6 +789,68 @@ LOG_CHANNEL_FORBIDDEN = (
 )
 LOG_CHANNEL_BAD = "❗ خطا: <code>{error}</code>"
 LOG_CHANNEL_CLEARED = "✅ کانال لاگ غیرفعال شد."
+
+ADMIN_ORDER_USAGE = "❗ استفاده: <code>/order &lt;order_id&gt;</code>"
+ADMIN_ORDER_NOTFOUND = "❗ سفارشی با این شناسه یافت نشد."
+ADMIN_ORDER_DETAIL = (
+    "📋 <b>سفارش #{order_id}</b>\n\n"
+    "📌 وضعیت: {status}\n"
+    "👤 کاربر: {user_line}\n"
+    "📍 لوکیشن: <b>{location}</b> (<code>#{location_id}</code>)\n"
+    "💾 حجم: <b>{volume}</b> · 📅 <b>{days}</b> روز\n"
+    "💰 مبلغ: <b>{price}</b>\n"
+    "🏷 نام نمایشی: {nickname}\n"
+    "🧪 تست: {test_mark}\n\n"
+    "🆔 پنل: <code>{panel_email}</code>\n"
+    "🔔 subId: <code>{sub_id}</code>\n"
+    "👮 بررسی‌کننده: {reviewer}\n"
+    "📝 دلیل رد: {decline_reason}\n"
+    "📷 رسید: {screenshot}\n\n"
+    "🕐 ایجاد: {created_at}\n"
+    "🕑 بروزرسانی: {updated_at}"
+)
+
+ADMIN_EDIT_ORDER_USAGE = "❗ استفاده: <code>/editorder &lt;order_id&gt;</code>"
+ADMIN_EDIT_ORDER_HEADER = "⚙️ <b>مدیریت سفارش</b>\n\n{detail}"
+ADMIN_EDIT_ORDER_NO_PANEL = "این سفارش روی پنل فعال نیست (فقط حذف از ربات ممکن است)."
+ADMIN_EDIT_ORDER_FAIL = "❗ خطای پنل: <code>{error}</code>"
+ADMIN_EDIT_ORDER_ENABLED = "✅ سرویس <code>#{order_id}</code> در پنل فعال شد."
+ADMIN_EDIT_ORDER_DISABLED = "⏸ سرویس <code>#{order_id}</code> در پنل غیرفعال شد."
+ADMIN_ORDER_DELETE_CONFIRM = (
+    "⚠️ <b>حذف سفارش #{order_id}</b>\n\n"
+    "کلاینت از پنل (در صورت وجود) و رکورد از ربات حذف می‌شود.\n"
+    "تأیید می‌کنید؟"
+)
+ADMIN_ORDER_DELETE_CANCELLED = "❌ حذف لغو شد."
+ADMIN_ORDER_DELETED_OK = "✅ سفارش <code>#{order_id}</code> از پنل و ربات حذف شد."
+ADMIN_ORDER_DELETED_PARTIAL = (
+    "⚠️ سفارش <code>#{order_id}</code> از ربات حذف شد.\n"
+    "خطای حذف از پنل: <code>{error}</code>"
+)
+
+BTN_ORDER_ENABLE = "✅ فعال در پنل"
+BTN_ORDER_DISABLE = "⏸ غیرفعال در پنل"
+BTN_ORDER_DELETE = "🗑 حذف پنل + ربات"
+BTN_ORDER_DELETE_CONFIRM = "✅ بله، حذف کن"
+BTN_USER_BAN = "🚫 مسدود کردن"
+BTN_USER_UNBAN = "✅ رفع مسدودیت"
+
+BAN_USAGE = "❗ استفاده: <code>/ban &lt;user_id&gt;</code>"
+UNBAN_USAGE = "❗ استفاده: <code>/unban &lt;user_id&gt;</code>"
+BAN_OK = "🚫 کاربر <code>{user_id}</code> مسدود شد."
+UNBAN_OK = "✅ مسدودیت کاربر <code>{user_id}</code> برداشته شد."
+BAN_USER_NOTFOUND = "❗ کاربر در ربات ثبت نشده."
+BAN_SELF = "❗ نمی‌توانید خودتان را مسدود کنید."
+
+EDIT_SERVICE_USAGE = (
+    "❗ استفاده:\n"
+    "<code>/editservice 5 10 3 38000</code>\n"
+    "شناسه پلن + حجم + روز + قیمت (همان فرمت addservice)"
+)
+EDIT_SERVICE_OK = (
+    "✅ پلن <code>#{id}</code> به‌روز شد:\n"
+    "{volume} گیگ · {days} روز · {price}"
+)
 
 SET_LOC_PRICE_USAGE = (
     "❗ استفاده:\n"

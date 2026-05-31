@@ -315,6 +315,34 @@ class NetFlyLogger:
             f"رسید ارسال شده بود: <b>{'بله' if had_receipt else 'خیر'}</b>"
         )
 
+    async def log_admin_order_action(
+        self,
+        *,
+        order_id: int,
+        admin: Actor,
+        action: str,
+    ) -> None:
+        await self._send_text(
+            "🛠 <b>مدیریت سفارش توسط ادمین</b>\n\n"
+            f"🆔 سفارش: <code>#{order_id}</code>\n"
+            f"👮 ادمین:\n{admin.html_line()}\n"
+            f"⚙️ عملیات: <b>{escape(action)}</b>"
+        )
+
+    async def log_user_ban(
+        self,
+        *,
+        admin: Actor,
+        user: Actor,
+        banned: bool,
+    ) -> None:
+        label = "مسدود شد 🚫" if banned else "رفع مسدودیت ✅"
+        await self._send_text(
+            f"👮 <b>{label}</b>\n\n"
+            f"ادمین:\n{admin.html_line()}\n"
+            f"کاربر:\n{user.html_line()}"
+        )
+
     async def log_broadcast_done(
         self,
         *,

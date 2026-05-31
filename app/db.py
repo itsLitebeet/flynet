@@ -324,6 +324,14 @@ class Database:
             row = cur.fetchone()
             return bool(row and row["is_banned"])
 
+    def set_user_banned(self, user_id: int, banned: bool) -> bool:
+        with self._cursor() as cur:
+            cur.execute(
+                "UPDATE users SET is_banned = ? WHERE user_id = ?",
+                (1 if banned else 0, user_id),
+            )
+            return cur.rowcount > 0
+
     def count_users(self) -> int:
         with self._cursor() as cur:
             cur.execute("SELECT COUNT(*) AS c FROM users")
@@ -521,6 +529,35 @@ class Database:
         with self._cursor() as cur:
             cur.execute("DELETE FROM service_packages WHERE id = ?", (package_id,))
             return cur.rowcount > 0
+
+    def update_service_package(
+        self,
+        package_id: int,
+        volume_gb: int,
+        duration_days: int,
+        price: int,
+    ) -> tuple[bool, str]:
+        """Returns (ok, reason). reason: ok | not_found | invalid | duplicate."""
+        if volume_gb <= 0 or duration_days <= 0 or price < 0:
+            return False, "invalid"
+        pkg = self.get_service_package(package_id)
+        if pkg is None:
+            return False, "not_found"
+        loc = self.get_location(pkg.location_id)
+        if loc is None:
+            return False, "not_found"
+        if loc.is_test:
+            return False, "test_location"
+        try:
+            with self._cursor() as cur:
+                cur.execute(
+                    "UPDATE service_packages SET volume_gb = ?, duration_days = ?, "
+                    "price = ? WHERE id = ?",
+                    (volume_gb, duration_days, price, package_id),
+                )
+            return True, "ok"
+        except sqlite3.IntegrityError:
+            return False, "duplicate"
 
     def get_service_package(self, package_id: int) -> ServicePackage | None:
         with self._cursor() as cur:

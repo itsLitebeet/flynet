@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from html import escape
 
-from aiogram import Bot, F, Router
+from aiogram import Bot, Router
 from aiogram.filters import Command, CommandObject
 from aiogram.types import CallbackQuery, Message
 
@@ -196,6 +196,127 @@ async def cmd_toggle_manual_purchase(
     if enabled and not db.list_all_service_packages():
         extra = "\n\n⚠️ هنوز پلنی با <code>/addservice</code> تعریف نشده."
     await message.answer(texts.TOGGLE_MANUAL_PURCHASE_OK.format(mode=mode) + extra)
+
+
+# ---------- service package edit ----------
+@router.message(Command("editservice"))
+async def cmd_editservice(
+    message: Message, command: CommandObject, settings: Settings, db: Database
+) -> None:
+    if not _require_admin(message, settings):
+        await message.answer(texts.NOT_ADMIN)
+        return
+
+    parts = (command.args or "").split()
+    if len(parts) != 4:
+        await message.answer(texts.EDIT_SERVICE_USAGE)
+        return
+    try:
+        package_id, volume_gb, duration_days, price = (
+            int(parts[0]),
+            int(parts[1]),
+            int(parts[2]),
+            int(parts[3]),
+        )
+    except ValueError:
+        await message.answer(texts.EDIT_SERVICE_USAGE)
+        return
+
+    ok, reason = db.update_service_package(
+        package_id, volume_gb, duration_days, price
+    )
+    if not ok:
+        msg = {
+            "not_found": texts.DEL_SERVICE_NOTFOUND,
+            "invalid": texts.ADD_SERVICE_INVALID,
+            "duplicate": texts.ADD_SERVICE_DUPLICATE,
+            "test_location": texts.ADD_SERVICE_TEST_LOC,
+        }.get(reason, texts.ADD_SERVICE_INVALID)
+        await message.answer(msg)
+        return
+
+    await message.answer(
+        texts.EDIT_SERVICE_OK.format(
+            id=package_id,
+            volume=volume_gb,
+            days=duration_days,
+            price=texts.format_price(price),
+        )
+    )
+
+
+# ---------- ban / unban ----------
+@router.message(Command("ban"))
+async def cmd_ban(
+    message: Message, command: CommandObject, settings: Settings, db: Database, bot: Bot
+) -> None:
+    if not _require_admin(message, settings):
+        await message.answer(texts.NOT_ADMIN)
+        return
+    user_id = _parse_admin_user_id(message, command)
+    if user_id is None:
+        await message.answer(texts.BAN_USAGE)
+        return
+    if message.from_user and user_id == message.from_user.id:
+        await message.answer(texts.BAN_SELF)
+        return
+    if db.get_user(user_id) is None:
+        await message.answer(texts.BAN_USER_NOTFOUND)
+        return
+    db.set_user_banned(user_id, True)
+    await message.answer(texts.BAN_OK.format(user_id=user_id))
+    await _log_ban_toggle(bot, db, message, user_id, banned=True)
+
+
+@router.message(Command("unban"))
+async def cmd_unban(
+    message: Message, command: CommandObject, settings: Settings, db: Database, bot: Bot
+) -> None:
+    if not _require_admin(message, settings):
+        await message.answer(texts.NOT_ADMIN)
+        return
+    user_id = _parse_admin_user_id(message, command)
+    if user_id is None:
+        await message.answer(texts.UNBAN_USAGE)
+        return
+    if db.get_user(user_id) is None:
+        await message.answer(texts.BAN_USER_NOTFOUND)
+        return
+    db.set_user_banned(user_id, False)
+    await message.answer(texts.UNBAN_OK.format(user_id=user_id))
+    await _log_ban_toggle(bot, db, message, user_id, banned=False)
+
+
+def _parse_admin_user_id(message: Message, command: CommandObject) -> int | None:
+    raw = (command.args or "").strip()
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        return None
+
+
+async def _log_ban_toggle(
+    bot: Bot, db: Database, message: Message, user_id: int, *, banned: bool
+) -> None:
+    from app.logs import Actor, make_logger
+
+    admin = Actor.from_user(message.from_user)
+    row = db.get_user(user_id)
+    if admin is None or row is None:
+        return
+    target = Actor(
+        user_id=user_id,
+        full_name=" ".join(
+            p for p in [row["first_name"], row["last_name"]] if p
+        )
+        or "—",
+        username=row["username"],
+    )
+    await make_logger(bot, db).log_user_ban(
+        admin=admin, user=target, banned=banned
+    )
 
 
 # ---------- settings ----------

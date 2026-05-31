@@ -154,10 +154,12 @@ async def send_user_detail(
     *,
     edit_in_place: bool = False,
 ) -> bool:
+    row = db.get_user(user_id)
     text = format_user_detail(db, user_id)
-    if text is None:
+    if text is None or row is None:
         return False
-    markup = keyboards.admin_user_detail_keyboard(user_id)
+    is_banned = bool(row["is_banned"])
+    markup = keyboards.admin_user_detail_keyboard(user_id, is_banned=is_banned)
     if edit_in_place:
         try:
             await message.edit_text(
@@ -460,6 +462,83 @@ async def cb_admin_cmd_help(callback: CallbackQuery, settings: Settings) -> None
     if isinstance(callback.message, Message):
         await callback.message.answer(texts.ADMIN_HELP)
     await callback.answer()
+
+
+@router.callback_query(F.data.startswith(keyboards.CB_ADM_USER_BAN_PREFIX))
+async def cb_admin_ban_user(
+    callback: CallbackQuery, settings: Settings, db: Database, bot: Bot
+) -> None:
+    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
+        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+        return
+    try:
+        user_id = int(
+            (callback.data or "").removeprefix(keyboards.CB_ADM_USER_BAN_PREFIX)
+        )
+    except ValueError:
+        await callback.answer()
+        return
+    if user_id == callback.from_user.id:
+        await callback.answer(texts.BAN_SELF, show_alert=True)
+        return
+    if db.get_user(user_id) is None:
+        await callback.answer(texts.BAN_USER_NOTFOUND, show_alert=True)
+        return
+    db.set_user_banned(user_id, True)
+    if isinstance(callback.message, Message):
+        await send_user_detail(
+            callback.message, db, user_id, edit_in_place=True
+        )
+    await callback.answer(texts.BAN_OK.format(user_id=user_id))
+    await _log_ban_from_callback(bot, db, callback, user_id, banned=True)
+
+
+@router.callback_query(F.data.startswith(keyboards.CB_ADM_USER_UNBAN_PREFIX))
+async def cb_admin_unban_user(
+    callback: CallbackQuery, settings: Settings, db: Database, bot: Bot
+) -> None:
+    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
+        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+        return
+    try:
+        user_id = int(
+            (callback.data or "").removeprefix(keyboards.CB_ADM_USER_UNBAN_PREFIX)
+        )
+    except ValueError:
+        await callback.answer()
+        return
+    if db.get_user(user_id) is None:
+        await callback.answer(texts.BAN_USER_NOTFOUND, show_alert=True)
+        return
+    db.set_user_banned(user_id, False)
+    if isinstance(callback.message, Message):
+        await send_user_detail(
+            callback.message, db, user_id, edit_in_place=True
+        )
+    await callback.answer(texts.UNBAN_OK.format(user_id=user_id))
+    await _log_ban_from_callback(bot, db, callback, user_id, banned=False)
+
+
+async def _log_ban_from_callback(
+    bot: Bot, db: Database, callback: CallbackQuery, user_id: int, *, banned: bool
+) -> None:
+    from app.logs import Actor, make_logger
+
+    admin = Actor.from_user(callback.from_user)
+    row = db.get_user(user_id)
+    if admin is None or row is None:
+        return
+    target = Actor(
+        user_id=user_id,
+        full_name=" ".join(
+            p for p in [row["first_name"], row["last_name"]] if p
+        )
+        or "—",
+        username=row["username"],
+    )
+    await make_logger(bot, db).log_user_ban(
+        admin=admin, user=target, banned=banned
+    )
 
 
 # ---------- pending order → resend receipt ----------

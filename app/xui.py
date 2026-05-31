@@ -6,6 +6,7 @@ The endpoints implemented here mirror the spec the user provided:
     POST /panel/api/clients/add?email=<email>     body: { client: {...}, inboundIds: [...] }
     GET  /panel/api/clients/get/{email}           -> { success, obj }
     POST /panel/api/clients/update/{email}        body: { email, totalGB?, expiryTime?, ... }
+    POST /panel/api/clients/del/{email}           query: keepTraffic=1
     GET  /panel/api/clients/subLinks/{subId}      -> { success, obj: [link, ...] }
 
 The `list` endpoint is the most reliable source of truth: each item is a full
@@ -460,6 +461,14 @@ class XuiClient:
 
         return await self._request(
             "POST", f"/panel/api/clients/update/{email}", json_body=body
+        )
+
+    async def delete_client(self, email: str, *, keep_traffic: int = 1) -> dict[str, Any]:
+        """Remove client from panel. keepTraffic=1 retains xray_client_traffic row."""
+        return await self._request(
+            "POST",
+            f"/panel/api/clients/del/{email}",
+            params={"keepTraffic": int(keep_traffic)},
         )
 
     async def rename_client_email(self, old_email: str, new_email: str) -> None:
