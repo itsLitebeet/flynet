@@ -29,11 +29,16 @@ log = logging.getLogger(__name__)
 
 class OrderFlow(StatesGroup):
     picking_location    = State()
+    picking_package     = State()
     picking_volume      = State()
     entering_custom_vol = State()
     picking_duration    = State()
     reviewing           = State()
     awaiting_receipt    = State()
+
+
+PURCHASE_MODE_PACKAGES = "packages"
+PURCHASE_MODE_LEGACY = "legacy"
 
 
 # ---------- helpers ----------
@@ -55,6 +60,56 @@ def _calc_price_for(
     return texts.calc_price(volume_gb, duration_days, base, per_gb, per_day)
 
 
+async def _clear_plan_selection(state: FSMContext) -> None:
+    data = await state.get_data()
+    for key in ("volume_gb", "duration_days", "price", "package_id"):
+        data.pop(key, None)
+    await state.set_data(data)
+
+
+def _resolve_order_terms(
+    data: dict, db: Database
+) -> tuple[int, str, int, int, int] | None:
+    """Validate FSM data; re-read package price from DB before creating order."""
+    try:
+        location_id = int(data["location_id"])
+        location_name = str(data["location_name"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+    loc = db.get_location(location_id)
+    if loc is None or not loc.enabled or loc.is_test:
+        return None
+
+    mode = str(data.get("purchase_mode", PURCHASE_MODE_LEGACY))
+    if mode == PURCHASE_MODE_PACKAGES:
+        try:
+            package_id = int(data["package_id"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        pkg = db.get_service_package(package_id)
+        if pkg is None or not pkg.enabled or pkg.location_id != location_id:
+            return None
+        return (
+            location_id,
+            location_name,
+            pkg.volume_gb,
+            pkg.duration_days,
+            pkg.price,
+        )
+
+    try:
+        volume_gb = int(data["volume_gb"])
+        duration_days = int(data["duration_days"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if volume_gb <= 0 or duration_days <= 0:
+        return None
+
+    price = _calc_price_for(db, volume_gb, duration_days, location_id)
+    return location_id, location_name, volume_gb, duration_days, price
+
+
 async def _abort_order_flow(
     message: Message, state: FSMContext, db: Database
 ) -> None:
@@ -73,6 +128,7 @@ async def _abort_order_flow(
 
 
 async def _show_locations(callback: CallbackQuery, db: Database, state: FSMContext) -> None:
+    await _clear_plan_selection(state)
     locs = db.list_locations(only_enabled=True, exclude_test=True)
     if not locs:
         await _edit_or_answer(callback, texts.NO_LOCATIONS_USER, keyboards.back_to_menu())
@@ -82,9 +138,36 @@ async def _show_locations(callback: CallbackQuery, db: Database, state: FSMConte
     await _edit_or_answer(callback, texts.ORDER_PICK_LOCATION, keyboards.locations(locs))
 
 
+async def _show_packages(
+    callback: CallbackQuery,
+    state: FSMContext,
+    location_id: int,
+    location_name: str,
+    db: Database,
+) -> None:
+    packages = db.list_service_packages(location_id)
+    if not packages:
+        await _edit_or_answer(
+            callback,
+            texts.ORDER_NO_PACKAGES,
+            keyboards.locations(db.list_locations(only_enabled=True, exclude_test=True)),
+        )
+        await state.set_state(OrderFlow.picking_location)
+        return
+
+    await state.update_data(purchase_mode=PURCHASE_MODE_PACKAGES)
+    await state.set_state(OrderFlow.picking_package)
+    await _edit_or_answer(
+        callback,
+        texts.ORDER_PICK_PACKAGE.format(location=escape(location_name)),
+        keyboards.service_packages(packages),
+    )
+
+
 async def _show_volumes(
     callback: CallbackQuery, state: FSMContext, location_name: str, db: Database
 ) -> None:
+    await state.update_data(purchase_mode=PURCHASE_MODE_LEGACY)
     await state.set_state(OrderFlow.picking_volume)
     await _edit_or_answer(
         callback,
@@ -113,13 +196,20 @@ async def _show_durations(
 
 async def _show_review(callback: CallbackQuery, state: FSMContext, db: Database) -> None:
     data = await state.get_data()
-    price = _calc_price_for(
-        db,
-        int(data["volume_gb"]),
-        int(data["duration_days"]),
-        int(data["location_id"]),
-    )
-    await state.update_data(price=price)
+    mode = str(data.get("purchase_mode", PURCHASE_MODE_LEGACY))
+    if mode == PURCHASE_MODE_PACKAGES and data.get("price") is not None:
+        price = int(data["price"])
+        back_cb = keyboards.CB_ORDER_BACK_PKG
+    else:
+        price = _calc_price_for(
+            db,
+            int(data["volume_gb"]),
+            int(data["duration_days"]),
+            int(data["location_id"]),
+        )
+        await state.update_data(price=price)
+        back_cb = keyboards.CB_ORDER_BACK_DUR
+
     await state.set_state(OrderFlow.reviewing)
     await _edit_or_answer(
         callback,
@@ -129,7 +219,7 @@ async def _show_review(callback: CallbackQuery, state: FSMContext, db: Database)
             days=int(data["duration_days"]),
             price=texts.format_price(price),
         ),
-        keyboards.confirm_order(),
+        keyboards.confirm_order(back_callback=back_cb),
     )
 
 
@@ -177,17 +267,55 @@ async def cb_pick_location(callback: CallbackQuery, state: FSMContext, db: Datab
         return
 
     loc = db.get_location(loc_id)
-    if loc is None or not loc.enabled:
+    if loc is None or not loc.enabled or loc.is_test:
         await callback.answer("این لوکیشن دیگر در دسترس نیست.", show_alert=True)
         await _show_locations(callback, db, state)
         return
 
+    await _clear_plan_selection(state)
     await state.update_data(
         location_id=loc.id,
         location_name=loc.name,
         inbound_ids=loc.inbound_ids,
     )
-    await _show_volumes(callback, state, loc.name, db)
+    if db.is_manual_purchase_enabled():
+        await _show_packages(callback, state, loc.id, loc.name, db)
+    else:
+        await _show_volumes(callback, state, loc.name, db)
+    await callback.answer()
+
+
+# ---------- pick predefined package (manual purchase mode) ----------
+@router.callback_query(
+    StateFilter(OrderFlow.picking_package),
+    F.data.startswith(keyboards.CB_SVC_PREFIX),
+)
+async def cb_pick_package(callback: CallbackQuery, state: FSMContext, db: Database) -> None:
+    raw = (callback.data or "").removeprefix(keyboards.CB_SVC_PREFIX)
+    try:
+        package_id = int(raw)
+    except ValueError:
+        await callback.answer()
+        return
+
+    pkg = db.get_service_package(package_id)
+    data = await state.get_data()
+    loc_id = int(data.get("location_id", 0))
+    if pkg is None or not pkg.enabled or pkg.location_id != loc_id:
+        await callback.answer("این پلن دیگر موجود نیست.", show_alert=True)
+        await _show_packages(
+            callback, state, loc_id, str(data.get("location_name", "—")), db
+        )
+        return
+
+    await state.update_data(
+        volume_gb=pkg.volume_gb,
+        duration_days=pkg.duration_days,
+        price=pkg.price,
+        package_id=pkg.id,
+        purchase_mode=PURCHASE_MODE_PACKAGES,
+    )
+    await _show_review(callback, state, db)
     await callback.answer()
 
 
@@ -303,20 +431,48 @@ async def cb_confirm_order(
         await callback.answer()
         return
 
+    terms = _resolve_order_terms(data, db)
+    if terms is None:
+        await callback.answer(texts.ORDER_PLAN_CHANGED, show_alert=True)
+        loc_id = int(data.get("location_id") or 0)
+        if (
+            data.get("purchase_mode") == PURCHASE_MODE_PACKAGES
+            and loc_id
+            and db.list_service_packages(loc_id)
+        ):
+            await _show_packages(
+                callback,
+                state,
+                loc_id,
+                str(data.get("location_name", "—")),
+                db,
+            )
+        else:
+            await _show_locations(callback, db, state)
+        return
+
+    location_id, location_name, volume_gb, duration_days, price_toman = terms
+    await state.update_data(
+        location_id=location_id,
+        location_name=location_name,
+        volume_gb=volume_gb,
+        duration_days=duration_days,
+        price=price_toman,
+    )
+
     order_id = db.create_order(
         user_id=user.id,
-        location_id=int(data["location_id"]),
-        location_name=str(data["location_name"]),
-        volume_gb=int(data["volume_gb"]),
-        duration_days=int(data["duration_days"]),
-        price=int(data["price"]),
+        location_id=location_id,
+        location_name=location_name,
+        volume_gb=volume_gb,
+        duration_days=duration_days,
+        price=price_toman,
     )
     await state.update_data(order_id=order_id)
     await state.set_state(OrderFlow.awaiting_receipt)
 
     card_raw = db.get_setting("card_number", "—") or "—"
     card_holder = db.get_setting("card_holder", "—") or "—"
-    price_toman = int(data["price"])
 
     await _edit_or_answer(
         callback,
@@ -337,7 +493,10 @@ async def cmd_cancel_order(message: Message, state: FSMContext, db: Database) ->
     await _abort_order_flow(message, state, db)
 
 
-@router.callback_query(F.data == keyboards.CB_ORDER_CANCEL)
+@router.callback_query(
+    F.data == keyboards.CB_ORDER_CANCEL,
+    StateFilter(OrderFlow),
+)
 async def cb_cancel_anywhere(
     callback: CallbackQuery, state: FSMContext, db: Database
 ) -> None:
@@ -348,23 +507,54 @@ async def cb_cancel_anywhere(
     await callback.answer()
 
 
-@router.callback_query(F.data == keyboards.CB_ORDER_BACK_LOC)
+@router.callback_query(
+    F.data == keyboards.CB_ORDER_BACK_LOC,
+    StateFilter(OrderFlow),
+)
 async def cb_back_to_locations(callback: CallbackQuery, state: FSMContext, db: Database) -> None:
     await _show_locations(callback, db, state)
     await callback.answer()
 
 
-@router.callback_query(F.data == keyboards.CB_ORDER_BACK_VOL)
+@router.callback_query(
+    F.data == keyboards.CB_ORDER_BACK_VOL,
+    StateFilter(OrderFlow),
+)
 async def cb_back_to_volumes(callback: CallbackQuery, state: FSMContext, db: Database) -> None:
     data = await state.get_data()
+    loc_id = int(data.get("location_id", 0))
     loc_name = str(data.get("location_name", "—"))
-    await _show_volumes(callback, state, loc_name, db)
+    if db.is_manual_purchase_enabled() and loc_id:
+        await _show_packages(callback, state, loc_id, loc_name, db)
+    else:
+        await _show_volumes(callback, state, loc_name, db)
     await callback.answer()
 
 
-@router.callback_query(F.data == keyboards.CB_ORDER_BACK_DUR)
+@router.callback_query(
+    F.data == keyboards.CB_ORDER_BACK_PKG,
+    StateFilter(OrderFlow),
+)
+async def cb_back_to_packages(callback: CallbackQuery, state: FSMContext, db: Database) -> None:
+    data = await state.get_data()
+    loc_id = int(data.get("location_id", 0))
+    loc_name = str(data.get("location_name", "—"))
+    await _show_packages(callback, state, loc_id, loc_name, db)
+    await callback.answer()
+
+
+@router.callback_query(
+    F.data == keyboards.CB_ORDER_BACK_DUR,
+    StateFilter(OrderFlow),
+)
 async def cb_back_to_duration(callback: CallbackQuery, state: FSMContext, db: Database) -> None:
     data = await state.get_data()
+    if data.get("purchase_mode") == PURCHASE_MODE_PACKAGES:
+        loc_id = int(data.get("location_id", 0))
+        loc_name = str(data.get("location_name", "—"))
+        await _show_packages(callback, state, loc_id, loc_name, db)
+        await callback.answer()
+        return
     loc_name = str(data.get("location_name", "—"))
     vol_gb = int(data.get("volume_gb", 0))
     await _show_durations(callback, state, loc_name, vol_gb, db)

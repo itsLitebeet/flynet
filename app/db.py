@@ -74,6 +74,18 @@ CREATE TABLE IF NOT EXISTS tickets (
     created_at TEXT    NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (user_id) REFERENCES users(user_id)
 );
+
+CREATE TABLE IF NOT EXISTS service_packages (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    location_id   INTEGER NOT NULL,
+    volume_gb     INTEGER NOT NULL,
+    duration_days INTEGER NOT NULL,
+    price         INTEGER NOT NULL,
+    enabled       INTEGER NOT NULL DEFAULT 1,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE,
+    UNIQUE (location_id, volume_gb, duration_days)
+);
 """
 
 
@@ -90,6 +102,7 @@ DEFAULT_SETTINGS: dict[str, str] = {
 SETTING_VOLUME_PRESETS = "volume_presets_gb"
 SETTING_DURATION_PRESETS = "duration_presets_days"
 SETTING_TEST_ENABLED = "test_feature_enabled"
+SETTING_MANUAL_PURCHASE = "manual_purchase_enabled"
 MAX_PLAN_PRESETS = 12
 TEST_VOLUME_BYTES = 100 * 1024 * 1024
 
@@ -112,6 +125,27 @@ class Location:
         if not self.sub_url_template or not sub_id:
             return None
         return self.sub_url_template.replace("{subId}", sub_id)
+
+
+@dataclass(frozen=True)
+class ServicePackage:
+    id: int
+    location_id: int
+    volume_gb: int
+    duration_days: int
+    price: int
+    enabled: bool
+
+
+def _row_to_service_package(row: sqlite3.Row) -> ServicePackage:
+    return ServicePackage(
+        id=int(row["id"]),
+        location_id=int(row["location_id"]),
+        volume_gb=int(row["volume_gb"]),
+        duration_days=int(row["duration_days"]),
+        price=int(row["price"]),
+        enabled=bool(row["enabled"]),
+    )
 
 
 def _row_to_location(row: sqlite3.Row) -> Location:
@@ -209,6 +243,26 @@ class Database:
                     "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
                     (k, v),
                 )
+        with self._cursor() as cur:
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS service_packages (
+                    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                    location_id   INTEGER NOT NULL,
+                    volume_gb     INTEGER NOT NULL,
+                    duration_days INTEGER NOT NULL,
+                    price         INTEGER NOT NULL,
+                    enabled       INTEGER NOT NULL DEFAULT 1,
+                    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+                    FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE,
+                    UNIQUE (location_id, volume_gb, duration_days)
+                )
+                """
+            )
+            cur.execute(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+                (SETTING_MANUAL_PURCHASE, "0"),
+            )
 
     def _backfill_location_pricing(self) -> None:
         base, per_gb, per_day = self.get_pricing()
@@ -226,6 +280,7 @@ class Database:
             SETTING_VOLUME_PRESETS: json.dumps(texts.DEFAULT_VOLUME_PRESETS_GB),
             SETTING_DURATION_PRESETS: json.dumps(texts.DEFAULT_DURATION_PRESETS_DAYS),
             SETTING_TEST_ENABLED: "0",
+            SETTING_MANUAL_PURCHASE: "0",
         }
         with self._cursor() as cur:
             for k, v in {**DEFAULT_SETTINGS, **extras}.items():
@@ -404,6 +459,78 @@ class Database:
         presets.append(days)
         self._set_int_list_setting(SETTING_DURATION_PRESETS, presets)
         return True, "ok"
+
+    def is_manual_purchase_enabled(self) -> bool:
+        return self.get_setting(SETTING_MANUAL_PURCHASE, "0") == "1"
+
+    def set_manual_purchase_enabled(self, enabled: bool) -> None:
+        self.set_setting(SETTING_MANUAL_PURCHASE, "1" if enabled else "0")
+
+    def add_service_package(
+        self,
+        location_id: int,
+        volume_gb: int,
+        duration_days: int,
+        price: int,
+    ) -> tuple[bool, str, int | None]:
+        """Returns (ok, reason, package_id). reason: ok | not_found | invalid | duplicate."""
+        if volume_gb <= 0 or duration_days <= 0 or price < 0:
+            return False, "invalid", None
+        loc = self.get_location(location_id)
+        if loc is None:
+            return False, "not_found", None
+        if loc.is_test:
+            return False, "test_location", None
+        if not loc.enabled:
+            return False, "disabled", None
+        try:
+            with self._cursor() as cur:
+                cur.execute(
+                    "INSERT INTO service_packages "
+                    "(location_id, volume_gb, duration_days, price) "
+                    "VALUES (?, ?, ?, ?)",
+                    (location_id, volume_gb, duration_days, price),
+                )
+                pkg_id = int(cur.lastrowid or 0)
+            return True, "ok", pkg_id
+        except sqlite3.IntegrityError:
+            return False, "duplicate", None
+
+    def remove_service_package(self, package_id: int) -> bool:
+        with self._cursor() as cur:
+            cur.execute("DELETE FROM service_packages WHERE id = ?", (package_id,))
+            return cur.rowcount > 0
+
+    def get_service_package(self, package_id: int) -> ServicePackage | None:
+        with self._cursor() as cur:
+            cur.execute("SELECT * FROM service_packages WHERE id = ?", (package_id,))
+            row = cur.fetchone()
+            if row is None:
+                return None
+            return _row_to_service_package(row)
+
+    def list_service_packages(
+        self, location_id: int, *, only_enabled: bool = True
+    ) -> list[ServicePackage]:
+        clauses = ["location_id = ?"]
+        params: list[int] = [location_id]
+        if only_enabled:
+            clauses.append("enabled = 1")
+        where = " AND ".join(clauses)
+        with self._cursor() as cur:
+            cur.execute(
+                f"SELECT * FROM service_packages WHERE {where} "
+                "ORDER BY price, volume_gb, duration_days",
+                params,
+            )
+            return [_row_to_service_package(r) for r in cur.fetchall()]
+
+    def list_all_service_packages(self) -> list[ServicePackage]:
+        with self._cursor() as cur:
+            cur.execute(
+                "SELECT * FROM service_packages ORDER BY location_id, price"
+            )
+            return [_row_to_service_package(r) for r in cur.fetchall()]
 
     def remove_duration_preset(self, days: int) -> tuple[bool, str]:
         presets = self.get_duration_presets()

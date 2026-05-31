@@ -46,6 +46,158 @@ async def cmd_users(message: Message, settings: Settings, db: Database) -> None:
     await send_users(message, db, page=0)
 
 
+# ---------- predefined service packages (manual purchase) ----------
+@router.message(Command("addservice"))
+async def cmd_addservice(
+    message: Message, command: CommandObject, settings: Settings, db: Database
+) -> None:
+    if not _require_admin(message, settings):
+        await message.answer(texts.NOT_ADMIN)
+        return
+
+    parts = (command.args or "").split()
+    if len(parts) != 4:
+        await message.answer(texts.ADD_SERVICE_USAGE)
+        return
+    try:
+        loc_id, volume_gb, duration_days, price = (
+            int(parts[0]),
+            int(parts[1]),
+            int(parts[2]),
+            int(parts[3]),
+        )
+    except ValueError:
+        await message.answer(texts.ADD_SERVICE_USAGE)
+        return
+
+    ok, reason, pkg_id = db.add_service_package(
+        loc_id, volume_gb, duration_days, price
+    )
+    if not ok:
+        msg = {
+            "not_found": texts.ADD_SERVICE_NOT_FOUND,
+            "invalid": texts.ADD_SERVICE_INVALID,
+            "duplicate": texts.ADD_SERVICE_DUPLICATE,
+            "test_location": texts.ADD_SERVICE_TEST_LOC,
+            "disabled": texts.ADD_SERVICE_DISABLED,
+        }.get(reason, texts.ADD_SERVICE_INVALID)
+        await message.answer(msg)
+        return
+
+    loc = db.get_location(loc_id)
+    loc_name = escape(loc.name) if loc else "—"
+    await message.answer(
+        texts.ADD_SERVICE_OK.format(
+            id=pkg_id or 0,
+            loc_id=loc_id,
+            volume=volume_gb,
+            days=duration_days,
+            price=texts.format_price(price),
+        )
+        + f"\n📍 {loc_name}"
+    )
+
+
+@router.message(Command("delservice"))
+async def cmd_delservice(
+    message: Message, command: CommandObject, settings: Settings, db: Database
+) -> None:
+    if not _require_admin(message, settings):
+        await message.answer(texts.NOT_ADMIN)
+        return
+
+    raw = (command.args or "").strip()
+    if not raw:
+        await message.answer(texts.DEL_SERVICE_USAGE)
+        return
+    try:
+        package_id = int(raw)
+    except ValueError:
+        await message.answer(texts.DEL_SERVICE_USAGE)
+        return
+
+    if not db.remove_service_package(package_id):
+        await message.answer(texts.DEL_SERVICE_NOTFOUND)
+        return
+    await message.answer(texts.DEL_SERVICE_OK.format(id=package_id))
+
+
+@router.message(Command("listservices"))
+async def cmd_listservices(
+    message: Message, command: CommandObject, settings: Settings, db: Database
+) -> None:
+    if not _require_admin(message, settings):
+        await message.answer(texts.NOT_ADMIN)
+        return
+
+    raw = (command.args or "").strip()
+    loc_filter: int | None = None
+    if raw:
+        try:
+            loc_filter = int(raw)
+        except ValueError:
+            await message.answer(texts.ADD_SERVICE_USAGE.replace("addservice", "listservices"))
+            return
+        if db.get_location(loc_filter) is None:
+            await message.answer(texts.ADD_SERVICE_NOT_FOUND)
+            return
+
+    packages = (
+        db.list_service_packages(loc_filter, only_enabled=False)
+        if loc_filter is not None
+        else db.list_all_service_packages()
+    )
+    if not packages:
+        await message.answer(texts.LIST_SERVICES_EMPTY)
+        return
+
+    filter_line = f" — لوکیشن <code>#{loc_filter}</code>" if loc_filter else ""
+    lines = [texts.LIST_SERVICES_HEADER.format(filter_line=filter_line)]
+    for pkg in packages:
+        loc = db.get_location(pkg.location_id)
+        loc_name = escape(loc.name) if loc else "—"
+        lines.append(
+            texts.LIST_SERVICES_LINE.format(
+                id=pkg.id,
+                loc_id=pkg.location_id,
+                loc_name=loc_name,
+                volume=pkg.volume_gb,
+                days=pkg.duration_days,
+                price=texts.format_price(pkg.price),
+            )
+        )
+    mode = "روشن ✅" if db.is_manual_purchase_enabled() else "خاموش ❌"
+    lines.append(f"\n🔀 حالت خرید دستی: <b>{mode}</b>")
+    await message.answer("\n".join(lines))
+
+
+@router.message(Command("togglemanualpurchase"))
+async def cmd_toggle_manual_purchase(
+    message: Message, command: CommandObject, settings: Settings, db: Database
+) -> None:
+    if not _require_admin(message, settings):
+        await message.answer(texts.NOT_ADMIN)
+        return
+
+    raw = (command.args or "").strip().lower()
+    if raw in ("on", "1", "yes"):
+        enabled = True
+    elif raw in ("off", "0", "no"):
+        enabled = False
+    elif not raw:
+        enabled = not db.is_manual_purchase_enabled()
+    else:
+        await message.answer(texts.TOGGLE_MANUAL_PURCHASE_USAGE)
+        return
+
+    db.set_manual_purchase_enabled(enabled)
+    mode = "پلن ازپیش‌تعریف (دکمه‌ها) ✅" if enabled else "انتخاب حجم و مدت (فرمول قیمت) ❌"
+    extra = ""
+    if enabled and not db.list_all_service_packages():
+        extra = "\n\n⚠️ هنوز پلنی با <code>/addservice</code> تعریف نشده."
+    await message.answer(texts.TOGGLE_MANUAL_PURCHASE_OK.format(mode=mode) + extra)
+
+
 # ---------- settings ----------
 @router.message(Command("setcard"))
 async def cmd_setcard(

@@ -23,6 +23,15 @@ def format_price(toman: int) -> str:
     return f"{toman:,} تومان"
 
 
+def format_service_package_button(volume_gb: int, duration_days: int, price: int) -> str:
+    """Inline button label (Telegram max 64 chars)."""
+    label = f"{volume_gb} گیگابایت | {duration_days} روزه {price:,} تومان"
+    if len(label) <= 64:
+        return label
+    short = f"{volume_gb}G | {duration_days}d | {price:,}T"
+    return short if len(short) <= 64 else short[:63] + "…"
+
+
 def format_card_number(card: str) -> str:
     """Digits only — no dashes or spaces (easier to copy in banking apps)."""
     return "".join(ch for ch in card if ch.isdigit()) or card
@@ -291,6 +300,16 @@ NO_LOCATIONS_USER = (
     "یا با پشتیبانی در تماس باشید."
 )
 
+ORDER_PICK_PACKAGE = (
+    "📦 لوکیشن: <b>{location}</b>\n\n"
+    "📋 <b>پلن مورد نظر را انتخاب کنید:</b>"
+)
+
+ORDER_NO_PACKAGES = (
+    "⛔ برای این لوکیشن هنوز پلنی تعریف نشده.\n"
+    "لطفاً لوکیشن دیگری انتخاب کنید یا با پشتیبانی تماس بگیرید."
+)
+
 ORDER_PICK_VOLUME = (
     "📦 لوکیشن انتخاب‌شده: <b>{location}</b>\n\n"
     "💾 <b>حجم ترافیک را انتخاب کنید:</b>"
@@ -554,6 +573,11 @@ ADMIN_HELP = (
     "/plans — حجم و مدت پیش‌فرض در فلو خرید\n"
     "/addvolume &lt;gb&gt; | /delvolume &lt;gb&gt;\n"
     "/addduration &lt;days&gt; | /delduration &lt;days&gt;\n\n"
+    "<b>پلن‌های ازپیش‌تعریف (خرید دستی):</b>\n"
+    "/togglemanualpurchase — روشن/خاموش انتخاب پلن از دکمه‌ها\n"
+    "/addservice &lt;loc_id&gt; &lt;gb&gt; &lt;days&gt; &lt;toman&gt;\n"
+    "/listservices [loc_id] — لیست پلن‌ها\n"
+    "/delservice &lt;package_id&gt;\n\n"
     "<b>لوکیشن‌ها:</b>\n"
     "/locations — لیست لوکیشن‌ها\n"
     "/addlocation &lt;name&gt; | &lt;base_url&gt; | &lt;api_token&gt; | &lt;inbound_id1,id2&gt;\n"
@@ -683,6 +707,46 @@ SET_PRICE_OK       = ("✅ فرمول قیمت به‌روزرسانی شد:\n"
                      "base = <b>{base}</b> | per_gb = <b>{per_gb}</b> | per_day = <b>{per_day}</b>")
 SET_PRICE_USAGE    = "❗ استفاده:\n<code>/setprice 20000 8000 1500</code>"
 SHOW_SETTINGS      = ADMIN_SETTINGS_VIEW  # alias for /showsettings command
+
+ADD_SERVICE_USAGE = (
+    "❗ استفاده:\n"
+    "<code>/addservice 2 5 3 20000</code>\n"
+    "یعنی: لوکیشن ۲ — ۵ گیگ — ۳ روز — ۲۰٬۰۰۰ تومان"
+)
+ADD_SERVICE_OK = (
+    "✅ پلن اضافه شد — شناسه <code>#{id}</code>\n"
+    "📍 لوکیشن <code>#{loc_id}</code> · {volume} گیگ · {days} روز · {price}"
+)
+ADD_SERVICE_DUPLICATE = "❗ این ترکیب حجم/مدت برای همین لوکیشن قبلاً ثبت شده."
+ADD_SERVICE_NOT_FOUND = "❗ لوکیشن با این شناسه یافت نشد."
+ADD_SERVICE_INVALID   = "❗ مقادیر نامعتبر (حجم و روز باید بزرگ‌تر از ۰، قیمت ≥ ۰)."
+ADD_SERVICE_TEST_LOC  = "❗ برای لوکیشن تست نمی‌توان پلن فروش تعریف کرد."
+ADD_SERVICE_DISABLED  = "❗ لوکیشن غیرفعال است — ابتدا فعالش کنید یا لوکیشن دیگری انتخاب کنید."
+
+ORDER_INCOMPLETE = "اطلاعات سفارش ناقص است. از ابتدا خرید را شروع کنید."
+ORDER_PLAN_CHANGED = "این پلن دیگر موجود نیست. لطفاً دوباره انتخاب کنید."
+
+DEL_SERVICE_USAGE    = "❗ استفاده: <code>/delservice &lt;package_id&gt;</code>"
+DEL_SERVICE_OK       = "✅ پلن <code>#{id}</code> حذف شد."
+DEL_SERVICE_NOTFOUND = "❗ پلن یافت نشد."
+
+LIST_SERVICES_EMPTY = "ℹ️ هیچ پلنی ثبت نشده. از <code>/addservice</code> استفاده کنید."
+LIST_SERVICES_HEADER = "📋 <b>پلن‌های فروش</b>{filter_line}\n\n"
+LIST_SERVICES_LINE = (
+    "• <code>#{id}</code> — لوکیشن <code>#{loc_id}</code> ({loc_name})\n"
+    "  {volume} گیگ · {days} روز · {price}"
+)
+
+TOGGLE_MANUAL_PURCHASE_USAGE = (
+    "❗ استفاده:\n"
+    "<code>/togglemanualpurchase</code> — تغییر حالت\n"
+    "<code>/togglemanualpurchase on</code> | <code>off</code>"
+)
+TOGGLE_MANUAL_PURCHASE_OK = (
+    "✅ حالت خرید: <b>{mode}</b>\n\n"
+    "<b>روشن:</b> کاربر پس از انتخاب لوکیشن، پلن‌های ازپیش‌تعریف را می‌بیند.\n"
+    "<b>خاموش:</b> انتخاب جداگانه حجم و مدت (فرمول قیمت)."
+)
 
 SET_LOC_PRICE_USAGE = (
     "❗ استفاده:\n"

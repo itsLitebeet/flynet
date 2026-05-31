@@ -28,6 +28,8 @@ CB_LOC_PREFIX     = "loc:"          # loc:<location_id>
 CB_VOL_PREFIX     = "vol:"          # vol:<gb> or vol:custom
 CB_VOL_CUSTOM     = "vol:custom"
 CB_DUR_PREFIX     = "dur:"          # dur:<days>
+CB_SVC_PREFIX     = "svc:"          # svc:<package_id>
+CB_ORDER_BACK_PKG = "ord:back:pkg"
 CB_ORDER_CONFIRM  = "ord:confirm"   # final confirmation of summary
 CB_ORDER_CANCEL   = "ord:cancel"
 CB_ORDER_BACK_LOC = "ord:back:loc"
@@ -230,12 +232,28 @@ def durations(duration_presets_days: list[int]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def confirm_order() -> InlineKeyboardMarkup:
+def service_packages(packages: list) -> InlineKeyboardMarkup:
+    """Predefined plans: two buttons per row (volume | days | price)."""
+    preset_btns = [
+        InlineKeyboardButton(
+            text=texts.format_service_package_button(
+                pkg.volume_gb, pkg.duration_days, pkg.price
+            ),
+            callback_data=f"{CB_SVC_PREFIX}{pkg.id}",
+        )
+        for pkg in packages
+    ]
+    rows = _chunk_buttons(preset_btns, per_row=2)
+    rows.append([InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ORDER_BACK_LOC)])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def confirm_order(*, back_callback: str = CB_ORDER_BACK_DUR) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text=texts.BTN_CONFIRM, callback_data=CB_ORDER_CONFIRM)],
-            [InlineKeyboardButton(text=texts.BTN_BACK,    callback_data=CB_ORDER_BACK_DUR)],
-            [InlineKeyboardButton(text=texts.BTN_CANCEL,  callback_data=CB_ORDER_CANCEL)],
+            [InlineKeyboardButton(text=texts.BTN_BACK, callback_data=back_callback)],
+            [InlineKeyboardButton(text=texts.BTN_CANCEL, callback_data=CB_ORDER_CANCEL)],
         ]
     )
 
