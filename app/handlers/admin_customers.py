@@ -119,7 +119,7 @@ async def cb_admin_customers_page(
 
 @router.callback_query(F.data == keyboards.CB_ADM_CUSTOMERS_SEARCH)
 async def cb_admin_customers_search_start(
-    callback: CallbackQuery, state: FSMContext, settings: Settings
+    callback: CallbackQuery, state: FSMContext, settings: Settings, db: Database
 ) -> None:
     if not await guard_admin_callback(callback, settings, db, CUSTOMERS):
         return
