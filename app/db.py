@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS locations (
     price_per_gb      INTEGER,
     price_per_day     INTEGER,
     enabled           INTEGER NOT NULL DEFAULT 1,
+    purchase_enabled  INTEGER NOT NULL DEFAULT 1,
     is_test           INTEGER NOT NULL DEFAULT 0,
     created_at        TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -125,6 +126,7 @@ class Location:
     price_per_gb: int | None
     price_per_day: int | None
     enabled: bool
+    purchase_enabled: bool
     is_test: bool
 
     def render_sub_url(self, sub_id: str | None) -> str | None:
@@ -185,6 +187,11 @@ def _row_to_location(row: sqlite3.Row) -> Location:
         price_per_gb=_opt_int("price_per_gb"),
         price_per_day=_opt_int("price_per_day"),
         enabled=bool(row["enabled"]),
+        purchase_enabled=(
+            bool(row["purchase_enabled"])
+            if "purchase_enabled" in row.keys()
+            else True
+        ),
         is_test=bool(row["is_test"]) if "is_test" in row.keys() else False,
     )
 
@@ -232,6 +239,9 @@ class Database:
         self._ensure_column("orders", "nickname", "TEXT")
         self._ensure_column("orders", "admin_receipt_refs", "TEXT")
         self._ensure_column("locations", "is_test", "INTEGER NOT NULL DEFAULT 0")
+        self._ensure_column(
+            "locations", "purchase_enabled", "INTEGER NOT NULL DEFAULT 1"
+        )
         self._ensure_column("orders", "is_test", "INTEGER NOT NULL DEFAULT 0")
         # Legacy status from an earlier version — hard-delete on upgrade.
         with self._cursor() as cur:
@@ -987,6 +997,16 @@ class Database:
             )
             return cur.rowcount > 0
 
+    def set_location_purchase_enabled(
+        self, location_id: int, purchase_enabled: bool
+    ) -> bool:
+        with self._cursor() as cur:
+            cur.execute(
+                "UPDATE locations SET purchase_enabled = ? WHERE id = ?",
+                (1 if purchase_enabled else 0, location_id),
+            )
+            return cur.rowcount > 0
+
     def count_orders_for_location(self, location_id: int) -> int:
         with self._cursor() as cur:
             cur.execute(
@@ -1022,10 +1042,13 @@ class Database:
         *,
         exclude_test: bool = False,
         only_test: bool = False,
+        only_purchase_open: bool = False,
     ) -> list[Location]:
         clauses: list[str] = []
         if only_enabled:
             clauses.append("enabled = 1")
+        if only_purchase_open:
+            clauses.append("purchase_enabled = 1")
         if exclude_test:
             clauses.append("is_test = 0")
         if only_test:

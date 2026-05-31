@@ -307,11 +307,19 @@ async def send_location_detail(
             f"{texts.format_test_duration()} · رایگان · "
             f"دکمه تست: {'روشن' if db.is_test_feature_enabled() else 'خاموش'}\n"
         )
+    purchase_state = (
+        "باز ✅"
+        if loc.purchase_enabled
+        else "بسته ⛔ (فقط سرویس‌های قبلی)"
+    )
+    if loc.is_test:
+        purchase_state = "— (لوکیشن تست)"
     text = texts.ADMIN_LOC_DETAIL.format(
         id=loc.id,
         state_emoji="🟢" if loc.enabled else "🔴",
         name=escape(loc.name),
         test_line=test_line,
+        purchase_state=purchase_state,
         base_url=escape(loc.base_url),
         inbounds=",".join(str(i) for i in loc.inbound_ids) or "—",
         sub=sub,
@@ -321,7 +329,10 @@ async def send_location_detail(
         message,
         text,
         keyboards.admin_location_detail(
-            loc.id, enabled=loc.enabled, is_test=loc.is_test
+            loc.id,
+            enabled=loc.enabled,
+            purchase_enabled=loc.purchase_enabled,
+            is_test=loc.is_test,
         ),
         edit_in_place=edit_in_place,
     )
@@ -1167,6 +1178,38 @@ async def cb_admin_loc_toggle(callback: CallbackQuery, settings: Settings, db: D
     db.set_location_enabled(loc_id, new_state)
     state_word = "فعال" if new_state else "غیرفعال"
     await callback.answer(f"لوکیشن {state_word} شد ✅")
+    if isinstance(callback.message, Message):
+        await send_location_detail(
+            callback.message, db, loc_id, edit_in_place=True
+        )
+
+
+@router.callback_query(F.data.startswith(keyboards.CB_ADM_LOC_PURCHASE_PREFIX))
+async def cb_admin_loc_purchase_toggle(
+    callback: CallbackQuery, settings: Settings, db: Database
+) -> None:
+    if await _guard_cb(callback, settings, db, LOCATIONS) is None:
+        return
+
+    raw = (callback.data or "").removeprefix(keyboards.CB_ADM_LOC_PURCHASE_PREFIX)
+    try:
+        loc_id = int(raw)
+    except ValueError:
+        await callback.answer()
+        return
+
+    loc = db.get_location(loc_id)
+    if loc is None:
+        await callback.answer("لوکیشن یافت نشد.", show_alert=True)
+        return
+    if loc.is_test:
+        await callback.answer("لوکیشن تست قابل تغییر نیست.", show_alert=True)
+        return
+
+    new_state = not loc.purchase_enabled
+    db.set_location_purchase_enabled(loc_id, new_state)
+    state_word = "باز" if new_state else "بسته"
+    await callback.answer(f"خرید جدید {state_word} شد ✅")
     if isinstance(callback.message, Message):
         await send_location_detail(
             callback.message, db, loc_id, edit_in_place=True

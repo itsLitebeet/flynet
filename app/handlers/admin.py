@@ -520,10 +520,16 @@ async def cmd_locations(message: Message, settings: Settings, db: Database) -> N
     lines = [texts.LOC_LIST_HEADER]
     for loc in locs:
         test_tag = "🧪 " if loc.is_test else ""
+        if not loc.enabled:
+            state_emoji = "🔴"
+        elif not loc.purchase_enabled:
+            state_emoji = "🟡"
+        else:
+            state_emoji = "🟢"
         lines.append(
             texts.LOC_LIST_ITEM.format(
                 id=loc.id,
-                state_emoji="🟢" if loc.enabled else "🔴",
+                state_emoji=state_emoji,
                 test_tag=test_tag,
                 name=escape(loc.name),
                 base_url=escape(loc.base_url),
@@ -872,6 +878,39 @@ async def cmd_togglelocation(
 
 
 # ---------- pending orders ----------
+@router.message(Command("togglepurchase"))
+async def cmd_togglepurchase(
+    message: Message, command: CommandObject, settings: Settings, db: Database
+) -> None:
+    if not await guard_admin_message(message, settings, db, LOCATIONS):
+        return
+
+    raw = (command.args or "").strip()
+    try:
+        loc_id = int(raw)
+    except ValueError:
+        await message.answer(texts.TOGGLE_PURCHASE_USAGE)
+        return
+
+    loc = db.get_location(loc_id)
+    if loc is None:
+        await message.answer(texts.DEL_LOC_NOTFOUND)
+        return
+    if loc.is_test:
+        await message.answer("لوکیشن تست — خرید از فروشگاه غیرفعال است.")
+        return
+
+    new_state = not loc.purchase_enabled
+    db.set_location_purchase_enabled(loc_id, new_state)
+    await message.answer(
+        texts.TOGGLE_PURCHASE_OK.format(
+            id=loc_id,
+            name=escape(loc.name),
+            state="باز" if new_state else "بسته",
+        )
+    )
+
+
 @router.message(Command("pending"))
 async def cmd_pending(message: Message, settings: Settings, db: Database) -> None:
     if not await guard_admin_message(message, settings, db, ORDERS_REVIEW):

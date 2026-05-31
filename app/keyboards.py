@@ -105,6 +105,7 @@ CB_ADM_USER_UNBAN_PREFIX     = "adm:unban:" # adm:unban:<user_id>
 CB_ADM_LOC_DETAIL_PREFIX = "adm:ld:"    # adm:ld:<location_id>
 CB_ADM_LOC_EDIT_PREFIX   = "adm:le:"    # adm:le:<location_id>
 CB_ADM_LOC_TOGGLE_PREFIX = "adm:lt:"    # adm:lt:<location_id>
+CB_ADM_LOC_PURCHASE_PREFIX = "adm:lp:"  # adm:lp:<location_id>
 CB_ADM_TOOL_SYNC         = "adm:tsync"
 CB_ADM_TOOL_CLEAR        = "adm:tclr"
 CB_ADM_BROADCAST         = "adm:bcast"
@@ -1297,10 +1298,18 @@ def admin_pending_list(orders: list[dict]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def _location_list_emoji(loc: Location) -> str:
+    if not loc.enabled:
+        return "🔴"
+    if not loc.purchase_enabled:
+        return "🟡"
+    return "🟢"
+
+
 def admin_locations_list(locs: list[Location]) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for loc in locs:
-        emoji = "🟢" if loc.enabled else "🔴"
+        emoji = _location_list_emoji(loc)
         rows.append([
             InlineKeyboardButton(
                 text=f"{emoji} #{loc.id} {loc.name}",
@@ -1318,9 +1327,18 @@ def admin_locations_list(locs: list[Location]) -> InlineKeyboardMarkup:
 
 
 def admin_location_detail(
-    location_id: int, *, enabled: bool, is_test: bool = False
+    location_id: int,
+    *,
+    enabled: bool,
+    purchase_enabled: bool,
+    is_test: bool = False,
 ) -> InlineKeyboardMarkup:
-    toggle_label = "🔴 غیرفعال کردن" if enabled else "🟢 فعال کردن"
+    toggle_label = "🔴 غیرفعال کردن لوکیشن" if enabled else "🟢 فعال کردن لوکیشن"
+    purchase_label = (
+        "🛑 بستن خرید جدید"
+        if purchase_enabled
+        else "🛒 باز کردن خرید جدید"
+    )
     rows: list[list[InlineKeyboardButton]] = [
         [
             InlineKeyboardButton(
@@ -1334,13 +1352,24 @@ def admin_location_detail(
                 callback_data=f"{CB_ADM_LOC_TOGGLE_PREFIX}{location_id}",
             ),
         ],
+    ]
+    if not is_test:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=purchase_label,
+                    callback_data=f"{CB_ADM_LOC_PURCHASE_PREFIX}{location_id}",
+                ),
+            ]
+        )
+    rows.append(
         [
             InlineKeyboardButton(
                 text="⚠️ حذف کامل لوکیشن",
                 callback_data=f"{CB_ADM_LOC_PURGE_PREFIX}{location_id}",
             ),
-        ],
-    ]
+        ]
+    )
     if is_test:
         rows.insert(
             1,

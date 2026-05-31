@@ -87,7 +87,7 @@ def _resolve_order_terms(
         return None
 
     loc = db.get_location(location_id)
-    if loc is None or not loc.enabled or loc.is_test:
+    if loc is None or not loc.enabled or not loc.purchase_enabled or loc.is_test:
         return None
 
     mode = str(data.get("purchase_mode", PURCHASE_MODE_LEGACY))
@@ -147,7 +147,9 @@ async def _abort_order_flow(
 
 async def _show_locations(callback: CallbackQuery, db: Database, state: FSMContext) -> None:
     await _clear_plan_selection(state)
-    locs = db.list_locations(only_enabled=True, exclude_test=True)
+    locs = db.list_locations(
+        only_enabled=True, exclude_test=True, only_purchase_open=True
+    )
     if not locs:
         await _edit_or_answer(callback, texts.NO_LOCATIONS_USER, keyboards.back_to_menu())
         await state.clear()
@@ -168,7 +170,13 @@ async def _show_packages(
         await _edit_or_answer(
             callback,
             texts.ORDER_NO_PACKAGES,
-            keyboards.locations(db.list_locations(only_enabled=True, exclude_test=True)),
+            keyboards.locations(
+                db.list_locations(
+                    only_enabled=True,
+                    exclude_test=True,
+                    only_purchase_open=True,
+                )
+            ),
         )
         await state.set_state(OrderFlow.picking_location)
         return
@@ -247,7 +255,9 @@ async def _show_review(callback: CallbackQuery, state: FSMContext, db: Database)
 async def _begin_buy_message(message: Message, state: FSMContext, db: Database) -> None:
     """Start buy flow (reply-keyboard button or inline «خرید»)."""
     await state.clear()
-    locs = db.list_locations(only_enabled=True, exclude_test=True)
+    locs = db.list_locations(
+        only_enabled=True, exclude_test=True, only_purchase_open=True
+    )
     if not locs:
         await message.answer(
             texts.NO_LOCATIONS_USER,
@@ -290,6 +300,10 @@ async def cb_pick_location(callback: CallbackQuery, state: FSMContext, db: Datab
     loc = db.get_location(loc_id)
     if loc is None or not loc.enabled or loc.is_test:
         await callback.answer("این لوکیشن دیگر در دسترس نیست.", show_alert=True)
+        await _show_locations(callback, db, state)
+        return
+    if not loc.purchase_enabled:
+        await callback.answer(texts.LOC_PURCHASE_CLOSED_USER, show_alert=True)
         await _show_locations(callback, db, state)
         return
 
