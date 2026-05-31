@@ -448,8 +448,32 @@ ADMIN_PENDING_EMPTY = "✅ هیچ سفارشی در انتظار بررسی نی
 
 ADMIN_PENDING_BTN = "🔍 #{id} · {price} · کاربر {user_id}"
 
-ADMIN_USERS_HEADER = "👥 <b>۲۰ کاربر اخیر</b>\n"
-ADMIN_USER_ITEM = "• <code>{user_id}</code> — {name} ({username}) — {created_at}"
+ADMIN_USERS_HEADER = (
+    "👥 <b>کاربران و کلاینت‌های پنل</b>\n"
+    "صفحه <b>{page}</b> از <b>{pages}</b> — جمع: <b>{total}</b> کاربر\n\n"
+    "روی هر کاربر بزنید برای جزئیات کامل."
+)
+ADMIN_USERS_EMPTY = "هیچ کاربری در ربات ثبت نشده است."
+
+ADMIN_USER_DETAIL = (
+    "👤 <b>کاربر تلگرام</b>\n\n"
+    "🆔 شناسه: <code>{user_id}</code>\n"
+    "👤 نام: <b>{full_name}</b>\n"
+    "📎 یوزرنیم: {username}\n"
+    "📅 عضو از: {created_at}\n"
+    "🚫 وضعیت: <b>{ban_state}</b>\n\n"
+    "<b>سفارش‌ها و کلاینت پنل ({order_count}):</b>\n"
+    "{orders_block}"
+)
+
+ADMIN_USER_ORDER_LINE = (
+    "• <b>#{order_id}</b> — {status}\n"
+    "  📍 {location} · {volume}GB / {days}d · {price}\n"
+    "  {panel_line}"
+)
+ADMIN_USER_ORDER_PANEL = "  🆔 پنل: <code>{email}</code>\n"
+ADMIN_USER_ORDER_NO_PANEL = "  🆔 پنل: <i>هنوز ساخته نشده</i>\n"
+ADMIN_USER_NO_ORDERS = "<i>هیچ سفارشی ثبت نشده.</i>"
 
 ADMIN_TOOL_SYNC_DONE = "✅ همگام‌سازی پنل انجام شد (همان نتیجه <code>/syncpanel</code>)."
 
@@ -462,7 +486,7 @@ ADMIN_HELP = (
     "💡 <b>پنل دکمه‌ای:</b> <code>/admin</code> — منوی پایین + دکمه‌های شیشه‌ای\n\n"
     "<b>عمومی:</b>\n"
     "/stats — آمار کلی\n"
-    "/users — ۲۰ کاربر اخیر\n"
+    "/users — کاربران تلگرام + کلاینت‌های پنل\n"
     "/pending — سفارش‌های در انتظار بررسی\n"
     "/broadcast &lt;متن&gt; — ارسال همگانی\n\n"
     "<b>تنظیمات:</b>\n"

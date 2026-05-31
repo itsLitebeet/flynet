@@ -19,7 +19,7 @@ from app.handlers.admin_helpers import (
     run_clear_declined,
     run_sync_panel,
 )
-from app.handlers.admin_panel import send_base_plans, send_dashboard, send_pending_list
+from app.handlers.admin_panel import send_base_plans, send_dashboard, send_pending_list, send_users
 
 
 router = Router(name="admin")
@@ -44,20 +44,7 @@ async def cmd_users(message: Message, settings: Settings, db: Database) -> None:
     if not _require_admin(message, settings):
         await message.answer(texts.NOT_ADMIN)
         return
-
-    rows = db.recent_users(limit=20)
-    if not rows:
-        await message.answer("هیچ کاربری ثبت نشده است.")
-        return
-
-    lines = ["👥 <b>۲۰ کاربر اخیر</b>", ""]
-    for r in rows:
-        username = f"@{r['username']}" if r["username"] else "—"
-        first = escape(r["first_name"] or "")
-        lines.append(
-            f"• <code>{r['user_id']}</code> — {first} ({username}) — {r['created_at']}"
-        )
-    await message.answer("\n".join(lines))
+    await send_users(message, db, page=0)
 
 
 @router.message(Command("broadcast"))

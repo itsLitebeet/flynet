@@ -278,6 +278,27 @@ class Database:
             )
             return list(cur.fetchall())
 
+    def list_users_paginated(self, offset: int, limit: int) -> list[sqlite3.Row]:
+        with self._cursor() as cur:
+            cur.execute(
+                "SELECT * FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (limit, offset),
+            )
+            return list(cur.fetchall())
+
+    def list_user_orders_admin(
+        self, user_id: int, limit: int = 30
+    ) -> list[sqlite3.Row]:
+        """All orders for a user (admin view), newest first."""
+        with self._cursor() as cur:
+            cur.execute(
+                "SELECT id, status, xui_email, location_name, volume_gb, "
+                "duration_days, nickname, price, created_at, updated_at "
+                "FROM orders WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?",
+                (user_id, limit),
+            )
+            return list(cur.fetchall())
+
     # ---------- settings (key/value) ----------
     def get_setting(self, key: str, default: str | None = None) -> str | None:
         with self._cursor() as cur:

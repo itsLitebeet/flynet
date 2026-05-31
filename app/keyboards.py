@@ -47,7 +47,9 @@ CB_ADM_PENDING_LIST      = "adm:plist"
 CB_ADM_SETTINGS          = "adm:set"
 CB_ADM_LOCATIONS_LIST    = "adm:llist"
 CB_ADM_TOOLS             = "adm:tools"
-CB_ADM_USERS             = "adm:usr"
+CB_ADM_USERS                 = "adm:usr"
+CB_ADM_USERS_PAGE_PREFIX     = "adm:usrp:"   # adm:usrp:<page>
+CB_ADM_USER_DETAIL_PREFIX    = "adm:u:"      # adm:u:<user_id>
 CB_ADM_CMD_HELP          = "adm:cmdhelp"
 CB_ADM_ORDER_VIEW_PREFIX = "adm:ov:"    # adm:ov:<order_id>
 CB_ADM_LOC_DETAIL_PREFIX = "adm:ld:"    # adm:ld:<location_id>
@@ -429,6 +431,64 @@ def admin_plans_keyboard(
         InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_SETTINGS),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_users_keyboard(
+    users: list, *, page: int, total_pages: int
+) -> InlineKeyboardMarkup:
+    """`users` — sqlite3.Row or dict with user_id, first_name, username."""
+    rows: list[list[InlineKeyboardButton]] = []
+    for u in users:
+        uid = int(u["user_id"])
+        label = (u["first_name"] or "").strip() or str(uid)
+        if len(label) > 18:
+            label = label[:17] + "…"
+        rows.append([
+            InlineKeyboardButton(
+                text=f"👤 {label}",
+                callback_data=f"{CB_ADM_USER_DETAIL_PREFIX}{uid}",
+            )
+        ])
+    nav: list[InlineKeyboardButton] = []
+    if page > 0:
+        nav.append(
+            InlineKeyboardButton(
+                text="◀️ قبلی",
+                callback_data=f"{CB_ADM_USERS_PAGE_PREFIX}{page - 1}",
+            )
+        )
+    if page < total_pages - 1:
+        nav.append(
+            InlineKeyboardButton(
+                text="بعدی ▶️",
+                callback_data=f"{CB_ADM_USERS_PAGE_PREFIX}{page + 1}",
+            )
+        )
+    if nav:
+        rows.append(nav)
+    rows.append([
+        InlineKeyboardButton(text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_USERS),
+        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_user_detail_keyboard(user_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.BTN_VIEW_USER,
+                    url=f"tg://user?id={user_id}",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🔙 لیست کاربران", callback_data=CB_ADM_USERS
+                ),
+            ],
+        ]
+    )
 
 
 def admin_tools_inline() -> InlineKeyboardMarkup:

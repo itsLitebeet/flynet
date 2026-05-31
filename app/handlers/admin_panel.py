@@ -5,6 +5,7 @@ from __future__ import annotations
 from html import escape
 
 from aiogram import Bot, F, Router
+from aiogram.enums import ParseMode
 from aiogram.filters import Command, StateFilter
 from aiogram.types import CallbackQuery, Message
 
@@ -21,6 +22,7 @@ from app.handlers.admin_helpers import (
     run_clear_declined,
     run_sync_panel,
 )
+from app.handlers.admin_users_ui import format_user_detail, format_users_page
 
 router = Router(name="admin_panel")
 
@@ -104,30 +106,70 @@ async def send_locations(message: Message, db: Database) -> None:
     )
 
 
-async def send_users(message: Message, db: Database) -> None:
-    rows = db.recent_users(limit=20)
-    if not rows:
-        await message.answer(
-            "هیچ کاربری ثبت نشده است.",
-            reply_markup=keyboards.admin_home_inline(),
-        )
-        return
-    lines = [texts.ADMIN_USERS_HEADER, ""]
-    for r in rows:
-        username = f"@{r['username']}" if r["username"] else "—"
-        first = escape(r["first_name"] or "")
-        lines.append(
-            texts.ADMIN_USER_ITEM.format(
-                user_id=r["user_id"],
-                name=first,
-                username=username,
-                created_at=r["created_at"],
+async def send_users(
+    message: Message,
+    db: Database,
+    page: int = 0,
+    *,
+    edit_in_place: bool = False,
+) -> None:
+    text, total_pages, users = format_users_page(db, page)
+    if not users:
+        markup = keyboards.admin_home_inline()
+        if edit_in_place:
+            try:
+                await message.edit_text(
+                    text, reply_markup=markup, parse_mode=ParseMode.HTML
+                )
+            except Exception:  # noqa: BLE001
+                await message.answer(
+                    text, reply_markup=markup, parse_mode=ParseMode.HTML
+                )
+        else:
+            await message.answer(
+                text, reply_markup=markup, parse_mode=ParseMode.HTML
             )
-        )
-    await message.answer(
-        "\n".join(lines),
-        reply_markup=keyboards.admin_home_inline(),
+        return
+
+    markup = keyboards.admin_users_keyboard(
+        users, page=page, total_pages=total_pages
     )
+    if edit_in_place:
+        try:
+            await message.edit_text(
+                text, reply_markup=markup, parse_mode=ParseMode.HTML
+            )
+        except Exception:  # noqa: BLE001
+            await message.answer(
+                text, reply_markup=markup, parse_mode=ParseMode.HTML
+            )
+    else:
+        await message.answer(text, reply_markup=markup, parse_mode=ParseMode.HTML)
+
+
+async def send_user_detail(
+    message: Message,
+    db: Database,
+    user_id: int,
+    *,
+    edit_in_place: bool = False,
+) -> bool:
+    text = format_user_detail(db, user_id)
+    if text is None:
+        return False
+    markup = keyboards.admin_user_detail_keyboard(user_id)
+    if edit_in_place:
+        try:
+            await message.edit_text(
+                text, reply_markup=markup, parse_mode=ParseMode.HTML
+            )
+        except Exception:  # noqa: BLE001
+            await message.answer(
+                text, reply_markup=markup, parse_mode=ParseMode.HTML
+            )
+    else:
+        await message.answer(text, reply_markup=markup, parse_mode=ParseMode.HTML)
+    return True
 
 
 def _order_receipt_caption(db: Database, order) -> str | None:
@@ -189,7 +231,7 @@ async def admin_menu_buttons(
     elif text == texts.ADMIN_BTN_TOOLS:
         await send_tools(message)
     elif text == texts.ADMIN_BTN_USERS:
-        await send_users(message, db)
+        await send_users(message, db, page=0)
 
 
 # ---------- inline navigation ----------
@@ -364,7 +406,49 @@ async def cb_admin_users(
         await callback.answer(texts.NOT_ADMIN, show_alert=True)
         return
     if isinstance(callback.message, Message):
-        await send_users(callback.message, db)
+        await send_users(callback.message, db, page=0, edit_in_place=True)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith(keyboards.CB_ADM_USERS_PAGE_PREFIX))
+async def cb_admin_users_page(
+    callback: CallbackQuery, settings: Settings, db: Database
+) -> None:
+    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
+        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+        return
+    raw = (callback.data or "").removeprefix(keyboards.CB_ADM_USERS_PAGE_PREFIX)
+    try:
+        page = int(raw)
+    except ValueError:
+        await callback.answer()
+        return
+    if isinstance(callback.message, Message):
+        await send_users(callback.message, db, page=page, edit_in_place=True)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith(keyboards.CB_ADM_USER_DETAIL_PREFIX))
+async def cb_admin_user_detail(
+    callback: CallbackQuery, settings: Settings, db: Database
+) -> None:
+    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
+        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+        return
+    raw = (callback.data or "").removeprefix(keyboards.CB_ADM_USER_DETAIL_PREFIX)
+    try:
+        user_id = int(raw)
+    except ValueError:
+        await callback.answer()
+        return
+    if not isinstance(callback.message, Message):
+        await callback.answer()
+        return
+    if not await send_user_detail(
+        callback.message, db, user_id, edit_in_place=True
+    ):
+        await callback.answer("کاربر یافت نشد.", show_alert=True)
+        return
     await callback.answer()
 
 
