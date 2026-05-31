@@ -3,20 +3,20 @@
 from __future__ import annotations
 
 import logging
-import time
 from html import escape
 
 from aiogram import Bot, F, Router
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from app import keyboards, texts
 from app.admin_perms import ORDERS_MANAGE
 from app.config import Settings
 from app.db import Database
 from app.handlers.admin_helpers import guard_admin_callback, guard_admin_message
+from app.handlers.admin_panel import send_admin_home
 from app.handlers.admin_ui_helpers import admin_edit_or_answer
 from app.logs import Actor, make_logger
 from app.xui import XuiClient, XuiError, build_client_email
@@ -27,6 +27,7 @@ log = logging.getLogger(__name__)
 _DAYS_MIN = 1
 _DAYS_MAX = 3650
 _SKIP_USER_TEXT = frozenset({"-", "—", "skip", "none"})
+_WIZARD_MSG_IDS_KEY = "wizard_msg_ids"
 
 
 class AdminAddClientFlow(StatesGroup):
@@ -44,6 +45,34 @@ def _calc_order_price(
     return db.resolve_price(base_price)
 
 
+async def _track_wizard_message(state: FSMContext, sent: Message) -> None:
+    data = await state.get_data()
+    ids: list[int] = list(data.get(_WIZARD_MSG_IDS_KEY) or [])
+    ids.append(sent.message_id)
+    await state.update_data(**{_WIZARD_MSG_IDS_KEY: ids})
+
+
+async def _wizard_reply(
+    message: Message,
+    state: FSMContext,
+    text: str,
+    reply_markup: InlineKeyboardMarkup | None = None,
+) -> Message:
+    sent = await message.answer(text, reply_markup=reply_markup)
+    await _track_wizard_message(state, sent)
+    return sent
+
+
+async def _delete_wizard_messages(
+    bot: Bot, chat_id: int, message_ids: list[int]
+) -> None:
+    for mid in message_ids:
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=mid)
+        except Exception:  # noqa: BLE001 — already gone or too old
+            log.debug("Could not delete wizard message %s in %s", mid, chat_id)
+
+
 def _parse_positive_int(raw: str) -> int | None:
     s = (raw or "").strip()
     if not s.isdigit():
@@ -54,7 +83,9 @@ def _parse_positive_int(raw: str) -> int | None:
 
 async def _prompt_volume(message: Message, state: FSMContext) -> None:
     await state.set_state(AdminAddClientFlow.waiting_volume)
-    await message.answer(
+    await _wizard_reply(
+        message,
+        state,
         texts.ADMIN_ADD_CLIENT_VOLUME_PROMPT.format(
             min_gb=texts.CUSTOM_VOLUME_MIN_GB,
             max_gb=texts.CUSTOM_VOLUME_MAX_GB,
@@ -70,7 +101,9 @@ async def _start_add_client(
 ) -> None:
     await state.clear()
     await state.set_state(AdminAddClientFlow.waiting_user_id)
-    await message.answer(
+    await _wizard_reply(
+        message,
+        state,
         texts.ADMIN_ADD_CLIENT_USER_PROMPT,
         reply_markup=keyboards.admin_add_client_user_keyboard(),
     )
@@ -89,18 +122,70 @@ async def cb_admin_add_client_start(
     await callback.answer()
 
 
+async def _cancel_wizard_and_cleanup(
+    event: Message | CallbackQuery, state: FSMContext, bot: Bot
+) -> tuple[int | None, list[int]]:
+    data = await state.get_data()
+    msg_ids: list[int] = list(data.get(_WIZARD_MSG_IDS_KEY) or [])
+    chat_id: int | None = None
+
+    if isinstance(event, CallbackQuery):
+        if isinstance(event.message, Message):
+            chat_id = event.message.chat.id
+            if event.message.message_id not in msg_ids:
+                msg_ids.append(event.message.message_id)
+    elif isinstance(event, Message):
+        chat_id = event.chat.id
+
+    await state.clear()
+    if chat_id is not None and msg_ids:
+        await _delete_wizard_messages(bot, chat_id, msg_ids)
+    return chat_id, msg_ids
+
+
+@router.callback_query(
+    F.data == keyboards.CB_ADM_HOME, StateFilter(AdminAddClientFlow)
+)
+async def add_client_back_home(
+    callback: CallbackQuery,
+    state: FSMContext,
+    settings: Settings,
+    db: Database,
+    bot: Bot,
+) -> None:
+    if not await guard_admin_callback(callback, settings, db, ORDERS_MANAGE):
+        return
+    await _cancel_wizard_and_cleanup(callback, state, bot)
+    if callback.from_user is None or not isinstance(callback.message, Message):
+        await callback.answer()
+        return
+    await send_admin_home(
+        callback.message,
+        settings,
+        db,
+        admin_user_id=callback.from_user.id,
+        edit_in_place=False,
+    )
+    await callback.answer()
+
+
 @router.message(Command("cancel"), StateFilter(AdminAddClientFlow))
 @router.callback_query(
     F.data == keyboards.CB_ADM_FLOW_CANCEL, StateFilter(AdminAddClientFlow)
 )
 async def add_client_flow_cancel(
-    event: Message | CallbackQuery, state: FSMContext
+    event: Message | CallbackQuery, state: FSMContext, bot: Bot
 ) -> None:
-    await state.clear()
+    await _cancel_wizard_and_cleanup(event, state, bot)
+
     if isinstance(event, CallbackQuery):
         await event.answer(texts.CANCELLED)
     else:
         await event.answer(texts.CANCELLED)
+        try:
+            await event.delete()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 @router.callback_query(
@@ -136,7 +221,7 @@ async def add_client_user_id(
 
     user_id = _parse_positive_int(raw)
     if user_id is None:
-        await message.answer(texts.ADMIN_ADD_CLIENT_USER_INVALID)
+        await _wizard_reply(message, state, texts.ADMIN_ADD_CLIENT_USER_INVALID)
         return
 
     db.upsert_user(user_id=user_id, username=None, first_name=None, last_name=None)
@@ -156,17 +241,21 @@ async def add_client_volume(
     if gb is None or not (
         texts.CUSTOM_VOLUME_MIN_GB <= gb <= texts.CUSTOM_VOLUME_MAX_GB
     ):
-        await message.answer(
+        await _wizard_reply(
+            message,
+            state,
             texts.ADMIN_ADD_CLIENT_VOLUME_INVALID.format(
                 min_gb=texts.CUSTOM_VOLUME_MIN_GB,
                 max_gb=texts.CUSTOM_VOLUME_MAX_GB,
-            )
+            ),
         )
         return
 
     await state.update_data(volume_gb=gb)
     await state.set_state(AdminAddClientFlow.waiting_days)
-    await message.answer(
+    await _wizard_reply(
+        message,
+        state,
         texts.ADMIN_ADD_CLIENT_DAYS_PROMPT,
         reply_markup=keyboards.admin_flow_cancel_inline(
             back_data=keyboards.CB_ADM_HOME
@@ -176,7 +265,7 @@ async def add_client_volume(
 
 @router.message(StateFilter(AdminAddClientFlow.waiting_days))
 async def add_client_days(
-    message: Message, state: FSMContext, settings: Settings, db: Database
+    message: Message, state: FSMContext, settings: Settings, db: Database, bot: Bot
 ) -> None:
     if not await guard_admin_message(message, settings, db, ORDERS_MANAGE):
         await state.clear()
@@ -184,22 +273,30 @@ async def add_client_days(
 
     days = _parse_positive_int(message.text or "")
     if days is None or not (_DAYS_MIN <= days <= _DAYS_MAX):
-        await message.answer(
+        await _wizard_reply(
+            message,
+            state,
             texts.ADMIN_ADD_CLIENT_DAYS_INVALID.format(
                 min_days=_DAYS_MIN, max_days=_DAYS_MAX
-            )
+            ),
         )
         return
 
     locs = db.list_locations(only_enabled=True, exclude_test=True)
     if not locs:
+        chat_id = message.chat.id
+        msg_ids = list((await state.get_data()).get(_WIZARD_MSG_IDS_KEY) or [])
         await state.clear()
+        if msg_ids:
+            await _delete_wizard_messages(bot, chat_id, msg_ids)
         await message.answer(texts.ADMIN_ADD_CLIENT_NO_LOCATIONS)
         return
 
     await state.update_data(duration_days=days)
     await state.set_state(AdminAddClientFlow.picking_location)
-    await message.answer(
+    await _wizard_reply(
+        message,
+        state,
         texts.ADMIN_ADD_CLIENT_LOCATION_PROMPT,
         reply_markup=keyboards.admin_add_client_locations(locs),
     )
@@ -264,22 +361,30 @@ async def add_client_pick_location(
     )
 
     admin_id = callback.from_user.id
-    order_id: int | None = None
-    if target_user_id is not None:
-        price = _calc_order_price(db, volume_gb, duration_days, loc.id)
-        order_id = db.create_order(
-            user_id=target_user_id,
-            location_id=loc.id,
-            location_name=loc.name,
-            volume_gb=volume_gb,
-            duration_days=duration_days,
-            price=price,
+    price = _calc_order_price(db, volume_gb, duration_days, loc.id)
+    panel_only = target_user_id is None
+    if panel_only:
+        db.upsert_user(
+            user_id=admin_id,
+            username=callback.from_user.username,
+            first_name=callback.from_user.first_name,
+            last_name=callback.from_user.last_name,
         )
-        panel_email = build_client_email(order_id, is_test=False)
-        tg_user_id = target_user_id
+        order_user_id = admin_id
     else:
-        panel_email = f"adm-{admin_id}-{int(time.time())}"
-        tg_user_id = admin_id
+        order_user_id = target_user_id
+
+    order_id = db.create_order(
+        user_id=order_user_id,
+        location_id=loc.id,
+        location_name=loc.name,
+        volume_gb=volume_gb,
+        duration_days=duration_days,
+        price=price,
+        admin_manual_only=panel_only,
+    )
+    panel_email = build_client_email(order_id, is_test=False)
+    tg_user_id = target_user_id if target_user_id is not None else admin_id
 
     try:
         async with XuiClient(loc.base_url, loc.api_token) as xui:
@@ -291,17 +396,10 @@ async def add_client_pick_location(
                 tg_user_id=tg_user_id,
             )
     except XuiError as exc:
-        log.warning(
-            "Admin manual provision failed%s: %s",
-            f" order {order_id}" if order_id else "",
-            exc,
-        )
-        if order_id is not None:
-            db.set_order_status(order_id, "failed", admin_id=admin_id)
+        log.warning("Admin manual provision failed order %s: %s", order_id, exc)
+        db.set_order_status(order_id, "failed", admin_id=admin_id)
         await state.clear()
-        order_hint = (
-            f" (سفارش <code>#{order_id}</code>)" if order_id is not None else ""
-        )
+        order_hint = f" (سفارش <code>#{order_id}</code>)"
         await callback.message.answer(
             texts.ADMIN_ADD_CLIENT_FAILED.format(
                 order_hint=order_hint, error=escape(str(exc))
@@ -309,16 +407,10 @@ async def add_client_pick_location(
         )
         return
     except Exception as exc:  # noqa: BLE001
-        log.exception(
-            "Unexpected admin manual provision%s",
-            f" order {order_id}" if order_id else "",
-        )
-        if order_id is not None:
-            db.set_order_status(order_id, "failed", admin_id=admin_id)
+        log.exception("Unexpected admin manual provision order %s", order_id)
+        db.set_order_status(order_id, "failed", admin_id=admin_id)
         await state.clear()
-        order_hint = (
-            f" (سفارش <code>#{order_id}</code>)" if order_id is not None else ""
-        )
+        order_hint = f" (سفارش <code>#{order_id}</code>)"
         await callback.message.answer(
             texts.ADMIN_ADD_CLIENT_FAILED.format(
                 order_hint=order_hint, error=escape(str(exc))
@@ -326,14 +418,13 @@ async def add_client_pick_location(
         )
         return
 
-    if order_id is not None:
-        db.set_order_provisioned(
-            order_id=order_id,
-            email=result.email,
-            sub_id=result.sub_id,
-            client_uuid=result.client_uuid,
-            sub_links=result.sub_links,
-        )
+    db.set_order_provisioned(
+        order_id=order_id,
+        email=result.email,
+        sub_id=result.sub_id,
+        client_uuid=result.client_uuid,
+        sub_links=result.sub_links,
+    )
     await state.clear()
 
     sub_url = loc.render_sub_url(result.sub_id)
@@ -342,7 +433,7 @@ async def add_client_pick_location(
         sub_links=[escape(x) for x in result.sub_links],
     )
 
-    if order_id is not None and target_user_id is not None:
+    if not panel_only:
         await callback.message.answer(
             texts.ADMIN_ADD_CLIENT_OK.format(
                 order_id=order_id,
@@ -373,6 +464,7 @@ async def add_client_pick_location(
     else:
         await callback.message.answer(
             texts.ADMIN_ADD_CLIENT_OK_PANEL_ONLY.format(
+                order_id=order_id,
                 location=escape(loc.name),
                 volume=volume_gb,
                 days=duration_days,
@@ -383,9 +475,14 @@ async def add_client_pick_location(
         )
 
     admin = Actor.from_user(callback.from_user)
-    if admin is not None and order_id is not None:
-        await make_logger(bot, db).log_admin_order_action(
+    if admin is not None:
+        await make_logger(bot, db).log_manual_client_created(
             order_id=order_id,
             admin=admin,
-            action="ساخت دستی کلاینت",
+            location=loc.name,
+            volume_gb=volume_gb,
+            duration_days=duration_days,
+            price=price,
+            panel_email=result.email,
+            buyer_id=target_user_id,
         )

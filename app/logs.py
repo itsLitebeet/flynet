@@ -320,6 +320,37 @@ class NetFlyLogger:
             f"رسید ارسال شده بود: <b>{'بله' if had_receipt else 'خیر'}</b>"
         )
 
+    async def log_manual_client_created(
+        self,
+        *,
+        order_id: int,
+        admin: Actor,
+        location: str,
+        volume_gb: int,
+        duration_days: int,
+        price: int,
+        panel_email: str,
+        buyer_id: int | None = None,
+    ) -> None:
+        body = _order_detail_block(
+            order_id=order_id,
+            location=location,
+            volume_gb=volume_gb,
+            duration_days=duration_days,
+            price=price,
+            status="provisioned",
+        )
+        if buyer_id is not None:
+            user_line = f"👤 کاربر: <code>{buyer_id}</code>\n"
+        else:
+            user_line = "👤 کاربر: <i>— (فقط پنل)</i>\n"
+        await self._send_text(
+            "➕ <b>ساخت دستی کلاینت</b>\n\n"
+            f"👮 ادمین:\n{admin.html_line()}\n"
+            f"{user_line}"
+            f"🆔 پنل: <code>{escape(panel_email)}</code>\n\n{body}"
+        )
+
     async def log_admin_order_action(
         self,
         *,

@@ -684,7 +684,8 @@ ADMIN_ADD_CLIENT_OK = (
     "{configs_block}"
 )
 ADMIN_ADD_CLIENT_OK_PANEL_ONLY = (
-    "✅ <b>کلاینت روی پنل ساخته شد</b> (بدون ثبت برای کاربر)\n\n"
+    "✅ <b>کلاینت روی پنل ساخته شد</b> (بدون «سرویس‌های من»)\n\n"
+    "🆔 سفارش: <code>#{order_id}</code>\n"
     "📍 لوکیشن: <b>{location}</b>\n"
     "💾 {volume} گیگ · 📅 {days} روز\n"
     "📧 پنل: <code>{panel_email}</code>\n\n"

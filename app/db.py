@@ -243,6 +243,9 @@ class Database:
             "locations", "purchase_enabled", "INTEGER NOT NULL DEFAULT 1"
         )
         self._ensure_column("orders", "is_test", "INTEGER NOT NULL DEFAULT 0")
+        self._ensure_column(
+            "orders", "admin_manual_only", "INTEGER NOT NULL DEFAULT 0"
+        )
         # Legacy status from an earlier version — hard-delete on upgrade.
         with self._cursor() as cur:
             cur.execute("DELETE FROM orders WHERE status = 'panel_removed'")
@@ -454,7 +457,8 @@ class Database:
         """Users with at least one non-test (paid) order."""
         with self._cursor() as cur:
             cur.execute(
-                "SELECT COUNT(DISTINCT user_id) AS c FROM orders WHERE is_test = 0"
+                "SELECT COUNT(DISTINCT user_id) AS c FROM orders "
+                "WHERE is_test = 0 AND COALESCE(admin_manual_only, 0) = 0"
             )
             return int(cur.fetchone()["c"])
 
@@ -473,6 +477,7 @@ class Database:
                 "MAX(o.updated_at) AS last_order_at "
                 "FROM users u "
                 "INNER JOIN orders o ON o.user_id = u.user_id AND o.is_test = 0 "
+                "AND COALESCE(o.admin_manual_only, 0) = 0 "
                 "GROUP BY u.user_id "
                 "ORDER BY last_order_at DESC "
                 "LIMIT ? OFFSET ?",
@@ -499,6 +504,7 @@ class Database:
             "u.created_at, u.is_banned, " + agg + " "
             "FROM users u "
             "INNER JOIN orders o ON o.user_id = u.user_id AND o.is_test = 0 "
+            "AND COALESCE(o.admin_manual_only, 0) = 0 "
         )
 
         with self._cursor() as cur:
@@ -1069,13 +1075,14 @@ class Database:
         price: int,
         *,
         is_test: bool = False,
+        admin_manual_only: bool = False,
     ) -> int:
         with self._cursor() as cur:
             cur.execute(
                 "INSERT INTO orders "
                 "(user_id, location_id, location_name, volume_gb, duration_days, price, "
-                "is_test) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "is_test, admin_manual_only) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     user_id,
                     location_id,
@@ -1084,6 +1091,7 @@ class Database:
                     duration_days,
                     price,
                     1 if is_test else 0,
+                    1 if admin_manual_only else 0,
                 ),
             )
             return int(cur.lastrowid or 0)
@@ -1200,6 +1208,7 @@ class Database:
             cur.execute(
                 "SELECT * FROM orders WHERE user_id = ? "
                 "AND status != 'declined' "
+                "AND COALESCE(admin_manual_only, 0) = 0 "
                 "ORDER BY created_at DESC LIMIT ?",
                 (user_id, limit),
             )

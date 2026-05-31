@@ -13,6 +13,14 @@ def is_test_order(row) -> bool:
     return bool(row["is_test"]) if "is_test" in row.keys() else False
 
 
+def is_admin_manual_panel_only(row) -> bool:
+    return (
+        bool(row["admin_manual_only"])
+        if "admin_manual_only" in row.keys()
+        else False
+    )
+
+
 def _parse_sqlite_utc(ts: str) -> datetime | None:
     try:
         return datetime.strptime(ts.strip(), "%Y-%m-%d %H:%M:%S").replace(
@@ -49,6 +57,8 @@ def test_ended_with_usage(usage: ClientUsage) -> bool:
 
 async def is_visible_to_buyer(db: Database, row) -> bool:
     """Whether this order should appear in the buyer's service list / detail."""
+    if is_admin_manual_panel_only(row):
+        return False
     if not is_test_order(row):
         return True
     if test_ended_sync(row):
