@@ -23,13 +23,18 @@ def format_price(toman: int) -> str:
     return f"{toman:,} تومان"
 
 
-def format_service_package_button(volume_gb: int, duration_days: int, price: int) -> str:
-    """Inline button label (Telegram max 64 chars)."""
-    label = f"{volume_gb} گیگابایت | {duration_days} روزه {price:,} تومان"
-    if len(label) <= 64:
-        return label
-    short = f"{volume_gb}G | {duration_days}d | {price:,}T"
-    return short if len(short) <= 64 else short[:63] + "…"
+def _truncate_btn(text: str, *, max_len: int = 64) -> str:
+    return text if len(text) <= max_len else text[: max_len - 1] + "…"
+
+
+def format_service_package_volume(volume_gb: int) -> str:
+    """Right-hand button: e.g. 25 گیگابایت"""
+    return _truncate_btn(f"{volume_gb} گیگابایت")
+
+
+def format_service_package_term(duration_days: int, price: int) -> str:
+    """Left-hand button: e.g. 30 روزه - 378,000 تومان"""
+    return _truncate_btn(f"{duration_days} روزه - {price:,} تومان")
 
 
 def format_card_number(card: str) -> str:

@@ -233,17 +233,22 @@ def durations(duration_presets_days: list[int]) -> InlineKeyboardMarkup:
 
 
 def service_packages(packages: list) -> InlineKeyboardMarkup:
-    """Predefined plans: two buttons per row (volume | days | price)."""
-    preset_btns = [
-        InlineKeyboardButton(
-            text=texts.format_service_package_button(
-                pkg.volume_gb, pkg.duration_days, pkg.price
+    """One plan per row: two buttons (volume + term/price), same callback each."""
+    rows: list[list[InlineKeyboardButton]] = []
+    for pkg in packages:
+        cb = f"{CB_SVC_PREFIX}{pkg.id}"
+        rows.append([
+            InlineKeyboardButton(
+                text=texts.format_service_package_term(
+                    pkg.duration_days, pkg.price
+                ),
+                callback_data=cb,
             ),
-            callback_data=f"{CB_SVC_PREFIX}{pkg.id}",
-        )
-        for pkg in packages
-    ]
-    rows = _chunk_buttons(preset_btns, per_row=2)
+            InlineKeyboardButton(
+                text=texts.format_service_package_volume(pkg.volume_gb),
+                callback_data=cb,
+            ),
+        ])
     rows.append([InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ORDER_BACK_LOC)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
