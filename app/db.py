@@ -1168,9 +1168,10 @@ class Database:
             return cur.fetchone()
 
     def list_user_orders(self, user_id: int, limit: int = 50) -> list[sqlite3.Row]:
-        """Orders visible to the buyer in «سرویس‌های من».
+        """Orders for a user (buyer UI filters declined + ended tests separately).
 
-        Hides declined orders (buyers should not see rejected purchases).
+        Hides declined orders at SQL level; ended test subs are filtered in
+        ``buyer_orders.filter_visible_orders``.
         """
         with self._cursor() as cur:
             cur.execute(
@@ -1243,6 +1244,18 @@ class Database:
                     "SELECT * FROM orders WHERE status = 'provisioned' ORDER BY id"
                 )
             return list(cur.fetchall())
+
+    def detach_test_order_from_panel(self, order_id: int) -> bool:
+        """Clear panel client fields on a test order; keeps row for one-time claim."""
+        with self._cursor() as cur:
+            cur.execute(
+                "UPDATE orders SET xui_email = NULL, xui_sub_id = NULL, "
+                "xui_client_uuid = NULL, sub_links = NULL, "
+                "updated_at = datetime('now') "
+                "WHERE id = ? AND is_test = 1",
+                (order_id,),
+            )
+            return cur.rowcount > 0
 
     def delete_order(self, order_id: int) -> bool:
         with self._cursor() as cur:

@@ -16,7 +16,7 @@ from app.admin_perms import (
 )
 from app.config import Settings
 from app.db import Database, Location
-from app.xui import XuiClient, XuiError
+from app.xui import XuiClient, XuiError, _usage_from_client
 
 
 def is_admin(user_id: int, settings: Settings) -> bool:
@@ -133,25 +133,51 @@ def format_settings_text(db: Database) -> str:
 
 async def sync_location_orders(
     db: Database, loc: Location
-) -> tuple[list[int], str | None]:
-    """Return (cleared_order_ids, error_message)."""
+) -> tuple[list[int], list[int], str | None]:
+    """Return (orphan_deleted_ids, test_panel_cleaned_ids, error_message)."""
     try:
         async with XuiClient(loc.base_url, loc.api_token) as xui:
             clients = await xui.list_clients()
-    except XuiError as exc:
-        return [], str(exc)
 
-    panel_emails = {str(c.get("email", "")) for c in clients if c.get("email")}
-    cleared: list[int] = []
-    for row in db.list_provisioned_orders(location_id=loc.id):
-        email = row["xui_email"]
-        if not email:
-            continue
-        if str(email) not in panel_emails:
-            oid = int(row["id"])
-            if db.delete_order(oid):
-                cleared.append(oid)
-    return cleared, None
+            clients_by_email: dict[str, dict] = {}
+            for c in clients:
+                em = c.get("email")
+                if em:
+                    clients_by_email[str(em)] = c
+
+            panel_emails = set(clients_by_email)
+            orphan_deleted: list[int] = []
+            test_panel_cleaned: list[int] = []
+
+            for row in db.list_provisioned_orders(location_id=loc.id):
+                email = row["xui_email"]
+                if not email:
+                    continue
+                email = str(email)
+                oid = int(row["id"])
+                is_test = bool(row["is_test"]) if "is_test" in row.keys() else False
+
+                if is_test:
+                    if email not in panel_emails:
+                        continue
+                    usage = _usage_from_client(clients_by_email[email])
+                    if not usage.is_service_ended():
+                        continue
+                    try:
+                        await xui.delete_client(email, keep_traffic=1)
+                    except XuiError:
+                        continue
+                    if db.detach_test_order_from_panel(oid):
+                        test_panel_cleaned.append(oid)
+                    continue
+
+                if email not in panel_emails:
+                    if db.delete_order(oid):
+                        orphan_deleted.append(oid)
+
+            return orphan_deleted, test_panel_cleaned, None
+    except XuiError as exc:
+        return [], [], str(exc)
 
 
 async def run_sync_panel(
@@ -163,12 +189,13 @@ async def run_sync_panel(
         loc = db.get_location(loc_filter)
         locations = [loc] if loc else []
 
-    all_cleared: list[int] = []
+    all_orphans: list[int] = []
+    all_test_cleaned: list[int] = []
     out: list[str] = []
     for loc in locations:
         if loc is None:
             continue
-        cleared, err = await sync_location_orders(db, loc)
+        orphans, test_cleaned, err = await sync_location_orders(db, loc)
         if err:
             out.append(
                 texts.SYNC_PANEL_LOC_ERR.format(
@@ -176,17 +203,23 @@ async def run_sync_panel(
                 )
             )
             continue
-        all_cleared.extend(cleared)
+        all_orphans.extend(orphans)
+        all_test_cleaned.extend(test_cleaned)
 
     declined_deleted = db.delete_orders_by_status("declined")
-    if not all_cleared and declined_deleted == 0:
+    if not all_orphans and not all_test_cleaned and declined_deleted == 0:
         out.append(texts.SYNC_PANEL_NONE.format(declined=0))
     else:
-        orphan_ids = ", ".join(str(i) for i in all_cleared) if all_cleared else "—"
+        orphan_ids = ", ".join(str(i) for i in all_orphans) if all_orphans else "—"
+        test_ids = (
+            ", ".join(str(i) for i in all_test_cleaned) if all_test_cleaned else "—"
+        )
         out.append(
             texts.SYNC_PANEL_DONE.format(
-                orphan_count=len(all_cleared),
+                orphan_count=len(all_orphans),
                 orphan_ids=orphan_ids,
+                test_cleaned_count=len(all_test_cleaned),
+                test_cleaned_ids=test_ids,
                 declined=declined_deleted,
             )
         )

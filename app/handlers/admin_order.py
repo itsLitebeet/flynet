@@ -295,7 +295,7 @@ async def cb_order_delete_ask(
 
 @router.callback_query(F.data == keyboards.CB_ADM_ORDER_DELETE_CANCEL)
 async def cb_order_delete_cancel(
-    callback: CallbackQuery, settings: Settings
+    callback: CallbackQuery, settings: Settings, db: Database
 ) -> None:
     if not await guard_admin_callback(callback, settings, db, ORDERS_MANAGE):
         return

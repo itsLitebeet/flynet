@@ -156,7 +156,7 @@ async def cb_admin_offer_percent_preset(
 
 @router.callback_query(F.data == keyboards.CB_ADM_OFFER_PCT_CUSTOM)
 async def cb_admin_offer_percent_custom(
-    callback: CallbackQuery, state: FSMContext, settings: Settings
+    callback: CallbackQuery, state: FSMContext, settings: Settings, db: Database
 ) -> None:
     if not await guard_admin_callback(callback, settings, db, OFFER):
         return
@@ -175,7 +175,7 @@ async def cb_admin_offer_percent_custom(
 
 @router.callback_query(F.data == keyboards.CB_ADM_OFFER_AMOUNT)
 async def cb_admin_offer_amount(
-    callback: CallbackQuery, state: FSMContext, settings: Settings
+    callback: CallbackQuery, state: FSMContext, settings: Settings, db: Database
 ) -> None:
     if not await guard_admin_callback(callback, settings, db, OFFER):
         return
@@ -194,7 +194,7 @@ async def cb_admin_offer_amount(
 
 @router.callback_query(F.data == keyboards.CB_ADM_OFFER_FIXED)
 async def cb_admin_offer_fixed(
-    callback: CallbackQuery, state: FSMContext, settings: Settings
+    callback: CallbackQuery, state: FSMContext, settings: Settings, db: Database
 ) -> None:
     if not await guard_admin_callback(callback, settings, db, OFFER):
         return

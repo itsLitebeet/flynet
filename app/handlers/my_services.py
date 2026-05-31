@@ -26,6 +26,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
 
 from app import keyboards, texts
+from app.buyer_orders import filter_visible_orders, is_visible_to_buyer
 from app.db import Database
 from app.xui import ClientUsage, XuiClient, XuiError, email_from_user_label
 
@@ -209,7 +210,7 @@ async def _show_service_detail(
     *,
     refresh: bool = False,
 ) -> None:
-    row = _own_order_or_none(db, order_id, user_id)
+    row = await _own_order_or_none(db, order_id, user_id)
     if row is None:
         await callback.answer("سرویس یافت نشد.", show_alert=True)
         return
@@ -252,9 +253,11 @@ async def _show_service_detail(
         await callback.answer()
 
 
-def _own_order_or_none(db: Database, order_id: int, user_id: int):
+async def _own_order_or_none(db: Database, order_id: int, user_id: int):
     row = db.get_order(order_id)
     if row is None or int(row["user_id"]) != user_id:
+        return None
+    if not await is_visible_to_buyer(db, row):
         return None
     return row
 
@@ -266,7 +269,7 @@ async def _show_services_list(
     *,
     edit_in_place: bool = False,
 ) -> None:
-    rows = db.list_user_orders(user_id, limit=50)
+    rows = await filter_visible_orders(db, db.list_user_orders(user_id, limit=50))
     if not rows:
         text = texts.MY_SERVICES_EMPTY
         if edit_in_place:
@@ -362,7 +365,7 @@ async def cb_view_configs(callback: CallbackQuery, db: Database) -> None:
         await callback.answer()
         return
 
-    row = _own_order_or_none(db, order_id, user.id)
+    row = await _own_order_or_none(db, order_id, user.id)
     if row is None or row["status"] != "provisioned":
         await callback.answer("این سرویس فعال نیست.", show_alert=True)
         return
@@ -401,7 +404,7 @@ async def cb_refresh_usage(callback: CallbackQuery, db: Database) -> None:
         await callback.answer()
         return
 
-    row = _own_order_or_none(db, order_id, user.id)
+    row = await _own_order_or_none(db, order_id, user.id)
     if row is None or row["status"] != "provisioned":
         await callback.answer("این سرویس فعال نیست.", show_alert=True)
         return
@@ -422,7 +425,7 @@ async def cb_toggle(callback: CallbackQuery, db: Database) -> None:
         await callback.answer()
         return
 
-    row = _own_order_or_none(db, order_id, user.id)
+    row = await _own_order_or_none(db, order_id, user.id)
     if row is None or row["status"] != "provisioned":
         await callback.answer("این سرویس فعال نیست.", show_alert=True)
         return
@@ -479,7 +482,7 @@ async def cb_rename(callback: CallbackQuery, state: FSMContext, db: Database) ->
         await callback.answer()
         return
 
-    row = _own_order_or_none(db, order_id, user.id)
+    row = await _own_order_or_none(db, order_id, user.id)
     if row is None:
         await callback.answer("سرویس یافت نشد.", show_alert=True)
         return
@@ -514,7 +517,7 @@ async def on_nickname_received(
         await state.clear()
         return
 
-    row = _own_order_or_none(db, order_id, message.from_user.id)
+    row = await _own_order_or_none(db, order_id, message.from_user.id)
     if row is None:
         await state.clear()
         await message.answer("سرویس یافت نشد.")
@@ -605,7 +608,7 @@ async def cb_regen_ask(callback: CallbackQuery, db: Database) -> None:
         await callback.answer()
         return
 
-    row = _own_order_or_none(db, order_id, user.id)
+    row = await _own_order_or_none(db, order_id, user.id)
     if row is None or row["status"] != "provisioned":
         await callback.answer("این سرویس فعال نیست.", show_alert=True)
         return
@@ -632,7 +635,7 @@ async def cb_regen_confirm(callback: CallbackQuery, db: Database) -> None:
         await callback.answer()
         return
 
-    row = _own_order_or_none(db, order_id, user.id)
+    row = await _own_order_or_none(db, order_id, user.id)
     if row is None or row["status"] != "provisioned":
         await callback.answer("این سرویس فعال نیست.", show_alert=True)
         return

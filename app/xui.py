@@ -83,6 +83,20 @@ class ClientUsage:
     def is_never_expires(self) -> bool:
         return self.expiry_time_ms <= 0
 
+    @property
+    def is_expired(self) -> bool:
+        if self.expiry_time_ms <= 0:
+            return False
+        return self.expiry_time_ms <= int(time.time() * 1000)
+
+    @property
+    def is_quota_exhausted(self) -> bool:
+        return self.total_bytes > 0 and self.remaining_bytes <= 0
+
+    def is_service_ended(self) -> bool:
+        """True when expiry passed or traffic quota is used up."""
+        return self.is_expired or self.is_quota_exhausted
+
 
 def _auth_headers(api_token: str) -> dict[str, str]:
     return {

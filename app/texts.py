@@ -846,6 +846,8 @@ SYNC_PANEL_DONE = (
     "✅ همگام‌سازی پایان یافت.\n\n"
     "🗑 حذف از دیتابیس (یتیم پنل): <b>{orphan_count}</b>\n"
     "<code>{orphan_ids}</code>\n\n"
+    "🧪 تست منقضی — حذف از پنل (ثبت در ربات): <b>{test_cleaned_count}</b>\n"
+    "<code>{test_cleaned_ids}</code>\n\n"
     "❌ حذف سفارش‌های رد‌شده: <b>{declined}</b>"
 )
 SYNC_PANEL_LOC_ERR  = "⚠️ خطا در لوکیشن <code>#{id}</code> ({name}):\n<code>{error}</code>"
