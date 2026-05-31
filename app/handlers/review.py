@@ -6,8 +6,7 @@ When an admin clicks Accept on a payment receipt:
   3) Call XuiClient.provision() to create the client and fetch sub links.
   4) Notify the user with the links, save the result in the order row.
 
-Decline flow uses a small FSM to collect a reason from the admin and
-forwards it to the user.
+Decline flow: preset inline buttons or custom text (FSM), then notify buyer.
 """
 
 from __future__ import annotations
@@ -19,7 +18,7 @@ from aiogram import Bot, F, Router
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, User
 
 from app import keyboards, texts
 from app.admin_perms import ORDERS_REVIEW
@@ -231,7 +230,83 @@ async def cb_accept_order(
 
 
 # ---------- Decline ----------
-@router.callback_query(F.data.startswith(keyboards.CB_ADMIN_DECLINE_PREFIX))
+async def _apply_decline(
+    *,
+    order_id: int,
+    reason: str,
+    admin_user: User,
+    bot: Bot,
+    db: Database,
+    reply_to: Message,
+) -> bool:
+    """Decline order and notify buyer. Returns True on success."""
+    order = db.get_order(order_id)
+    if order is None:
+        await reply_to.answer("سفارش پیدا نشد.")
+        return False
+    if order["status"] != "awaiting_review":
+        await reply_to.answer(
+            texts.REVIEW_ALREADY.format(status=_status_label(order["status"]))
+        )
+        return False
+
+    user_id = int(order["user_id"])
+    admin_id = admin_user.id
+    if not db.claim_order_review(
+        order_id, "declined", admin_id, decline_reason=reason
+    ):
+        order = db.get_order(order_id)
+        st = order["status"] if order else "—"
+        await reply_to.answer(
+            texts.REVIEW_ALREADY.format(status=_status_label(str(st)))
+        )
+        return False
+
+    await clear_admin_receipt_buttons(
+        bot,
+        db,
+        order_id,
+        acting_admin_id=admin_id,
+        action="رد شد",
+    )
+    is_test = bool(order["is_test"]) if "is_test" in order.keys() else False
+    admin = Actor.from_user(admin_user)
+    if admin is not None:
+        await make_logger(bot, db).log_order_declined(
+            order_id=order_id,
+            admin=admin,
+            buyer_id=user_id,
+            location=str(order["location_name"]),
+            volume_gb=int(order["volume_gb"]),
+            duration_days=int(order["duration_days"]),
+            price=int(order["price"]),
+            reason=reason,
+            is_test=is_test,
+        )
+    await reply_to.answer(texts.REVIEW_DECLINE_SENT)
+
+    try:
+        await bot.send_message(
+            user_id,
+            texts.ORDER_DECLINED_NOTIFY.format(
+                order_id=order_id,
+                reason=escape(reason),
+            ),
+        )
+    except Exception:  # noqa: BLE001
+        log.exception(
+            "Failed to notify user %s about declined order %s",
+            user_id,
+            order_id,
+        )
+    return True
+
+
+@router.callback_query(
+    F.data.startswith(keyboards.CB_ADMIN_DECLINE_PREFIX)
+    & ~F.data.startswith(keyboards.CB_ADMIN_DECLINE_PRESET_PREFIX)
+    & ~F.data.startswith(keyboards.CB_ADMIN_DECLINE_CANCEL_PREFIX)
+)
 async def cb_decline_order(
     callback: CallbackQuery,
     state: FSMContext,
@@ -255,14 +330,86 @@ async def cb_decline_order(
     assert order is not None
 
     await state.set_state(DeclineFlow.waiting_reason)
-    await state.update_data(decline_order_id=order_id, decline_user_id=int(order["user_id"]))
+    await state.update_data(decline_order_id=order_id)
     if isinstance(callback.message, Message):
-        await callback.message.answer(texts.REVIEW_DECLINE_PROMPT)
+        await callback.message.answer(
+            texts.REVIEW_DECLINE_PROMPT,
+            reply_markup=keyboards.decline_reason_keyboard(order_id),
+        )
     await callback.answer()
 
 
+@router.callback_query(F.data.startswith(keyboards.CB_ADMIN_DECLINE_PRESET_PREFIX))
+async def cb_decline_preset(
+    callback: CallbackQuery,
+    state: FSMContext,
+    db: Database,
+    bot: Bot,
+    settings: Settings,
+) -> None:
+    if not await guard_admin_callback(callback, settings, db, ORDERS_REVIEW):
+        return
+    if callback.from_user is None:
+        await callback.answer()
+        return
+
+    raw = (callback.data or "").removeprefix(
+        keyboards.CB_ADMIN_DECLINE_PRESET_PREFIX
+    )
+    parts = raw.split(":", 1)
+    if len(parts) != 2:
+        await callback.answer()
+        return
+    try:
+        order_id = int(parts[0])
+    except ValueError:
+        await callback.answer()
+        return
+    preset_id = parts[1]
+    reason = texts.DECLINE_PRESET_REASONS.get(preset_id)
+    if reason is None:
+        await callback.answer()
+        return
+
+    if not await _reject_if_not_reviewable(callback, db, order_id):
+        await state.clear()
+        return
+
+    await state.clear()
+    if not isinstance(callback.message, Message):
+        await callback.answer()
+        return
+
+    await _apply_decline(
+        order_id=order_id,
+        reason=reason,
+        admin_user=callback.from_user,
+        bot=bot,
+        db=db,
+        reply_to=callback.message,
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith(keyboards.CB_ADMIN_DECLINE_CANCEL_PREFIX))
+async def cb_decline_cancel(
+    callback: CallbackQuery,
+    state: FSMContext,
+    settings: Settings,
+    db: Database,
+) -> None:
+    if not await guard_admin_callback(callback, settings, db, ORDERS_REVIEW):
+        return
+    await state.clear()
+    await callback.answer(texts.CANCELLED)
+
+
 @router.message(StateFilter(DeclineFlow.waiting_reason), Command("cancel"))
-async def cmd_cancel_decline(message: Message, state: FSMContext) -> None:
+async def cmd_cancel_decline(
+    message: Message, state: FSMContext, settings: Settings, db: Database
+) -> None:
+    if not await guard_admin_message(message, settings, db, ORDERS_REVIEW):
+        return
     await state.clear()
     await message.answer(texts.CANCELLED)
 
@@ -278,68 +425,22 @@ async def on_decline_reason(
     if not await guard_admin_message(message, settings, db, ORDERS_REVIEW):
         await state.clear()
         return
+    if message.from_user is None:
+        return
 
     data = await state.get_data()
     order_id = int(data.get("decline_order_id", 0))
-    user_id  = int(data.get("decline_user_id", 0))
     reason = (message.text or "").strip() or texts.ORDER_DECLINED_DEFAULT_REASON
     await state.clear()
 
     if not order_id:
         return
 
-    order = db.get_order(order_id)
-    if order is None:
-        await message.answer("سفارش پیدا نشد.")
-        return
-    if order["status"] != "awaiting_review":
-        await message.answer(
-            texts.REVIEW_ALREADY.format(status=_status_label(order["status"]))
-        )
-        return
-
-    admin_id = message.from_user.id
-    if not db.claim_order_review(
-        order_id, "declined", admin_id, decline_reason=reason
-    ):
-        order = db.get_order(order_id)
-        st = order["status"] if order else "—"
-        await message.answer(
-            texts.REVIEW_ALREADY.format(status=_status_label(str(st)))
-        )
-        return
-
-    await clear_admin_receipt_buttons(
-        bot,
-        db,
-        order_id,
-        acting_admin_id=admin_id,
-        action="رد شد",
+    await _apply_decline(
+        order_id=order_id,
+        reason=reason,
+        admin_user=message.from_user,
+        bot=bot,
+        db=db,
+        reply_to=message,
     )
-    is_test = bool(order["is_test"]) if "is_test" in order.keys() else False
-    admin = Actor.from_user(message.from_user)
-    if admin is not None:
-        await make_logger(bot, db).log_order_declined(
-            order_id=order_id,
-            admin=admin,
-            buyer_id=user_id,
-            location=str(order["location_name"]),
-            volume_gb=int(order["volume_gb"]),
-            duration_days=int(order["duration_days"]),
-            price=int(order["price"]),
-            reason=reason,
-            is_test=is_test,
-        )
-    await message.answer(texts.REVIEW_DECLINE_SENT)
-
-    try:
-        await bot.send_message(
-            user_id,
-            texts.ORDER_DECLINED_NOTIFY.format(
-                order_id=order_id,
-                reason=escape(reason),
-            ),
-        )
-    except Exception:  # noqa: BLE001
-        log.exception("Failed to notify user %s about declined order %s",
-                      user_id, order_id)

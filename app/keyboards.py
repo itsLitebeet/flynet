@@ -42,6 +42,8 @@ CB_CANCEL_SUPPORT = "support:cancel"
 # Admin review
 CB_ADMIN_ACCEPT_PREFIX  = "adm:acc:"   # adm:acc:<order_id>
 CB_ADMIN_DECLINE_PREFIX = "adm:dec:"   # adm:dec:<order_id>
+CB_ADMIN_DECLINE_PRESET_PREFIX = "adm:decp:"  # adm:decp:<order_id>:<preset_id>
+CB_ADMIN_DECLINE_CANCEL_PREFIX = "adm:decx:"  # adm:decx:<order_id>
 
 # Admin panel navigation
 CB_ADM_HOME              = "adm:home"
@@ -1363,6 +1365,32 @@ def admin_locations_list_footer() -> list[InlineKeyboardButton]:
 
 
 # ---------- admin review ----------
+def decline_reason_keyboard(order_id: int) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    row: list[InlineKeyboardButton] = []
+    for preset_id, label, _msg in texts.DECLINE_PRESETS:
+        row.append(
+            InlineKeyboardButton(
+                text=label,
+                callback_data=(
+                    f"{CB_ADMIN_DECLINE_PRESET_PREFIX}{order_id}:{preset_id}"
+                ),
+            )
+        )
+        if len(row) == 2:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    rows.append([
+        InlineKeyboardButton(
+            text=texts.BTN_CANCEL,
+            callback_data=f"{CB_ADMIN_DECLINE_CANCEL_PREFIX}{order_id}",
+        ),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def admin_review(order_id: int, user_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
