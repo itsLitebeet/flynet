@@ -15,7 +15,7 @@ CUSTOM_VOLUME_MAX_GB = 500
 
 # Free test subscription (one per user)
 TEST_VOLUME_MB = 100
-TEST_DURATION_DAYS = 3
+TEST_DURATION_HOURS = 2
 
 
 # ---------- helpers ----------
@@ -133,7 +133,7 @@ SERVICE_DETAIL = (
     "📦 <b>سرویس #{order_id}</b>{nickname_part}\n\n"
     "📍 لوکیشن: <b>{location}</b>\n"
     "💾 حجم سفارش: <b>{volume}</b>\n"
-    "📅 مدت سفارش: <b>{days} روز</b>\n"
+    "📅 مدت سفارش: <b>{duration}</b>\n"
     "💰 مبلغ: <b>{price}</b>\n"
     "🏷 وضعیت: <b>{status}</b>\n"
     "{panel_id_line}"
@@ -241,7 +241,7 @@ TEST_SUB_CONFIRM = (
     "🧪 <b>اشتراک تست رایگان</b>\n\n"
     "📍 لوکیشن: <b>{location}</b>\n"
     "💾 حجم: <b>{volume}</b>\n"
-    "📅 مدت: <b>{days} روز</b>\n"
+    "📅 مدت: <b>{duration}</b>\n"
     "💰 مبلغ: <b>رایگان</b>\n\n"
     "⚠️ هر کاربر فقط <b>یک‌بار</b> می‌تواند اشتراک تست دریافت کند.\n\n"
     "ادامه می‌دهید؟"
@@ -270,6 +270,17 @@ TEST_SUB_FAILED = (
 
 def format_test_volume() -> str:
     return f"{TEST_VOLUME_MB} مگابایت"
+
+
+def format_test_duration() -> str:
+    return f"{TEST_DURATION_HOURS} ساعت"
+
+
+def format_order_duration(duration_days: int, *, is_test: bool = False) -> str:
+    if is_test:
+        return format_test_duration()
+    return f"{duration_days} روز"
+
 
 def format_order_volume(volume_gb: int, *, is_test: bool = False) -> str:
     if is_test:
@@ -731,7 +742,7 @@ ADMIN_CUSTOMER_DETAIL = (
 )
 ADMIN_CUSTOMER_ORDER_LINE = (
     "• <b>#{order_id}</b> {test_mark} — {status}\n"
-    "  📍 {location} · {volume} · {days} روز · {price}\n"
+    "  📍 {location} · {volume} · {duration} · {price}\n"
     "  🏷 نام: {nickname} · 🕐 {created_at}\n"
     "  {panel_line}"
     "{extra_lines}"
@@ -1127,13 +1138,13 @@ ADD_TEST_LOC_USAGE = (
     "TOKEN | 1,2</code>\n\n"
     "فیلد پنجم اختیاری: لینک اشتراک با <code>{subId}</code>\n\n"
     "• فقط <b>یک</b> لوکیشن تست فعال — لوکیشن تست قبلی غیرفعال/حذف می‌شود\n"
-    f"• خریداران: <b>۱۰۰ مگابایت</b>، <b>{TEST_DURATION_DAYS} روز</b>، رایگان، یک‌بار برای هر کاربر\n"
+    f"• خریداران: <b>۱۰۰ مگابایت</b>، <b>{TEST_DURATION_HOURS} ساعت</b>، رایگان، یک‌بار برای هر کاربر\n"
     "• در لیست «خرید سرویس» نمایش داده <b>نمی‌شود</b>\n"
     "• دکمه تست را با <code>/toggletest</code> روشن/خاموش کنید"
 )
 ADD_TEST_LOC_OK = (
     "✅ <b>لوکیشن تست</b> «{name}» با شناسه <code>{id}</code> ثبت شد.\n"
-    "💾 {volume} · 📅 {days} روز · رایگان\n\n"
+    "💾 {volume} · 📅 {duration} · رایگان\n\n"
     "دکمه تست: <b>{toggle_state}</b> — <code>/toggletest</code> برای تغییر"
 )
 TOGGLE_TEST_OK = "✅ دکمه «دریافت اشتراک تست» اکنون <b>{state}</b> است."

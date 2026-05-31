@@ -634,7 +634,7 @@ async def cmd_addtestlocation(
             name=escape(name),
             id=loc_id,
             volume=texts.format_test_volume(),
-            days=texts.TEST_DURATION_DAYS,
+            duration=texts.format_test_duration(),
             toggle_state=toggle_state,
         )
         + f"\n\n🔗 base_url:\n<code>{escape(base_url)}</code>"

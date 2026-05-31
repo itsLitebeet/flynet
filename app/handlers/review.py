@@ -29,7 +29,7 @@ from app.db import TEST_VOLUME_BYTES, Database
 from app.handlers.admin_helpers import guard_admin_callback, guard_admin_message
 from app.handlers.review_notify import clear_admin_receipt_buttons
 from app.logs import Actor, make_logger
-from app.xui import XuiClient, XuiError, build_client_email
+from app.xui import XuiClient, XuiError, build_client_email, test_expiry_time_ms
 
 
 router = Router(name="review")
@@ -158,6 +158,7 @@ async def cb_accept_order(
                 inbound_ids=location.inbound_ids,
                 tg_user_id=int(order["user_id"]),
                 total_bytes=TEST_VOLUME_BYTES if is_test else None,
+                expiry_time_ms=test_expiry_time_ms() if is_test else None,
             )
     except XuiError as exc:
         log.warning("Provisioning failed for order %s: %s", order_id, exc)

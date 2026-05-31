@@ -98,7 +98,9 @@ def _format_customer_order_line(
         status=status,
         location=escape(str(order["location_name"])),
         volume=vol,
-        days=int(order["duration_days"]),
+        duration=texts.format_order_duration(
+            int(order["duration_days"]), is_test=is_test
+        ),
         price=texts.format_price(int(order["price"])),
         nickname=nick,
         created_at=escape(str(order["created_at"])),

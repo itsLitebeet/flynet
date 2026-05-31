@@ -95,6 +95,16 @@ def _expiry_ms_from_days(days: int) -> int:
     return int((time.time() + days * DAY_IN_SECONDS) * 1000)
 
 
+def _expiry_ms_from_hours(hours: int) -> int:
+    return int((time.time() + hours * 3600) * 1000)
+
+
+def test_expiry_time_ms() -> int:
+    from app import texts
+
+    return _expiry_ms_from_hours(texts.TEST_DURATION_HOURS)
+
+
 def _gb_to_bytes(gb: int) -> int:
     return gb * GIB_IN_BYTES
 
@@ -540,6 +550,8 @@ class XuiClient:
 
         if usage.expiry_time_ms > 0:
             expiry_ms = usage.expiry_time_ms
+        elif is_test:
+            expiry_ms = _expiry_ms_from_hours(_texts.TEST_DURATION_HOURS)
         else:
             expiry_ms = _expiry_ms_from_days(duration_days_fallback)
 

@@ -48,12 +48,17 @@ def _order_detail_block(
     is_test: bool = False,
     status: str | None = None,
 ) -> str:
+    from app import texts
+
     vol = escape(texts_format_volume(volume_gb, is_test))
+    duration = escape(
+        texts.format_order_duration(duration_days, is_test=is_test)
+    )
     lines = [
         f"🆔 سفارش: <code>#{order_id}</code>",
         f"📍 لوکیشن: <b>{escape(location)}</b>",
         f"💾 حجم: <b>{vol}</b>",
-        f"📅 مدت: <b>{duration_days}</b> روز",
+        f"📅 مدت: <b>{duration}</b>",
         f"💰 مبلغ: <b>{_format_price(price)}</b>",
     ]
     if is_test:

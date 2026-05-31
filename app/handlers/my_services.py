@@ -113,7 +113,12 @@ def _service_list_label(row) -> str:
     nick = f" — «{row['nickname']}»" if (row["nickname"] or "") else ""
     vol = _order_volume_label(row)
     test_mark = " 🧪" if ("is_test" in row.keys() and row["is_test"]) else ""
-    return f"{badge} #{row['id']}{test_mark} · {row['location_name']} · {vol}/{row['duration_days']}d{nick}"
+    dur = (
+        texts.format_test_duration()
+        if _is_test_order(row)
+        else f"{row['duration_days']}d"
+    )
+    return f"{badge} #{row['id']}{test_mark} · {row['location_name']} · {vol}/{dur}{nick}"
 
 
 def _format_usage_block(usage: ClientUsage) -> str:
@@ -169,7 +174,9 @@ def _build_detail_text(
             int(row["volume_gb"]),
             is_test=_is_test_order(row),
         ),
-        days=int(row["duration_days"]),
+        duration=texts.format_order_duration(
+            int(row["duration_days"]), is_test=_is_test_order(row)
+        ),
         price=texts.format_price(int(row["price"])),
         status=_status_badge(str(row["status"])),
         panel_id_line=panel_id_line,

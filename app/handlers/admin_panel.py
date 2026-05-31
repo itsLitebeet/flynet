@@ -304,7 +304,7 @@ async def send_location_detail(
     if loc.is_test:
         test_line = (
             f"\n🧪 <b>لوکیشن تست</b> — {texts.format_test_volume()} · "
-            f"{texts.TEST_DURATION_DAYS} روز · رایگان · "
+            f"{texts.format_test_duration()} · رایگان · "
             f"دکمه تست: {'روشن' if db.is_test_feature_enabled() else 'خاموش'}\n"
         )
     text = texts.ADMIN_LOC_DETAIL.format(

@@ -15,7 +15,7 @@ from app import keyboards, texts
 from app.db import Database, TEST_VOLUME_BYTES
 from app.handlers.buyer_ui import buyer_reply_keyboard, buyer_show_test_button
 from app.logs import Actor, make_logger
-from app.xui import XuiClient, XuiError, build_client_email
+from app.xui import XuiClient, XuiError, build_client_email, test_expiry_time_ms
 
 
 router = Router(name="test_sub")
@@ -56,7 +56,7 @@ async def _start_test_flow(message: Message, state: FSMContext, db: Database) ->
         texts.TEST_SUB_CONFIRM.format(
             location=escape(loc.name),
             volume=texts.format_test_volume(),
-            days=texts.TEST_DURATION_DAYS,
+            duration=texts.format_test_duration(),
         ),
         reply_markup=keyboards.test_sub_confirm(),
     )
@@ -108,7 +108,7 @@ async def cb_test_confirm(
         location_id=loc.id,
         location_name=loc.name,
         volume_gb=0,
-        duration_days=texts.TEST_DURATION_DAYS,
+        duration_days=0,
         price=0,
         is_test=True,
     )
@@ -119,10 +119,11 @@ async def cb_test_confirm(
             result = await xui.provision(
                 email=email,
                 volume_gb=1,
-                duration_days=texts.TEST_DURATION_DAYS,
+                duration_days=0,
                 inbound_ids=loc.inbound_ids,
                 tg_user_id=user.id,
                 total_bytes=TEST_VOLUME_BYTES,
+                expiry_time_ms=test_expiry_time_ms(),
             )
     except XuiError as exc:
         log.warning("Test provision failed for order %s: %s", order_id, exc)
