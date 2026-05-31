@@ -16,7 +16,13 @@ from app.handlers.admin_customers_ui import (
     format_customers_page,
     format_customers_search_results,
 )
-from app.handlers.admin_helpers import admin_from_message, is_admin
+from app.admin_perms import CUSTOMERS, USERS
+from app.handlers.admin_helpers import (
+    admin_can,
+    guard_admin_callback,
+    guard_admin_message,
+    is_admin,
+)
 from app.handlers.admin_ui_helpers import admin_edit_or_answer
 
 router = Router(name="admin_customers")
@@ -42,9 +48,11 @@ async def send_customers(
 
 async def send_customer_detail(
     message: Message,
+    settings: Settings,
     db: Database,
     user_id: int,
     *,
+    actor_id: int,
     edit_in_place: bool = False,
 ) -> bool:
     text = await format_customer_detail(db, user_id)
@@ -57,6 +65,9 @@ async def send_customer_detail(
     order_ids = [int(o["id"]) for o in orders][:8]
     markup = keyboards.admin_customer_detail_keyboard(
         user_id,
+        actor_id,
+        settings,
+        db,
         is_banned=bool(row["is_banned"]),
         order_ids=order_ids,
     )
@@ -70,7 +81,7 @@ async def send_customer_detail(
 async def msg_admin_customers(
     message: Message, settings: Settings, db: Database
 ) -> None:
-    if not admin_from_message(message, settings):
+    if not await guard_admin_message(message, settings, db, CUSTOMERS):
         return
     await send_customers(message, db)
 
@@ -79,8 +90,7 @@ async def msg_admin_customers(
 async def cb_admin_customers(
     callback: CallbackQuery, state: FSMContext, settings: Settings, db: Database
 ) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+    if not await guard_admin_callback(callback, settings, db, CUSTOMERS):
         return
     await state.clear()
     if isinstance(callback.message, Message):
@@ -92,8 +102,7 @@ async def cb_admin_customers(
 async def cb_admin_customers_page(
     callback: CallbackQuery, settings: Settings, db: Database
 ) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+    if not await guard_admin_callback(callback, settings, db, CUSTOMERS):
         return
     raw = (callback.data or "").removeprefix(
         keyboards.CB_ADM_CUSTOMERS_PAGE_PREFIX
@@ -112,8 +121,7 @@ async def cb_admin_customers_page(
 async def cb_admin_customers_search_start(
     callback: CallbackQuery, state: FSMContext, settings: Settings
 ) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+    if not await guard_admin_callback(callback, settings, db, CUSTOMERS):
         return
     if not isinstance(callback.message, Message):
         await callback.answer()
@@ -136,9 +144,16 @@ async def customers_flow_cancel(
     event: Message | CallbackQuery, state: FSMContext, settings: Settings, db: Database
 ) -> None:
     user_id = event.from_user.id if event.from_user else None
-    if user_id is None or not is_admin(user_id, settings):
+    if user_id is None or not admin_can(user_id, CUSTOMERS, settings, db):
+        msg = (
+            texts.NOT_ADMIN
+            if user_id is None or not is_admin(user_id, settings)
+            else texts.NOT_PERMITTED
+        )
         if isinstance(event, CallbackQuery):
-            await event.answer(texts.NOT_ADMIN, show_alert=True)
+            await event.answer(msg, show_alert=True)
+        else:
+            await event.answer(msg)
         return
     await state.clear()
     if isinstance(event, CallbackQuery):
@@ -153,9 +168,8 @@ async def customers_flow_cancel(
 async def customers_search_input(
     message: Message, state: FSMContext, settings: Settings, db: Database
 ) -> None:
-    if not admin_from_message(message, settings):
+    if not await guard_admin_message(message, settings, db, CUSTOMERS):
         await state.clear()
-        await message.answer(texts.NOT_ADMIN)
         return
 
     query = (message.text or "").strip()
@@ -173,8 +187,7 @@ async def customers_search_input(
 async def cb_admin_customer_detail(
     callback: CallbackQuery, settings: Settings, db: Database
 ) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+    if not await guard_admin_callback(callback, settings, db, CUSTOMERS):
         return
     raw = (callback.data or "").removeprefix(keyboards.CB_ADM_CUST_DETAIL_PREFIX)
     try:
@@ -186,7 +199,12 @@ async def cb_admin_customer_detail(
         await callback.answer()
         return
     if not await send_customer_detail(
-        callback.message, db, user_id, edit_in_place=True
+        callback.message,
+        settings,
+        db,
+        user_id,
+        actor_id=callback.from_user.id,
+        edit_in_place=True,
     ):
         await callback.answer("مشتری یافت نشد.", show_alert=True)
         return
@@ -197,8 +215,7 @@ async def cb_admin_customer_detail(
 async def cb_admin_cust_ban(
     callback: CallbackQuery, settings: Settings, db: Database, bot: Bot
 ) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+    if not await guard_admin_callback(callback, settings, db, USERS):
         return
     try:
         user_id = int(
@@ -216,7 +233,12 @@ async def cb_admin_cust_ban(
     db.set_user_banned(user_id, True)
     if isinstance(callback.message, Message):
         await send_customer_detail(
-            callback.message, db, user_id, edit_in_place=True
+            callback.message,
+            settings,
+            db,
+            user_id,
+            actor_id=callback.from_user.id,
+            edit_in_place=True,
         )
     await callback.answer(texts.BAN_OK.format(user_id=user_id))
     await _log_ban(bot, db, callback, user_id, banned=True)
@@ -226,8 +248,7 @@ async def cb_admin_cust_ban(
 async def cb_admin_cust_unban(
     callback: CallbackQuery, settings: Settings, db: Database, bot: Bot
 ) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+    if not await guard_admin_callback(callback, settings, db, USERS):
         return
     try:
         user_id = int(
@@ -242,7 +263,12 @@ async def cb_admin_cust_unban(
     db.set_user_banned(user_id, False)
     if isinstance(callback.message, Message):
         await send_customer_detail(
-            callback.message, db, user_id, edit_in_place=True
+            callback.message,
+            settings,
+            db,
+            user_id,
+            actor_id=callback.from_user.id,
+            edit_in_place=True,
         )
     await callback.answer(texts.UNBAN_OK.format(user_id=user_id))
     await _log_ban(bot, db, callback, user_id, banned=False)

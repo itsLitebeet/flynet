@@ -16,7 +16,14 @@ from aiogram.types import CallbackQuery, Message
 from app import keyboards, texts
 from app.config import Settings
 from app.db import Database
-from app.handlers.admin_helpers import admin_from_message, is_admin
+from app.admin_perms import TOOLS_BROADCAST
+from app.handlers.admin_helpers import (
+    admin_can,
+    admin_panel_access,
+    guard_admin_callback,
+    guard_admin_message,
+    is_admin,
+)
 from app.logs import Actor, make_logger
 
 router = Router(name="admin_broadcast")
@@ -143,8 +150,7 @@ async def cmd_broadcast_entry(
     db: Database,
     bot: Bot,
 ) -> None:
-    if not admin_from_message(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, TOOLS_BROADCAST):
         return
 
     args = (message.text or "").split(maxsplit=1)
@@ -157,10 +163,9 @@ async def cmd_broadcast_entry(
 
 @router.callback_query(F.data == keyboards.CB_ADM_BROADCAST, StateFilter(None))
 async def cb_broadcast_start(
-    callback: CallbackQuery, state: FSMContext, settings: Settings
+    callback: CallbackQuery, state: FSMContext, settings: Settings, db: Database
 ) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+    if not await guard_admin_callback(callback, settings, db, TOOLS_BROADCAST):
         return
     if not isinstance(callback.message, Message):
         await callback.answer()
@@ -174,16 +179,26 @@ async def cb_broadcast_start(
 @router.message(Command("cancel"), StateFilter(BroadcastFlow))
 @router.callback_query(F.data == keyboards.CB_BROADCAST_CANCEL, StateFilter(BroadcastFlow))
 async def broadcast_cancel(
-    event: Message | CallbackQuery, state: FSMContext, settings: Settings
+    event: Message | CallbackQuery, state: FSMContext, settings: Settings, db: Database
 ) -> None:
     user_id = event.from_user.id if event.from_user else None
-    if user_id is None or not is_admin(user_id, settings):
+    if user_id is None or not admin_can(user_id, TOOLS_BROADCAST, settings, db):
+        msg = (
+            texts.NOT_ADMIN
+            if user_id is None or not is_admin(user_id, settings)
+            else texts.NOT_PERMITTED
+        )
         if isinstance(event, CallbackQuery):
-            await event.answer(texts.NOT_ADMIN, show_alert=True)
+            await event.answer(msg, show_alert=True)
         return
 
     await state.clear()
     text = texts.BROADCAST_CANCELLED
+    kb = (
+        keyboards.admin_reply_keyboard(user_id, settings, db)
+        if user_id is not None
+        else None
+    )
     if isinstance(event, CallbackQuery):
         if isinstance(event.message, Message):
             try:
@@ -192,7 +207,7 @@ async def broadcast_cancel(
                 await event.message.answer(text)
         await event.answer()
     else:
-        await event.answer(text, reply_markup=keyboards.admin_reply_keyboard())
+        await event.answer(text, reply_markup=kb)
 
 
 # ---------- receive content ----------
@@ -200,7 +215,7 @@ async def broadcast_cancel(
 async def on_broadcast_content(
     message: Message, state: FSMContext, settings: Settings, db: Database
 ) -> None:
-    if not admin_from_message(message, settings):
+    if not await guard_admin_message(message, settings, db, TOOLS_BROADCAST):
         return
 
     if message.media_group_id:
@@ -243,8 +258,7 @@ async def cb_broadcast_confirm(
     db: Database,
     bot: Bot,
 ) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+    if not await guard_admin_callback(callback, settings, db, TOOLS_BROADCAST):
         return
 
     data = await state.get_data()
@@ -281,9 +295,10 @@ async def cb_broadcast_confirm(
         progress_message=callback.message,
     )
 
+    uid = callback.from_user.id
     await callback.message.answer(
         texts.BROADCAST_DONE.format(ok=ok, fail=fail),
-        reply_markup=keyboards.admin_reply_keyboard(),
+        reply_markup=keyboards.admin_reply_keyboard(uid, settings, db),
         parse_mode=ParseMode.HTML,
     )
 
@@ -299,8 +314,8 @@ async def cb_broadcast_confirm(
 
 @router.message(StateFilter(BroadcastFlow.waiting_confirm))
 async def on_broadcast_confirm_waiting(
-    message: Message, settings: Settings
+    message: Message, settings: Settings, db: Database
 ) -> None:
-    if not admin_from_message(message, settings):
+    if not await guard_admin_message(message, settings, db, TOOLS_BROADCAST):
         return
     await message.answer(texts.BROADCAST_CONFIRM_HINT, parse_mode=ParseMode.HTML)

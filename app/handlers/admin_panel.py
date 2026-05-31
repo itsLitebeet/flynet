@@ -14,8 +14,25 @@ from aiogram.types import CallbackQuery, Message
 from app import keyboards, texts
 from app.config import Settings
 from app.db import Database
+from app.admin_perms import (
+    CUSTOMERS,
+    DASHBOARD,
+    LOCATIONS,
+    OFFER,
+    ORDERS_MANAGE,
+    ORDERS_REVIEW,
+    PANEL,
+    SERVICES,
+    SETTINGS,
+    TOOLS_BROADCAST,
+    TOOLS_MISC,
+    TOOLS_SYNC,
+    USERS,
+)
 from app.handlers.admin_helpers import (
+    admin_can,
     admin_from_message,
+    admin_panel_access,
     format_base_plans_text,
     format_settings_text,
     format_stats_text,
@@ -40,63 +57,118 @@ class AdminPanelFlow(StatesGroup):
     waiting_order_id = State()
 
 
+async def _guard_cb(
+    callback: CallbackQuery, settings: Settings, db: Database, perm: str
+) -> int | None:
+    if callback.from_user is None:
+        await callback.answer()
+        return None
+    uid = callback.from_user.id
+    if not is_admin(uid, settings):
+        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+        return None
+    if not admin_can(uid, perm, settings, db):
+        await callback.answer(texts.NOT_PERMITTED, show_alert=True)
+        return None
+    return uid
+
+
+async def _guard_cb_any(
+    callback: CallbackQuery, settings: Settings, db: Database, *perms: str
+) -> int | None:
+    if callback.from_user is None:
+        await callback.answer()
+        return None
+    uid = callback.from_user.id
+    if not is_admin(uid, settings):
+        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+        return None
+    if not any(admin_can(uid, p, settings, db) for p in perms):
+        await callback.answer(texts.NOT_PERMITTED, show_alert=True)
+        return None
+    return uid
+
+
 def _admin_home_body(db: Database) -> str:
     return f"{texts.ADMIN_PANEL_HOME}\n\n{format_stats_text(db)}"
 
 
 async def send_admin_home(
-    message: Message, db: Database, *, edit_in_place: bool = False
+    message: Message,
+    settings: Settings,
+    db: Database,
+    *,
+    edit_in_place: bool = False,
 ) -> None:
+    user = message.from_user
+    if user is None or not admin_panel_access(user.id, settings, db):
+        return
+    uid = user.id
     if edit_in_place:
         await admin_edit_or_answer(
             message,
             _admin_home_body(db),
-            keyboards.admin_home_inline(),
+            keyboards.admin_home_inline(uid, settings, db),
             edit_in_place=True,
         )
         return
     await message.answer(
         texts.ADMIN_PANEL_HOME,
-        reply_markup=keyboards.admin_reply_keyboard(),
+        reply_markup=keyboards.admin_reply_keyboard(uid, settings, db),
     )
     await message.answer(
         format_stats_text(db),
-        reply_markup=keyboards.admin_home_inline(),
+        reply_markup=keyboards.admin_home_inline(uid, settings, db),
     )
 
 
 async def send_dashboard(
-    message: Message, db: Database, *, edit_in_place: bool = False
+    message: Message,
+    settings: Settings,
+    db: Database,
+    user_id: int,
+    *,
+    edit_in_place: bool = False,
 ) -> None:
     body = texts.ADMIN_DASHBOARD_HEADER.format(stats=format_stats_text(db))
     await admin_edit_or_answer(
         message,
         body,
-        keyboards.admin_dashboard_inline(),
+        keyboards.admin_dashboard_inline(user_id, settings, db),
         edit_in_place=edit_in_place,
     )
 
 
 async def send_orders_hub(
-    message: Message, *, edit_in_place: bool = False
+    message: Message,
+    settings: Settings,
+    db: Database,
+    user_id: int,
+    *,
+    edit_in_place: bool = False,
 ) -> None:
     await admin_edit_or_answer(
         message,
         texts.ADMIN_ORDERS_MENU,
-        keyboards.admin_orders_inline(),
+        keyboards.admin_orders_inline(user_id, settings, db),
         edit_in_place=edit_in_place,
     )
 
 
 async def send_pending_list(
-    message: Message, db: Database, *, edit_in_place: bool = False
+    message: Message,
+    settings: Settings,
+    db: Database,
+    user_id: int,
+    *,
+    edit_in_place: bool = False,
 ) -> None:
     rows = db.pending_orders(limit=20)
     if not rows:
         await admin_edit_or_answer(
             message,
             texts.ADMIN_PENDING_EMPTY,
-            keyboards.admin_orders_inline(),
+            keyboards.admin_orders_inline(user_id, settings, db),
             edit_in_place=edit_in_place,
         )
         return
@@ -120,7 +192,12 @@ async def send_pending_list(
 
 
 async def send_settings(
-    message: Message, db: Database, *, edit_in_place: bool = False
+    message: Message,
+    settings: Settings,
+    db: Database,
+    user_id: int,
+    *,
+    edit_in_place: bool = False,
 ) -> None:
     body = texts.ADMIN_SETTINGS_MENU.format(
         settings_block=format_settings_text(db)
@@ -128,7 +205,7 @@ async def send_settings(
     await admin_edit_or_answer(
         message,
         body,
-        keyboards.admin_settings_inline(),
+        keyboards.admin_settings_inline(user_id, settings, db),
         edit_in_place=edit_in_place,
     )
 
@@ -164,25 +241,37 @@ async def send_base_plans(
 
 
 async def send_tools(
-    message: Message, db: Database, *, edit_in_place: bool = False
+    message: Message,
+    settings: Settings,
+    db: Database,
+    user_id: int,
+    *,
+    edit_in_place: bool = False,
 ) -> None:
     await admin_edit_or_answer(
         message,
         format_tools_menu_text(db),
-        keyboards.admin_tools_inline(has_log_channel=bool(db.get_log_channel_id())),
+        keyboards.admin_tools_inline(
+            user_id, settings, db, has_log_channel=bool(db.get_log_channel_id())
+        ),
         edit_in_place=edit_in_place,
     )
 
 
 async def send_locations(
-    message: Message, db: Database, *, edit_in_place: bool = False
+    message: Message,
+    settings: Settings,
+    db: Database,
+    user_id: int,
+    *,
+    edit_in_place: bool = False,
 ) -> None:
     locs = db.list_locations(only_enabled=False)
     if not locs:
         await admin_edit_or_answer(
             message,
             texts.ADMIN_LOC_EMPTY,
-            keyboards.admin_home_inline(),
+            keyboards.admin_orders_inline(user_id, settings, db),
             edit_in_place=edit_in_place,
         )
         return
@@ -236,14 +325,16 @@ async def send_location_detail(
 
 async def send_users(
     message: Message,
+    settings: Settings,
     db: Database,
     page: int = 0,
     *,
+    user_id: int,
     edit_in_place: bool = False,
 ) -> None:
     text, total_pages, users = await format_users_page(db, page)
     if not users:
-        markup = keyboards.admin_home_inline()
+        markup = keyboards.admin_home_inline(user_id, settings, db)
         if edit_in_place:
             try:
                 await message.edit_text(
@@ -277,9 +368,11 @@ async def send_users(
 
 async def send_user_detail(
     message: Message,
+    settings: Settings,
     db: Database,
     user_id: int,
     *,
+    actor_id: int,
     edit_in_place: bool = False,
 ) -> bool:
     row = db.get_user(user_id)
@@ -290,7 +383,12 @@ async def send_user_detail(
     orders = db.list_user_orders_admin(user_id, limit=30)
     order_ids = [int(o["id"]) for o in orders][:6]
     markup = keyboards.admin_user_detail_keyboard(
-        user_id, is_banned=is_banned, order_ids=order_ids
+        user_id,
+        actor_id,
+        settings,
+        db,
+        is_banned=is_banned,
+        order_ids=order_ids,
     )
     if edit_in_place:
         try:
@@ -337,10 +435,16 @@ def _order_receipt_caption(db: Database, order) -> str | None:
 # ---------- /admin opens panel ----------
 @router.message(Command("admin"))
 async def cmd_admin_panel(message: Message, settings: Settings, db: Database) -> None:
-    if not admin_from_message(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if message.from_user is None:
         return
-    await send_admin_home(message, db)
+    if not admin_panel_access(message.from_user.id, settings, db):
+        await message.answer(
+            texts.NOT_ADMIN
+            if not is_admin(message.from_user.id, settings)
+            else texts.NOT_PERMITTED
+        )
+        return
+    await send_admin_home(message, settings, db)
 
 
 # ---------- reply keyboard ----------
@@ -350,103 +454,125 @@ async def admin_menu_buttons(
 ) -> None:
     if not admin_from_message(message, settings):
         return
+    user = message.from_user
+    if user is None:
+        return
+    uid = user.id
 
     text = message.text or ""
     if text == texts.ADMIN_BTN_PANEL:
-        await send_admin_home(message, db)
+        if not admin_panel_access(uid, settings, db):
+            await message.answer(texts.NOT_PERMITTED)
+            return
+        await send_admin_home(message, settings, db)
     elif text == texts.ADMIN_BTN_DASHBOARD:
-        await send_dashboard(message, db)
+        if not admin_can(uid, DASHBOARD, settings, db):
+            await message.answer(texts.NOT_PERMITTED)
+            return
+        await send_dashboard(message, settings, db, uid)
     elif text == texts.ADMIN_BTN_PENDING:
-        await send_pending_list(message, db)
+        if not admin_can(uid, ORDERS_REVIEW, settings, db):
+            await message.answer(texts.NOT_PERMITTED)
+            return
+        await send_pending_list(message, settings, db, uid)
     elif text == texts.ADMIN_BTN_ORDERS:
-        await send_orders_hub(message)
+        if not (
+            admin_can(uid, ORDERS_REVIEW, settings, db)
+            or admin_can(uid, ORDERS_MANAGE, settings, db)
+        ):
+            await message.answer(texts.NOT_PERMITTED)
+            return
+        await send_orders_hub(message, settings, db, uid)
     elif text == texts.ADMIN_BTN_SETTINGS:
-        await send_settings(message, db)
+        if not (
+            admin_can(uid, SETTINGS, settings, db)
+            or admin_can(uid, SERVICES, settings, db)
+            or admin_can(uid, OFFER, settings, db)
+        ):
+            await message.answer(texts.NOT_PERMITTED)
+            return
+        await send_settings(message, settings, db, uid)
     elif text == texts.ADMIN_BTN_LOCATIONS:
-        await send_locations(message, db)
+        if not admin_can(uid, LOCATIONS, settings, db):
+            await message.answer(texts.NOT_PERMITTED)
+            return
+        await send_locations(message, settings, db, uid)
     elif text == texts.ADMIN_BTN_TOOLS:
-        await send_tools(message, db)
+        if not (
+            admin_can(uid, TOOLS_BROADCAST, settings, db)
+            or admin_can(uid, TOOLS_SYNC, settings, db)
+            or admin_can(uid, TOOLS_MISC, settings, db)
+        ):
+            await message.answer(texts.NOT_PERMITTED)
+            return
+        await send_tools(message, settings, db, uid)
     elif text == texts.ADMIN_BTN_USERS:
-        await send_users(message, db, page=0)
+        if not admin_can(uid, USERS, settings, db):
+            await message.answer(texts.NOT_PERMITTED)
+            return
+        await send_users(message, settings, db, page=0, user_id=uid)
 
 
 # ---------- inline navigation ----------
 @router.callback_query(F.data == keyboards.CB_ADM_HOME)
 async def cb_admin_home(callback: CallbackQuery, settings: Settings, db: Database) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+    if await _guard_cb(callback, settings, db, PANEL) is None:
         return
     if isinstance(callback.message, Message):
-        await send_admin_home(callback.message, db, edit_in_place=True)
+        await send_admin_home(callback.message, settings, db, edit_in_place=True)
     await callback.answer()
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_DASH)
 async def cb_admin_dash(callback: CallbackQuery, settings: Settings, db: Database) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+    if await _guard_cb(callback, settings, db, DASHBOARD) is None:
         return
     if isinstance(callback.message, Message):
-        await send_dashboard(callback.message, db, edit_in_place=True)
+        await send_dashboard(callback.message, settings, db, callback.from_user.id, edit_in_place=True)
     await callback.answer()
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_ORDERS)
-async def cb_admin_orders(
-    callback: CallbackQuery, state: FSMContext, settings: Settings
-) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+async def cb_admin_orders(callback: CallbackQuery, state: FSMContext, settings: Settings, db: Database) -> None:
+    if await _guard_cb_any(callback, settings, db, ORDERS_REVIEW, ORDERS_MANAGE) is None:
         return
     await state.clear()
     if isinstance(callback.message, Message):
-        await send_orders_hub(callback.message, edit_in_place=True)
+        await send_orders_hub(callback.message, settings, db, callback.from_user.id, edit_in_place=True)
     await callback.answer()
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_PENDING_LIST)
-async def cb_admin_pending(
-    callback: CallbackQuery, settings: Settings, db: Database
-) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+async def cb_admin_pending(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, ORDERS_REVIEW) is None:
         return
     if isinstance(callback.message, Message):
-        await send_pending_list(callback.message, db, edit_in_place=True)
+        await send_pending_list(callback.message, settings, db, callback.from_user.id, edit_in_place=True)
     await callback.answer()
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_SETTINGS)
-async def cb_admin_settings(
-    callback: CallbackQuery, settings: Settings, db: Database
-) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+async def cb_admin_settings(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, SETTINGS) is None:
         return
     if isinstance(callback.message, Message):
-        await send_settings(callback.message, db, edit_in_place=True)
+        await send_settings(callback.message, settings, db, callback.from_user.id, edit_in_place=True)
     await callback.answer()
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_SETTINGS_REFRESH)
-async def cb_admin_settings_refresh(
-    callback: CallbackQuery, settings: Settings, db: Database
-) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+async def cb_admin_settings_refresh(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, SETTINGS) is None:
         return
     if isinstance(callback.message, Message):
-        await send_settings(callback.message, db, edit_in_place=True)
+        await send_settings(callback.message, settings, db, callback.from_user.id, edit_in_place=True)
     await callback.answer(texts.ADMIN_BTN_REFRESH)
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_SERVICES)
 @router.callback_query(F.data == keyboards.CB_ADM_SERVICES_REFRESH)
-async def cb_admin_services(
-    callback: CallbackQuery, settings: Settings, db: Database
-) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+async def cb_admin_services(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, SERVICES) is None:
         return
     if isinstance(callback.message, Message):
         await send_services(callback.message, db, edit_in_place=True)
@@ -454,11 +580,8 @@ async def cb_admin_services(
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_TOGGLE_MANUAL)
-async def cb_admin_toggle_manual(
-    callback: CallbackQuery, settings: Settings, db: Database
-) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+async def cb_admin_toggle_manual(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, SERVICES) is None:
         return
     enabled = not db.is_manual_purchase_enabled()
     db.set_manual_purchase_enabled(enabled)
@@ -470,8 +593,7 @@ async def cb_admin_toggle_manual(
 
 @router.callback_query(F.data == keyboards.CB_ADM_PLANS)
 async def cb_admin_plans(callback: CallbackQuery, settings: Settings, db: Database) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+    if await _guard_cb(callback, settings, db, SERVICES) is None:
         return
     if isinstance(callback.message, Message):
         await send_base_plans(callback.message, db, edit_in_place=True)
@@ -479,11 +601,8 @@ async def cb_admin_plans(callback: CallbackQuery, settings: Settings, db: Databa
 
 
 @router.callback_query(F.data.startswith(keyboards.CB_ADM_VOL_DEL_PREFIX))
-async def cb_admin_del_volume(
-    callback: CallbackQuery, settings: Settings, db: Database
-) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+async def cb_admin_del_volume(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, SERVICES) is None:
         return
     raw = (callback.data or "").removeprefix(keyboards.CB_ADM_VOL_DEL_PREFIX)
     try:
@@ -511,11 +630,8 @@ async def cb_admin_del_volume(
 
 
 @router.callback_query(F.data.startswith(keyboards.CB_ADM_DUR_DEL_PREFIX))
-async def cb_admin_del_duration(
-    callback: CallbackQuery, settings: Settings, db: Database
-) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+async def cb_admin_del_duration(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, SERVICES) is None:
         return
     raw = (callback.data or "").removeprefix(keyboards.CB_ADM_DUR_DEL_PREFIX)
     try:
@@ -543,36 +659,41 @@ async def cb_admin_del_duration(
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_TOOLS)
-async def cb_admin_tools(
-    callback: CallbackQuery, settings: Settings, db: Database
-) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
+async def cb_admin_tools(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+    if callback.from_user is None:
+        await callback.answer()
+        return
+    uid = callback.from_user.id
+    if not is_admin(uid, settings):
         await callback.answer(texts.NOT_ADMIN, show_alert=True)
         return
+    if not (
+        admin_can(uid, TOOLS_BROADCAST, settings, db)
+        or admin_can(uid, TOOLS_SYNC, settings, db)
+        or admin_can(uid, TOOLS_MISC, settings, db)
+    ):
+        await callback.answer(texts.NOT_PERMITTED, show_alert=True)
+        return
     if isinstance(callback.message, Message):
-        await send_tools(callback.message, db, edit_in_place=True)
+        await send_tools(callback.message, settings, db, callback.from_user.id, edit_in_place=True)
     await callback.answer()
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_LOCATIONS_LIST)
-async def cb_admin_locations(
-    callback: CallbackQuery, settings: Settings, db: Database
-) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+async def cb_admin_locations(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, LOCATIONS) is None:
         return
     if isinstance(callback.message, Message):
-        await send_locations(callback.message, db, edit_in_place=True)
+        await send_locations(
+            callback.message, settings, db, callback.from_user.id, edit_in_place=True
+        )
     await callback.answer()
 
 
 # ---------- order lookup FSM ----------
 @router.callback_query(F.data == keyboards.CB_ADM_ORDER_LOOKUP)
-async def cb_admin_order_lookup_start(
-    callback: CallbackQuery, state: FSMContext, settings: Settings
-) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+async def cb_admin_order_lookup_start(callback: CallbackQuery, state: FSMContext, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, ORDERS_MANAGE) is None:
         return
     if not isinstance(callback.message, Message):
         await callback.answer()
@@ -593,18 +714,28 @@ async def cb_admin_order_lookup_start(
     F.data == keyboards.CB_ADM_FLOW_CANCEL, StateFilter(AdminPanelFlow)
 )
 async def admin_panel_flow_cancel(
-    event: Message | CallbackQuery, state: FSMContext, settings: Settings
+    event: Message | CallbackQuery,
+    state: FSMContext,
+    settings: Settings,
+    db: Database,
 ) -> None:
     user_id = event.from_user.id if event.from_user else None
-    if user_id is None or not is_admin(user_id, settings):
+    if user_id is None or not admin_can(user_id, ORDERS_MANAGE, settings, db):
+        msg = (
+            texts.NOT_ADMIN
+            if user_id is None or not is_admin(user_id, settings)
+            else texts.NOT_PERMITTED
+        )
         if isinstance(event, CallbackQuery):
-            await event.answer(texts.NOT_ADMIN, show_alert=True)
+            await event.answer(msg, show_alert=True)
+        else:
+            await event.answer(msg)
         return
 
     await state.clear()
     if isinstance(event, CallbackQuery):
         if isinstance(event.message, Message):
-            await send_orders_hub(event.message, edit_in_place=True)
+            await send_orders_hub(event.message, settings, db, user_id, edit_in_place=True)
         await event.answer(texts.CANCELLED)
     else:
         await event.answer(texts.CANCELLED)
@@ -614,9 +745,14 @@ async def admin_panel_flow_cancel(
 async def admin_panel_order_id_input(
     message: Message, state: FSMContext, settings: Settings, db: Database
 ) -> None:
-    if not admin_from_message(message, settings):
+    user = message.from_user
+    if user is None or not admin_can(user.id, ORDERS_MANAGE, settings, db):
         await state.clear()
-        await message.answer(texts.NOT_ADMIN)
+        await message.answer(
+            texts.NOT_ADMIN
+            if user is None or not is_admin(user.id, settings)
+            else texts.NOT_PERMITTED
+        )
         return
 
     raw = (message.text or "").strip()
@@ -637,7 +773,7 @@ async def admin_panel_order_id_input(
     ):
         await message.answer(
             texts.ADMIN_ORDER_LOOKUP_NOTFOUND.format(order_id=order_id),
-            reply_markup=keyboards.admin_orders_inline(),
+            reply_markup=keyboards.admin_orders_inline(user.id, settings, db),
         )
 
 
@@ -652,9 +788,8 @@ _HINT_CALLBACKS = frozenset({
 
 
 @router.callback_query(F.data.in_(_HINT_CALLBACKS))
-async def cb_admin_hint(callback: CallbackQuery, settings: Settings) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+async def cb_admin_hint(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, SETTINGS) is None:
         return
     hints = {
         keyboards.CB_ADM_SETCARD_HELP: texts.SET_CARD_USAGE,
@@ -670,11 +805,8 @@ async def cb_admin_hint(callback: CallbackQuery, settings: Settings) -> None:
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_LOG_CHANNEL)
-async def cb_admin_log_channel(
-    callback: CallbackQuery, state: FSMContext, settings: Settings
-) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+async def cb_admin_log_channel(callback: CallbackQuery, state: FSMContext, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, TOOLS_MISC) is None:
         return
     if not isinstance(callback.message, Message):
         await callback.answer()
@@ -684,39 +816,30 @@ async def cb_admin_log_channel(
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_LOG_CHANNEL_OFF)
-async def cb_admin_log_channel_off(
-    callback: CallbackQuery, settings: Settings, db: Database
-) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+async def cb_admin_log_channel_off(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, TOOLS_MISC) is None:
         return
     db.set_log_channel_id(None)
     if isinstance(callback.message, Message):
-        await send_tools(callback.message, db, edit_in_place=True)
+        await send_tools(callback.message, settings, db, callback.from_user.id, edit_in_place=True)
     await callback.answer(texts.LOG_CHANNEL_CLEARED)
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_TOGGLE_TEST)
-async def cb_admin_toggle_test(
-    callback: CallbackQuery, settings: Settings, db: Database
-) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+async def cb_admin_toggle_test(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, TOOLS_MISC) is None:
         return
     enabled = not db.is_test_feature_enabled()
     db.set_test_feature_enabled(enabled)
     state_word = "روشن ✅" if enabled else "خاموش ❌"
     if isinstance(callback.message, Message):
-        await send_tools(callback.message, db, edit_in_place=True)
+        await send_tools(callback.message, settings, db, callback.from_user.id, edit_in_place=True)
     await callback.answer(f"دکمه تست: {state_word}")
 
 
 @router.callback_query(F.data.startswith(keyboards.CB_ADM_TOGGLE_TEST_LOC_PREFIX))
-async def cb_admin_toggle_test_from_loc(
-    callback: CallbackQuery, settings: Settings, db: Database
-) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+async def cb_admin_toggle_test_from_loc(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, TOOLS_MISC) is None:
         return
     raw = (callback.data or "").removeprefix(
         keyboards.CB_ADM_TOGGLE_TEST_LOC_PREFIX
@@ -737,23 +860,24 @@ async def cb_admin_toggle_test_from_loc(
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_USERS)
-async def cb_admin_users(
-    callback: CallbackQuery, settings: Settings, db: Database
-) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+async def cb_admin_users(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, USERS) is None:
         return
     if isinstance(callback.message, Message):
-        await send_users(callback.message, db, page=0, edit_in_place=True)
+        await send_users(
+            callback.message,
+            settings,
+            db,
+            page=0,
+            user_id=callback.from_user.id,
+            edit_in_place=True,
+        )
     await callback.answer()
 
 
 @router.callback_query(F.data.startswith(keyboards.CB_ADM_USERS_PAGE_PREFIX))
-async def cb_admin_users_page(
-    callback: CallbackQuery, settings: Settings, db: Database
-) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+async def cb_admin_users_page(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, USERS) is None:
         return
     raw = (callback.data or "").removeprefix(keyboards.CB_ADM_USERS_PAGE_PREFIX)
     try:
@@ -762,16 +886,20 @@ async def cb_admin_users_page(
         await callback.answer()
         return
     if isinstance(callback.message, Message):
-        await send_users(callback.message, db, page=page, edit_in_place=True)
+        await send_users(
+            callback.message,
+            settings,
+            db,
+            page=page,
+            user_id=callback.from_user.id,
+            edit_in_place=True,
+        )
     await callback.answer()
 
 
 @router.callback_query(F.data.startswith(keyboards.CB_ADM_USER_DETAIL_PREFIX))
-async def cb_admin_user_detail(
-    callback: CallbackQuery, settings: Settings, db: Database
-) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+async def cb_admin_user_detail(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, USERS) is None:
         return
     raw = (callback.data or "").removeprefix(keyboards.CB_ADM_USER_DETAIL_PREFIX)
     try:
@@ -783,7 +911,12 @@ async def cb_admin_user_detail(
         await callback.answer()
         return
     if not await send_user_detail(
-        callback.message, db, user_id, edit_in_place=True
+        callback.message,
+        settings,
+        db,
+        user_id,
+        actor_id=callback.from_user.id,
+        edit_in_place=True,
     ):
         await callback.answer("کاربر یافت نشد.", show_alert=True)
         return
@@ -791,9 +924,8 @@ async def cb_admin_user_detail(
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_CMD_HELP)
-async def cb_admin_cmd_help(callback: CallbackQuery, settings: Settings) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+async def cb_admin_cmd_help(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, PANEL) is None:
         return
     if isinstance(callback.message, Message):
         await callback.message.answer(texts.ADMIN_HELP)
@@ -801,11 +933,8 @@ async def cb_admin_cmd_help(callback: CallbackQuery, settings: Settings) -> None
 
 
 @router.callback_query(F.data.startswith(keyboards.CB_ADM_USER_BAN_PREFIX))
-async def cb_admin_ban_user(
-    callback: CallbackQuery, settings: Settings, db: Database, bot: Bot
-) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+async def cb_admin_ban_user(callback: CallbackQuery, bot: Bot, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, USERS) is None:
         return
     try:
         user_id = int(
@@ -823,18 +952,20 @@ async def cb_admin_ban_user(
     db.set_user_banned(user_id, True)
     if isinstance(callback.message, Message):
         await send_user_detail(
-            callback.message, db, user_id, edit_in_place=True
+            callback.message,
+            settings,
+            db,
+            user_id,
+            actor_id=callback.from_user.id,
+            edit_in_place=True,
         )
     await callback.answer(texts.BAN_OK.format(user_id=user_id))
     await _log_ban_from_callback(bot, db, callback, user_id, banned=True)
 
 
 @router.callback_query(F.data.startswith(keyboards.CB_ADM_USER_UNBAN_PREFIX))
-async def cb_admin_unban_user(
-    callback: CallbackQuery, settings: Settings, db: Database, bot: Bot
-) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+async def cb_admin_unban_user(callback: CallbackQuery, bot: Bot, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, USERS) is None:
         return
     try:
         user_id = int(
@@ -849,7 +980,12 @@ async def cb_admin_unban_user(
     db.set_user_banned(user_id, False)
     if isinstance(callback.message, Message):
         await send_user_detail(
-            callback.message, db, user_id, edit_in_place=True
+            callback.message,
+            settings,
+            db,
+            user_id,
+            actor_id=callback.from_user.id,
+            edit_in_place=True,
         )
     await callback.answer(texts.UNBAN_OK.format(user_id=user_id))
     await _log_ban_from_callback(bot, db, callback, user_id, banned=False)
@@ -879,14 +1015,8 @@ async def _log_ban_from_callback(
 
 # ---------- pending order → resend receipt ----------
 @router.callback_query(F.data.startswith(keyboards.CB_ADM_ORDER_VIEW_PREFIX))
-async def cb_admin_view_order(
-    callback: CallbackQuery,
-    settings: Settings,
-    db: Database,
-    bot: Bot,
-) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+async def cb_admin_view_order(callback: CallbackQuery, bot: Bot, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, ORDERS_REVIEW) is None:
         return
 
     raw = (callback.data or "").removeprefix(keyboards.CB_ADM_ORDER_VIEW_PREFIX)
@@ -931,11 +1061,8 @@ async def cb_admin_view_order(
 
 # ---------- locations detail / toggle / purge prompt ----------
 @router.callback_query(F.data.startswith(keyboards.CB_ADM_LOC_DETAIL_PREFIX))
-async def cb_admin_loc_detail(
-    callback: CallbackQuery, settings: Settings, db: Database
-) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+async def cb_admin_loc_detail(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, LOCATIONS) is None:
         return
 
     raw = (callback.data or "").removeprefix(keyboards.CB_ADM_LOC_DETAIL_PREFIX)
@@ -957,11 +1084,8 @@ async def cb_admin_loc_detail(
 
 
 @router.callback_query(F.data.startswith(keyboards.CB_ADM_LOC_TOGGLE_PREFIX))
-async def cb_admin_loc_toggle(
-    callback: CallbackQuery, settings: Settings, db: Database
-) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+async def cb_admin_loc_toggle(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, LOCATIONS) is None:
         return
 
     raw = (callback.data or "").removeprefix(keyboards.CB_ADM_LOC_TOGGLE_PREFIX)
@@ -987,11 +1111,8 @@ async def cb_admin_loc_toggle(
 
 
 @router.callback_query(F.data.startswith(keyboards.CB_ADM_LOC_PURGE_PREFIX))
-async def cb_admin_loc_purge_prompt(
-    callback: CallbackQuery, settings: Settings, db: Database
-) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+async def cb_admin_loc_purge_prompt(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, LOCATIONS) is None:
         return
 
     raw = (callback.data or "").removeprefix(keyboards.CB_ADM_LOC_PURGE_PREFIX)
@@ -1019,11 +1140,8 @@ async def cb_admin_loc_purge_prompt(
 
 # ---------- tools ----------
 @router.callback_query(F.data == keyboards.CB_ADM_TOOL_SYNC)
-async def cb_admin_tool_sync(
-    callback: CallbackQuery, settings: Settings, db: Database
-) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+async def cb_admin_tool_sync(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, TOOLS_SYNC) is None:
         return
     if not isinstance(callback.message, Message):
         await callback.answer()
@@ -1036,11 +1154,8 @@ async def cb_admin_tool_sync(
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_TOOL_CLEAR)
-async def cb_admin_tool_clear(
-    callback: CallbackQuery, settings: Settings, db: Database
-) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+async def cb_admin_tool_clear(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, TOOLS_SYNC) is None:
         return
     if isinstance(callback.message, Message):
         await callback.message.answer(run_clear_declined(db))

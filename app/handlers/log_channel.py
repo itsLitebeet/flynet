@@ -11,7 +11,8 @@ from aiogram.types import CallbackQuery, Message
 from app import keyboards, texts
 from app.config import Settings
 from app.db import Database
-from app.handlers.admin_helpers import admin_from_message
+from app.admin_perms import TOOLS_MISC
+from app.handlers.admin_helpers import guard_admin_message
 from app.logs import resolve_forwarded_channel_id, try_bind_log_channel
 
 router = Router(name="log_channel")
@@ -38,8 +39,7 @@ async def cmd_logchannel(
     db: Database,
     bot: Bot,
 ) -> None:
-    if not admin_from_message(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, TOOLS_MISC):
         return
 
     raw = (command.args or "").strip()
@@ -85,9 +85,8 @@ async def on_logchannel_input(
     db: Database,
     bot: Bot,
 ) -> None:
-    if not admin_from_message(message, settings):
+    if not await guard_admin_message(message, settings, db, TOOLS_MISC):
         await state.clear()
-        await message.answer(texts.NOT_ADMIN)
         return
 
     chat_id = resolve_forwarded_channel_id(message)

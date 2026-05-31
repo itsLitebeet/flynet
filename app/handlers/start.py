@@ -8,7 +8,7 @@ from aiogram.types import CallbackQuery, Message
 from app import keyboards, texts
 from app.config import Settings
 from app.db import Database
-from app.handlers.admin_helpers import is_admin
+from app.handlers.admin_helpers import admin_panel_access
 from app.handlers.admin_panel import send_admin_home
 from app.handlers.buyer_ui import buyer_reply_keyboard, buyer_show_test_button
 
@@ -17,8 +17,9 @@ router = Router(name="start")
 
 
 def _main_kb(message: Message, settings: Settings, db: Database):
-    if message.from_user and is_admin(message.from_user.id, settings):
-        return keyboards.admin_reply_keyboard()
+    user = message.from_user
+    if user and admin_panel_access(user.id, settings, db):
+        return keyboards.admin_reply_keyboard(user.id, settings, db)
     return buyer_reply_keyboard(message, db)
 
 
@@ -48,8 +49,8 @@ async def cmd_start(
     message: Message, state: FSMContext, settings: Settings, db: Database
 ) -> None:
     await state.clear()
-    if message.from_user and is_admin(message.from_user.id, settings):
-        await send_admin_home(message, db)
+    if message.from_user and admin_panel_access(message.from_user.id, settings, db):
+        await send_admin_home(message, settings, db)
     else:
         await _show_menu(message, settings, db)
 
@@ -106,9 +107,9 @@ async def cb_home(
     if callback.message is not None:
         if (
             callback.from_user
-            and is_admin(callback.from_user.id, settings)
+            and admin_panel_access(callback.from_user.id, settings, db)
         ):
-            await send_admin_home(callback.message, db)
+            await send_admin_home(callback.message, settings, db)
         else:
             show_test = (
                 callback.from_user is not None

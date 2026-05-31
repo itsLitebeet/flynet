@@ -84,6 +84,8 @@ CB_ADM_OFFER_PCT_PREFIX  = "adm:ofp:"   # adm:ofp:20 → 20%
 CB_ADM_OFFER_PCT_CUSTOM  = "adm:ofpc"
 CB_ADM_OFFER_AMOUNT      = "adm:ofamt"
 CB_ADM_OFFER_FIXED       = "adm:offix"
+CB_ADM_ROLES             = "adm:roles"
+CB_ADM_ROLE_SET_PREFIX   = "adm:rlset:"  # adm:rlset:<user_id>:<role>
 CB_ADM_ORDER_VIEW_PREFIX = "adm:ov:"    # adm:ov:<order_id>
 CB_ADM_ORDER_ENABLE_PREFIX   = "adm:oen:"   # adm:oen:<order_id>
 CB_ADM_ORDER_DISABLE_PREFIX  = "adm:odis:"  # adm:odis:<order_id>
@@ -413,100 +415,201 @@ def regen_confirm(order_id: int) -> InlineKeyboardMarkup:
 
 
 # ---------- admin reply keyboard ----------
-def admin_reply_keyboard() -> ReplyKeyboardMarkup:
+def _admin_perm(user_id: int, perm: str, settings, db) -> bool:
+    from app.admin_perms import has_permission
+
+    return has_permission(user_id, perm, settings, db)
+
+
+def admin_reply_keyboard(user_id: int, settings, db) -> ReplyKeyboardMarkup:
+    from app.admin_perms import (
+        CUSTOMERS,
+        DASHBOARD,
+        LOCATIONS,
+        OFFER,
+        ORDERS_MANAGE,
+        ORDERS_REVIEW,
+        SERVICES,
+        SETTINGS,
+        TOOLS_BROADCAST,
+        TOOLS_MISC,
+        TOOLS_SYNC,
+        USERS,
+    )
+
+    rows: list[list[KeyboardButton]] = []
+    row1: list[KeyboardButton] = []
+    if _admin_perm(user_id, DASHBOARD, settings, db):
+        row1.append(KeyboardButton(text=texts.ADMIN_BTN_DASHBOARD))
+    if _admin_perm(user_id, ORDERS_REVIEW, settings, db):
+        row1.append(KeyboardButton(text=texts.ADMIN_BTN_PENDING))
+    if row1:
+        rows.append(row1)
+
+    row2: list[KeyboardButton] = []
+    if _admin_perm(user_id, ORDERS_REVIEW, settings, db) or _admin_perm(
+        user_id, ORDERS_MANAGE, settings, db
+    ):
+        row2.append(KeyboardButton(text=texts.ADMIN_BTN_ORDERS))
+    if _admin_perm(user_id, CUSTOMERS, settings, db):
+        row2.append(KeyboardButton(text=texts.ADMIN_BTN_CUSTOMERS))
+    if row2:
+        rows.append(row2)
+
+    if _admin_perm(user_id, USERS, settings, db):
+        rows.append([KeyboardButton(text=texts.ADMIN_BTN_USERS)])
+
+    row3: list[KeyboardButton] = []
+    if _admin_perm(user_id, SETTINGS, settings, db) or _admin_perm(
+        user_id, SERVICES, settings, db
+    ) or _admin_perm(user_id, OFFER, settings, db):
+        row3.append(KeyboardButton(text=texts.ADMIN_BTN_SETTINGS))
+    if _admin_perm(user_id, LOCATIONS, settings, db):
+        row3.append(KeyboardButton(text=texts.ADMIN_BTN_LOCATIONS))
+    if row3:
+        rows.append(row3)
+
+    if _admin_perm(user_id, TOOLS_BROADCAST, settings, db) or _admin_perm(
+        user_id, TOOLS_SYNC, settings, db
+    ) or _admin_perm(user_id, TOOLS_MISC, settings, db
+    ):
+        rows.append([KeyboardButton(text=texts.ADMIN_BTN_TOOLS)])
+
+    rows.append([KeyboardButton(text=texts.ADMIN_BTN_PANEL)])
     return ReplyKeyboardMarkup(
-        keyboard=[
-            [
-                KeyboardButton(text=texts.ADMIN_BTN_DASHBOARD),
-                KeyboardButton(text=texts.ADMIN_BTN_PENDING),
-            ],
-            [
-                KeyboardButton(text=texts.ADMIN_BTN_ORDERS),
-                KeyboardButton(text=texts.ADMIN_BTN_CUSTOMERS),
-            ],
-            [
-                KeyboardButton(text=texts.ADMIN_BTN_USERS),
-            ],
-            [
-                KeyboardButton(text=texts.ADMIN_BTN_SETTINGS),
-                KeyboardButton(text=texts.ADMIN_BTN_LOCATIONS),
-            ],
-            [
-                KeyboardButton(text=texts.ADMIN_BTN_TOOLS),
-            ],
-            [KeyboardButton(text=texts.ADMIN_BTN_PANEL)],
-        ],
+        keyboard=rows or [[KeyboardButton(text=texts.ADMIN_BTN_PANEL)]],
         resize_keyboard=True,
         is_persistent=True,
     )
 
 
 # ---------- admin panel inline ----------
-def admin_home_inline() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_DASHBOARD, callback_data=CB_ADM_DASH
-                ),
-                InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_PENDING, callback_data=CB_ADM_PENDING_LIST
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_ORDERS, callback_data=CB_ADM_ORDERS
-                ),
-                InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_CUSTOMERS, callback_data=CB_ADM_CUSTOMERS
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_USERS, callback_data=CB_ADM_USERS
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_SETTINGS, callback_data=CB_ADM_SETTINGS
-                ),
-                InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_LOCATIONS, callback_data=CB_ADM_LOCATIONS_LIST
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_TOOLS, callback_data=CB_ADM_TOOLS
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text=texts.ADMIN_CMD_HELP_BTN, callback_data=CB_ADM_CMD_HELP
-                ),
-            ],
-        ]
+def admin_home_inline(user_id: int, settings, db) -> InlineKeyboardMarkup:
+    from app.admin_perms import (
+        CUSTOMERS,
+        DASHBOARD,
+        LOCATIONS,
+        OFFER,
+        ORDERS_MANAGE,
+        ORDERS_REVIEW,
+        SERVICES,
+        SETTINGS,
+        TOOLS_BROADCAST,
+        TOOLS_MISC,
+        TOOLS_SYNC,
+        USERS,
     )
 
+    rows: list[list[InlineKeyboardButton]] = []
 
-def admin_orders_inline() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_PENDING, callback_data=CB_ADM_PENDING_LIST
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_ORDER_LOOKUP,
-                    callback_data=CB_ADM_ORDER_LOOKUP,
-                ),
-            ],
-            [
-                InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME),
-            ],
-        ]
-    )
+    r1: list[InlineKeyboardButton] = []
+    if _admin_perm(user_id, DASHBOARD, settings, db):
+        r1.append(
+            InlineKeyboardButton(
+                text=texts.ADMIN_BTN_DASHBOARD, callback_data=CB_ADM_DASH
+            )
+        )
+    if _admin_perm(user_id, ORDERS_REVIEW, settings, db):
+        r1.append(
+            InlineKeyboardButton(
+                text=texts.ADMIN_BTN_PENDING, callback_data=CB_ADM_PENDING_LIST
+            )
+        )
+    if r1:
+        rows.append(r1)
+
+    r2: list[InlineKeyboardButton] = []
+    if _admin_perm(user_id, ORDERS_REVIEW, settings, db) or _admin_perm(
+        user_id, ORDERS_MANAGE, settings, db
+    ):
+        r2.append(
+            InlineKeyboardButton(
+                text=texts.ADMIN_BTN_ORDERS, callback_data=CB_ADM_ORDERS
+            )
+        )
+    if _admin_perm(user_id, CUSTOMERS, settings, db):
+        r2.append(
+            InlineKeyboardButton(
+                text=texts.ADMIN_BTN_CUSTOMERS, callback_data=CB_ADM_CUSTOMERS
+            )
+        )
+    if r2:
+        rows.append(r2)
+
+    if _admin_perm(user_id, USERS, settings, db):
+        rows.append([
+            InlineKeyboardButton(
+                text=texts.ADMIN_BTN_USERS, callback_data=CB_ADM_USERS
+            )
+        ])
+
+    r3: list[InlineKeyboardButton] = []
+    if _admin_perm(user_id, SETTINGS, settings, db) or _admin_perm(
+        user_id, SERVICES, settings, db
+    ) or _admin_perm(user_id, OFFER, settings, db):
+        r3.append(
+            InlineKeyboardButton(
+                text=texts.ADMIN_BTN_SETTINGS, callback_data=CB_ADM_SETTINGS
+            )
+        )
+    if _admin_perm(user_id, LOCATIONS, settings, db):
+        r3.append(
+            InlineKeyboardButton(
+                text=texts.ADMIN_BTN_LOCATIONS,
+                callback_data=CB_ADM_LOCATIONS_LIST,
+            )
+        )
+    if r3:
+        rows.append(r3)
+
+    if _admin_perm(user_id, TOOLS_BROADCAST, settings, db) or _admin_perm(
+        user_id, TOOLS_SYNC, settings, db
+    ) or _admin_perm(user_id, TOOLS_MISC, settings, db
+    ):
+        rows.append([
+            InlineKeyboardButton(
+                text=texts.ADMIN_BTN_TOOLS, callback_data=CB_ADM_TOOLS
+            )
+        ])
+
+    from app.handlers.admin_helpers import is_owner
+
+    if is_owner(user_id, settings):
+        rows.append([
+            InlineKeyboardButton(
+                text="👮 دسترسی ادمین‌ها", callback_data=CB_ADM_ROLES
+            )
+        ])
+
+    rows.append([
+        InlineKeyboardButton(
+            text=texts.ADMIN_CMD_HELP_BTN, callback_data=CB_ADM_CMD_HELP
+        )
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_orders_inline(user_id: int, settings, db) -> InlineKeyboardMarkup:
+    from app.admin_perms import ORDERS_MANAGE, ORDERS_REVIEW
+
+    rows: list[list[InlineKeyboardButton]] = []
+    if _admin_perm(user_id, ORDERS_REVIEW, settings, db):
+        rows.append([
+            InlineKeyboardButton(
+                text=texts.ADMIN_BTN_PENDING, callback_data=CB_ADM_PENDING_LIST
+            ),
+        ])
+    if _admin_perm(user_id, ORDERS_MANAGE, settings, db):
+        rows.append([
+            InlineKeyboardButton(
+                text=texts.ADMIN_BTN_ORDER_LOOKUP,
+                callback_data=CB_ADM_ORDER_LOOKUP,
+            ),
+        ])
+    rows.append([
+        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def admin_flow_cancel_inline(*, back_data: str = CB_ADM_HOME) -> InlineKeyboardMarkup:
@@ -522,29 +625,37 @@ def admin_flow_cancel_inline(*, back_data: str = CB_ADM_HOME) -> InlineKeyboardM
     )
 
 
-def admin_dashboard_inline() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_PENDING, callback_data=CB_ADM_PENDING_LIST
-                ),
-                InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_ORDERS, callback_data=CB_ADM_ORDERS
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_DASH
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text=texts.BTN_BACK, callback_data=CB_ADM_HOME
-                ),
-            ],
-        ]
-    )
+def admin_dashboard_inline(user_id: int, settings, db) -> InlineKeyboardMarkup:
+    from app.admin_perms import DASHBOARD, ORDERS_MANAGE, ORDERS_REVIEW
+
+    rows: list[list[InlineKeyboardButton]] = []
+    row1: list[InlineKeyboardButton] = []
+    if _admin_perm(user_id, ORDERS_REVIEW, settings, db):
+        row1.append(
+            InlineKeyboardButton(
+                text=texts.ADMIN_BTN_PENDING, callback_data=CB_ADM_PENDING_LIST
+            )
+        )
+    if _admin_perm(user_id, ORDERS_REVIEW, settings, db) or _admin_perm(
+        user_id, ORDERS_MANAGE, settings, db
+    ):
+        row1.append(
+            InlineKeyboardButton(
+                text=texts.ADMIN_BTN_ORDERS, callback_data=CB_ADM_ORDERS
+            )
+        )
+    if row1:
+        rows.append(row1)
+    if _admin_perm(user_id, DASHBOARD, settings, db):
+        rows.append([
+            InlineKeyboardButton(
+                text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_DASH
+            ),
+        ])
+    rows.append([
+        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def admin_offer_inline(db) -> InlineKeyboardMarkup:
@@ -592,43 +703,82 @@ def admin_offer_inline(db) -> InlineKeyboardMarkup:
     )
 
 
-def admin_settings_inline() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_OFFER,
-                    callback_data=CB_ADM_OFFER,
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_SETCARD_HELP,
-                    callback_data=CB_ADM_SETCARD_HELP,
-                ),
-                InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_SETPRICE_HELP,
-                    callback_data=CB_ADM_SETPRICE_HELP,
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text="📋 پلن‌های پایه",
-                    callback_data=CB_ADM_PLANS,
-                ),
-                InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_SERVICES,
-                    callback_data=CB_ADM_SERVICES,
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_SETTINGS_REFRESH
-                ),
-                InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME),
-            ],
-        ]
-    )
+def admin_settings_inline(user_id: int, settings, db) -> InlineKeyboardMarkup:
+    from app.admin_perms import OFFER, SERVICES, SETTINGS
+    from app.handlers.admin_helpers import is_owner
+
+    rows: list[list[InlineKeyboardButton]] = []
+    if _admin_perm(user_id, OFFER, settings, db):
+        rows.append([
+            InlineKeyboardButton(
+                text=texts.ADMIN_BTN_OFFER, callback_data=CB_ADM_OFFER
+            ),
+        ])
+    hint_row: list[InlineKeyboardButton] = []
+    if _admin_perm(user_id, SETTINGS, settings, db):
+        hint_row.append(
+            InlineKeyboardButton(
+                text=texts.ADMIN_BTN_SETCARD_HELP, callback_data=CB_ADM_SETCARD_HELP
+            )
+        )
+        hint_row.append(
+            InlineKeyboardButton(
+                text=texts.ADMIN_BTN_SETPRICE_HELP, callback_data=CB_ADM_SETPRICE_HELP
+            )
+        )
+    if hint_row:
+        rows.append(hint_row)
+    plan_row: list[InlineKeyboardButton] = []
+    if _admin_perm(user_id, SERVICES, settings, db):
+        plan_row.append(
+            InlineKeyboardButton(text="📋 پلن‌های پایه", callback_data=CB_ADM_PLANS)
+        )
+        plan_row.append(
+            InlineKeyboardButton(
+                text=texts.ADMIN_BTN_SERVICES, callback_data=CB_ADM_SERVICES
+            )
+        )
+    if plan_row:
+        rows.append(plan_row)
+    if is_owner(user_id, settings):
+        rows.append([
+            InlineKeyboardButton(
+                text="👮 دسترسی ادمین‌ها", callback_data=CB_ADM_ROLES
+            ),
+        ])
+    rows.append([
+        InlineKeyboardButton(
+            text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_SETTINGS_REFRESH
+        ),
+        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_roles_keyboard(settings, db) -> InlineKeyboardMarkup:
+    from app.admin_perms import VALID_ROLES, is_owner
+
+    short = {
+        "manager": "🛠 مدیر",
+        "reviewer": "🔍 بررسی",
+        "support": "💬 پشتیبانی",
+        "viewer": "👁 مشاهده",
+    }
+    rows: list[list[InlineKeyboardButton]] = []
+    for uid, _role in db.list_staff_roles(settings.admin_ids):
+        if is_owner(uid, settings):
+            continue
+        rows.append([
+            InlineKeyboardButton(
+                text=short.get(r, r),
+                callback_data=f"{CB_ADM_ROLE_SET_PREFIX}{uid}:{r}",
+            )
+            for r in VALID_ROLES
+        ])
+    rows.append([
+        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_SETTINGS),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def admin_services_inline(*, manual_enabled: bool) -> InlineKeyboardMarkup:
@@ -734,21 +884,15 @@ def admin_users_keyboard(
 
 def admin_user_detail_keyboard(
     user_id: int,
+    actor_id: int,
+    settings,
+    db,
     *,
     is_banned: bool = False,
     order_ids: list[int] | None = None,
 ) -> InlineKeyboardMarkup:
-    ban_btn = (
-        InlineKeyboardButton(
-            text=texts.BTN_USER_UNBAN,
-            callback_data=f"{CB_ADM_USER_UNBAN_PREFIX}{user_id}",
-        )
-        if is_banned
-        else InlineKeyboardButton(
-            text=texts.BTN_USER_BAN,
-            callback_data=f"{CB_ADM_USER_BAN_PREFIX}{user_id}",
-        )
-    )
+    from app.admin_perms import ORDERS_MANAGE, USERS
+
     rows: list[list[InlineKeyboardButton]] = [
         [
             InlineKeyboardButton(
@@ -756,9 +900,21 @@ def admin_user_detail_keyboard(
                 url=f"tg://user?id={user_id}",
             ),
         ],
-        [ban_btn],
     ]
-    if order_ids:
+    if _admin_perm(actor_id, USERS, settings, db):
+        ban_btn = (
+            InlineKeyboardButton(
+                text=texts.BTN_USER_UNBAN,
+                callback_data=f"{CB_ADM_USER_UNBAN_PREFIX}{user_id}",
+            )
+            if is_banned
+            else InlineKeyboardButton(
+                text=texts.BTN_USER_BAN,
+                callback_data=f"{CB_ADM_USER_BAN_PREFIX}{user_id}",
+            )
+        )
+        rows.append([ban_btn])
+    if order_ids and _admin_perm(actor_id, ORDERS_MANAGE, settings, db):
         order_row: list[InlineKeyboardButton] = []
         for oid in order_ids[:6]:
             order_row.append(
@@ -855,21 +1011,34 @@ def admin_customers_search_keyboard(customers: list) -> InlineKeyboardMarkup:
 
 def admin_customer_detail_keyboard(
     user_id: int,
+    actor_id: int,
+    settings,
+    db,
     *,
     is_banned: bool = False,
     order_ids: list[int] | None = None,
 ) -> InlineKeyboardMarkup:
-    ban_btn = (
+    from app.admin_perms import ORDERS_MANAGE, USERS
+
+    row2: list[InlineKeyboardButton] = [
         InlineKeyboardButton(
-            text=texts.BTN_USER_UNBAN,
-            callback_data=f"{CB_ADM_CUST_UNBAN_PREFIX}{user_id}",
+            text="👥 نمای کاربران",
+            callback_data=f"{CB_ADM_USER_DETAIL_PREFIX}{user_id}",
+        ),
+    ]
+    if _admin_perm(actor_id, USERS, settings, db):
+        ban_btn = (
+            InlineKeyboardButton(
+                text=texts.BTN_USER_UNBAN,
+                callback_data=f"{CB_ADM_CUST_UNBAN_PREFIX}{user_id}",
+            )
+            if is_banned
+            else InlineKeyboardButton(
+                text=texts.BTN_USER_BAN,
+                callback_data=f"{CB_ADM_CUST_BAN_PREFIX}{user_id}",
+            )
         )
-        if is_banned
-        else InlineKeyboardButton(
-            text=texts.BTN_USER_BAN,
-            callback_data=f"{CB_ADM_CUST_BAN_PREFIX}{user_id}",
-        )
-    )
+        row2.append(ban_btn)
     rows: list[list[InlineKeyboardButton]] = [
         [
             InlineKeyboardButton(
@@ -877,15 +1046,9 @@ def admin_customer_detail_keyboard(
                 url=f"tg://user?id={user_id}",
             ),
         ],
-        [
-            InlineKeyboardButton(
-                text="👥 نمای کاربران",
-                callback_data=f"{CB_ADM_USER_DETAIL_PREFIX}{user_id}",
-            ),
-            ban_btn,
-        ],
+        row2,
     ]
-    if order_ids:
+    if order_ids and _admin_perm(actor_id, ORDERS_MANAGE, settings, db):
         order_row: list[InlineKeyboardButton] = []
         for oid in order_ids[:8]:
             order_row.append(
@@ -987,52 +1150,57 @@ def broadcast_cancel_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def admin_tools_inline(*, has_log_channel: bool) -> InlineKeyboardMarkup:
-    log_row: list[InlineKeyboardButton] = [
-        InlineKeyboardButton(
-            text=texts.ADMIN_BTN_LOG_CHANNEL, callback_data=CB_ADM_LOG_CHANNEL
-        ),
-    ]
-    if has_log_channel:
-        log_row.append(
+def admin_tools_inline(
+    user_id: int, settings, db, *, has_log_channel: bool
+) -> InlineKeyboardMarkup:
+    from app.admin_perms import TOOLS_BROADCAST, TOOLS_MISC, TOOLS_SYNC
+
+    rows: list[list[InlineKeyboardButton]] = []
+    if _admin_perm(user_id, TOOLS_BROADCAST, settings, db):
+        rows.append([
             InlineKeyboardButton(
-                text="❌ قطع لاگ", callback_data=CB_ADM_LOG_CHANNEL_OFF
-            )
-        )
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=texts.BTN_ADMIN_BROADCAST, callback_data=CB_ADM_BROADCAST
-                ),
-            ],
-            log_row,
-            [
-                InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_TOGGLE_TEST, callback_data=CB_ADM_TOGGLE_TEST
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text="🔄 همگام‌سازی پنل", callback_data=CB_ADM_TOOL_SYNC
-                ),
-                InlineKeyboardButton(
-                    text="🗑 پاکسازی رد/پرداخت‌نشده", callback_data=CB_ADM_TOOL_CLEAR
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text=texts.ADMIN_CMD_HELP_BTN, callback_data=CB_ADM_CMD_HELP
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_TOOLS
-                ),
-                InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME),
-            ],
+                text=texts.BTN_ADMIN_BROADCAST, callback_data=CB_ADM_BROADCAST
+            ),
+        ])
+    if _admin_perm(user_id, TOOLS_MISC, settings, db):
+        log_row: list[InlineKeyboardButton] = [
+            InlineKeyboardButton(
+                text=texts.ADMIN_BTN_LOG_CHANNEL, callback_data=CB_ADM_LOG_CHANNEL
+            ),
         ]
-    )
+        if has_log_channel:
+            log_row.append(
+                InlineKeyboardButton(
+                    text="❌ قطع لاگ", callback_data=CB_ADM_LOG_CHANNEL_OFF
+                )
+            )
+        rows.append(log_row)
+        rows.append([
+            InlineKeyboardButton(
+                text=texts.ADMIN_BTN_TOGGLE_TEST, callback_data=CB_ADM_TOGGLE_TEST
+            ),
+        ])
+    if _admin_perm(user_id, TOOLS_SYNC, settings, db):
+        rows.append([
+            InlineKeyboardButton(
+                text="🔄 همگام‌سازی پنل", callback_data=CB_ADM_TOOL_SYNC
+            ),
+            InlineKeyboardButton(
+                text="🗑 پاکسازی رد/پرداخت‌نشده", callback_data=CB_ADM_TOOL_CLEAR
+            ),
+        ])
+    rows.append([
+        InlineKeyboardButton(
+            text=texts.ADMIN_CMD_HELP_BTN, callback_data=CB_ADM_CMD_HELP
+        ),
+    ])
+    rows.append([
+        InlineKeyboardButton(
+            text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_TOOLS
+        ),
+        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def admin_pending_list(orders: list[dict]) -> InlineKeyboardMarkup:

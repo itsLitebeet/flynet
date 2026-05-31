@@ -12,7 +12,8 @@ from aiogram.types import CallbackQuery, Message
 from app import keyboards, texts
 from app.config import Settings
 from app.db import Database
-from app.handlers.admin_helpers import admin_from_message, is_admin
+from app.admin_perms import ORDERS_MANAGE
+from app.handlers.admin_helpers import guard_admin_callback, guard_admin_message
 from app.handlers.admin_order_ui import format_admin_order_detail
 from app.logs import Actor, make_logger
 from app.xui import XuiClient, XuiError
@@ -54,10 +55,6 @@ async def send_admin_order_view(
     return True
 
 
-def _require_admin_msg(message: Message, settings: Settings) -> bool:
-    return admin_from_message(message, settings)
-
-
 async def _panel_for_order(db: Database, order) -> tuple | None:
     """Return (location, email) or None if panel ops impossible."""
     if str(order["status"]) != "provisioned" or not order["xui_email"]:
@@ -73,8 +70,7 @@ async def _panel_for_order(db: Database, order) -> tuple | None:
 async def cmd_order(
     message: Message, command: CommandObject, settings: Settings, db: Database
 ) -> None:
-    if not _require_admin_msg(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, ORDERS_MANAGE):
         return
 
     raw = (command.args or "").strip()
@@ -96,8 +92,7 @@ async def cmd_order(
 async def cmd_editorder(
     message: Message, command: CommandObject, settings: Settings, db: Database
 ) -> None:
-    if not _require_admin_msg(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, ORDERS_MANAGE):
         return
 
     raw = (command.args or "").strip()
@@ -121,8 +116,7 @@ async def cmd_editorder(
 async def cb_order_enable(
     callback: CallbackQuery, settings: Settings, db: Database, bot: Bot
 ) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+    if not await guard_admin_callback(callback, settings, db, ORDERS_MANAGE):
         return
 
     order_id = _parse_order_id(callback.data, keyboards.CB_ADM_ORDER_ENABLE_PREFIX)
@@ -169,8 +163,7 @@ async def cb_order_enable(
 async def cb_order_disable(
     callback: CallbackQuery, settings: Settings, db: Database, bot: Bot
 ) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+    if not await guard_admin_callback(callback, settings, db, ORDERS_MANAGE):
         return
 
     order_id = _parse_order_id(callback.data, keyboards.CB_ADM_ORDER_DISABLE_PREFIX)
@@ -218,8 +211,7 @@ async def cb_order_disable(
 async def cb_order_delete_ok(
     callback: CallbackQuery, settings: Settings, db: Database, bot: Bot
 ) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+    if not await guard_admin_callback(callback, settings, db, ORDERS_MANAGE):
         return
 
     order_id = _parse_order_id(callback.data, keyboards.CB_ADM_ORDER_DELETE_OK_PREFIX)
@@ -280,8 +272,7 @@ async def cb_order_delete_ok(
 async def cb_order_delete_ask(
     callback: CallbackQuery, settings: Settings, db: Database
 ) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+    if not await guard_admin_callback(callback, settings, db, ORDERS_MANAGE):
         return
 
     order_id = _parse_order_id(callback.data, keyboards.CB_ADM_ORDER_DELETE_ASK_PREFIX)
@@ -306,8 +297,7 @@ async def cb_order_delete_ask(
 async def cb_order_delete_cancel(
     callback: CallbackQuery, settings: Settings
 ) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+    if not await guard_admin_callback(callback, settings, db, ORDERS_MANAGE):
         return
     if isinstance(callback.message, Message):
         await callback.message.edit_text(texts.ADMIN_ORDER_DELETE_CANCELLED, reply_markup=None)
@@ -318,8 +308,7 @@ async def cb_order_delete_cancel(
 async def cb_order_manage(
     callback: CallbackQuery, settings: Settings, db: Database
 ) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+    if not await guard_admin_callback(callback, settings, db, ORDERS_MANAGE):
         return
     if not isinstance(callback.message, Message):
         await callback.answer()

@@ -427,6 +427,34 @@ SUPPORT_EMPTY    = "❗ لطفاً یک پیام متنی ارسال کنید."
 
 CANCELLED   = "❌ عملیات لغو شد."
 NOT_ADMIN   = "⛔ این دستور فقط برای ادمین‌ها در دسترس است."
+NOT_PERMITTED = "⛔ سطح دسترسی شما برای این کار کافی نیست."
+
+ADMIN_ROLE_LABELS = {
+    "owner": "👑 مالک (همه دسترسی‌ها)",
+    "manager": "🛠 مدیر",
+    "reviewer": "🔍 بررسی سفارش",
+    "support": "💬 پشتیبانی",
+    "viewer": "👁 مشاهده",
+}
+
+ADMIN_ROLES_MENU = (
+    "👮 <b>مدیریت دسترسی ادمین‌ها</b>\n\n"
+    "مالک: اولین شناسه در <code>ADMIN_IDS</code> — همیشه کامل.\n"
+    "بقیه با نقش محدود وارد می‌شوند.\n\n"
+    "{lines}"
+)
+
+ADMIN_ROLES_LINE = "• <code>{user_id}</code> — <b>{role_label}</b>"
+ADMIN_ROLE_SET_OK = "✅ نقش <code>{user_id}</code> → <b>{role_label}</b>"
+ADMIN_ROLE_USAGE = (
+    "❗ <b>مدیریت نقش (فقط مالک)</b>\n\n"
+    "<code>/setadminrole &lt;user_id&gt; manager|reviewer|support|viewer</code>\n"
+    "نقش‌ها:\n"
+    "• <b>manager</b> — همه جز مدیریت ادمین‌ها\n"
+    "• <b>reviewer</b> — بررسی و مدیریت سفارش، مشتریان\n"
+    "• <b>support</b> — کاربران، مشتریان، تأیید رسید\n"
+    "• <b>viewer</b> — فقط مشاهده"
+)
 USER_BANNED = "⛔ دسترسی شما به ربات مسدود شده است."
 
 

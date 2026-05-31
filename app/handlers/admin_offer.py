@@ -11,7 +11,13 @@ from aiogram.types import CallbackQuery, Message
 from app import keyboards, texts
 from app.config import Settings
 from app.db import Database
-from app.handlers.admin_helpers import admin_from_message, is_admin
+from app.admin_perms import OFFER
+from app.handlers.admin_helpers import (
+    admin_can,
+    guard_admin_callback,
+    guard_admin_message,
+    is_admin,
+)
 from app.handlers.admin_ui_helpers import admin_edit_or_answer
 from app.pricing import describe_offer
 
@@ -76,8 +82,7 @@ async def cmd_setoffer(
     settings: Settings,
     db: Database,
 ) -> None:
-    if not admin_from_message(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, OFFER):
         return
 
     raw = (command.args or "").strip().lower()
@@ -105,8 +110,7 @@ async def cmd_setoffer(
 async def cb_admin_offer_menu(
     callback: CallbackQuery, settings: Settings, db: Database
 ) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+    if not await guard_admin_callback(callback, settings, db, OFFER):
         return
     if isinstance(callback.message, Message):
         await send_offer_menu(callback.message, db, edit_in_place=True)
@@ -117,8 +121,7 @@ async def cb_admin_offer_menu(
 async def cb_admin_offer_clear(
     callback: CallbackQuery, settings: Settings, db: Database
 ) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+    if not await guard_admin_callback(callback, settings, db, OFFER):
         return
     db.clear_global_offer()
     if isinstance(callback.message, Message):
@@ -130,8 +133,7 @@ async def cb_admin_offer_clear(
 async def cb_admin_offer_percent_preset(
     callback: CallbackQuery, settings: Settings, db: Database
 ) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+    if not await guard_admin_callback(callback, settings, db, OFFER):
         return
     raw = (callback.data or "").removeprefix(keyboards.CB_ADM_OFFER_PCT_PREFIX)
     try:
@@ -156,8 +158,7 @@ async def cb_admin_offer_percent_preset(
 async def cb_admin_offer_percent_custom(
     callback: CallbackQuery, state: FSMContext, settings: Settings
 ) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+    if not await guard_admin_callback(callback, settings, db, OFFER):
         return
     if not isinstance(callback.message, Message):
         await callback.answer()
@@ -176,8 +177,7 @@ async def cb_admin_offer_percent_custom(
 async def cb_admin_offer_amount(
     callback: CallbackQuery, state: FSMContext, settings: Settings
 ) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+    if not await guard_admin_callback(callback, settings, db, OFFER):
         return
     if not isinstance(callback.message, Message):
         await callback.answer()
@@ -196,8 +196,7 @@ async def cb_admin_offer_amount(
 async def cb_admin_offer_fixed(
     callback: CallbackQuery, state: FSMContext, settings: Settings
 ) -> None:
-    if callback.from_user is None or not is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+    if not await guard_admin_callback(callback, settings, db, OFFER):
         return
     if not isinstance(callback.message, Message):
         await callback.answer()
@@ -223,9 +222,16 @@ async def offer_flow_cancel(
     db: Database,
 ) -> None:
     user_id = event.from_user.id if event.from_user else None
-    if user_id is None or not is_admin(user_id, settings):
+    if user_id is None or not admin_can(user_id, OFFER, settings, db):
+        msg = (
+            texts.NOT_ADMIN
+            if user_id is None or not is_admin(user_id, settings)
+            else texts.NOT_PERMITTED
+        )
         if isinstance(event, CallbackQuery):
-            await event.answer(texts.NOT_ADMIN, show_alert=True)
+            await event.answer(msg, show_alert=True)
+        else:
+            await event.answer(msg)
         return
     await state.clear()
     if isinstance(event, CallbackQuery):
@@ -240,9 +246,8 @@ async def offer_flow_cancel(
 async def offer_percent_input(
     message: Message, state: FSMContext, settings: Settings, db: Database
 ) -> None:
-    if not admin_from_message(message, settings):
+    if not await guard_admin_message(message, settings, db, OFFER):
         await state.clear()
-        await message.answer(texts.NOT_ADMIN)
         return
     raw = (message.text or "").strip().rstrip("%")
     try:
@@ -267,9 +272,8 @@ async def offer_percent_input(
 async def offer_amount_input(
     message: Message, state: FSMContext, settings: Settings, db: Database
 ) -> None:
-    if not admin_from_message(message, settings):
+    if not await guard_admin_message(message, settings, db, OFFER):
         await state.clear()
-        await message.answer(texts.NOT_ADMIN)
         return
     try:
         amount = int((message.text or "").strip().replace(",", ""))
@@ -293,9 +297,8 @@ async def offer_amount_input(
 async def offer_fixed_input(
     message: Message, state: FSMContext, settings: Settings, db: Database
 ) -> None:
-    if not admin_from_message(message, settings):
+    if not await guard_admin_message(message, settings, db, OFFER):
         await state.clear()
-        await message.answer(texts.NOT_ADMIN)
         return
     try:
         price = int((message.text or "").strip().replace(",", ""))

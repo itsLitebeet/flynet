@@ -107,6 +107,8 @@ SETTING_LOG_CHANNEL = "log_channel_id"
 SETTING_OFFER_ENABLED = "offer_enabled"
 SETTING_OFFER_KIND = "offer_kind"       # none | percent | amount | fixed
 SETTING_OFFER_VALUE = "offer_value"
+SETTING_ADMIN_ROLES = "admin_roles_json"
+DEFAULT_ADMIN_ROLE = "reviewer"
 MAX_PLAN_PRESETS = 12
 TEST_VOLUME_BYTES = 100 * 1024 * 1024
 
@@ -275,11 +277,51 @@ class Database:
                 (SETTING_OFFER_ENABLED, "0"),
                 (SETTING_OFFER_KIND, "none"),
                 (SETTING_OFFER_VALUE, "0"),
+                (SETTING_ADMIN_ROLES, "{}"),
             ):
                 cur.execute(
                     "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
                     (k, v),
                 )
+
+    def _load_admin_roles(self) -> dict[str, str]:
+        raw = self.get_setting(SETTING_ADMIN_ROLES, "{}") or "{}"
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            return {}
+        if not isinstance(data, dict):
+            return {}
+        return {str(k): str(v) for k, v in data.items()}
+
+    def _save_admin_roles(self, roles: dict[str, str]) -> None:
+        self.set_setting(SETTING_ADMIN_ROLES, json.dumps(roles, ensure_ascii=False))
+
+    def get_admin_role(self, user_id: int) -> str:
+        roles = self._load_admin_roles()
+        role = roles.get(str(user_id), DEFAULT_ADMIN_ROLE)
+        from app.admin_perms import VALID_ROLES
+
+        if role not in VALID_ROLES:
+            return DEFAULT_ADMIN_ROLE
+        return role
+
+    def set_admin_role(self, user_id: int, role: str) -> None:
+        from app.admin_perms import VALID_ROLES
+
+        if role not in VALID_ROLES:
+            raise ValueError("invalid role")
+        roles = self._load_admin_roles()
+        roles[str(user_id)] = role
+        self._save_admin_roles(roles)
+
+    def list_staff_roles(self, staff_ids: list[int]) -> list[tuple[int, str]]:
+        roles = self._load_admin_roles()
+        out: list[tuple[int, str]] = []
+        for uid in staff_ids:
+            role = roles.get(str(uid), DEFAULT_ADMIN_ROLE)
+            out.append((uid, role))
+        return out
 
     def _backfill_location_pricing(self) -> None:
         base, per_gb, per_day = self.get_pricing()
@@ -302,6 +344,7 @@ class Database:
             SETTING_OFFER_ENABLED: "0",
             SETTING_OFFER_KIND: "none",
             SETTING_OFFER_VALUE: "0",
+            SETTING_ADMIN_ROLES: "{}",
         }
         with self._cursor() as cur:
             for k, v in {**DEFAULT_SETTINGS, **extras}.items():

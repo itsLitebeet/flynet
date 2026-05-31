@@ -4,20 +4,78 @@ from __future__ import annotations
 
 from html import escape
 
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, Message
 
 from app import texts
+from app.admin_perms import (
+    can_access_panel,
+    get_role,
+    has_permission,
+    is_owner,
+    is_staff,
+)
 from app.config import Settings
 from app.db import Database, Location
 from app.xui import XuiClient, XuiError
 
 
 def is_admin(user_id: int, settings: Settings) -> bool:
-    return user_id in settings.admin_ids
+    """Listed in ADMIN_IDS (staff). Use has_permission() for actions."""
+    return is_staff(user_id, settings)
 
 
 def admin_from_message(message: Message, settings: Settings) -> bool:
     return message.from_user is not None and is_admin(message.from_user.id, settings)
+
+
+def admin_can(
+    user_id: int | None, perm: str, settings: Settings, db: Database
+) -> bool:
+    if user_id is None:
+        return False
+    return has_permission(user_id, perm, settings, db)
+
+
+def admin_panel_access(
+    user_id: int | None, settings: Settings, db: Database
+) -> bool:
+    if user_id is None:
+        return False
+    return can_access_panel(user_id, settings, db)
+
+
+async def guard_admin_message(
+    message: Message, settings: Settings, db: Database, perm: str
+) -> bool:
+    """Return True if the sender may run an admin command requiring ``perm``."""
+    user = message.from_user
+    if user is None or not is_staff(user.id, settings):
+        await message.answer(texts.NOT_ADMIN)
+        return False
+    if not has_permission(user.id, perm, settings, db):
+        await message.answer(texts.NOT_PERMITTED)
+        return False
+    return True
+
+
+async def guard_admin_callback(
+    callback: CallbackQuery, settings: Settings, db: Database, perm: str
+) -> bool:
+    user = callback.from_user
+    if user is None or not is_staff(user.id, settings):
+        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+        return False
+    if not has_permission(user.id, perm, settings, db):
+        await callback.answer(texts.NOT_PERMITTED, show_alert=True)
+        return False
+    return True
+
+
+def format_role_label(user_id: int, settings: Settings, db: Database) -> str:
+    from app import texts
+
+    role = get_role(user_id, settings, db)
+    return texts.ADMIN_ROLE_LABELS.get(role, role)
 
 
 def normalize_panel_url(raw: str) -> str:

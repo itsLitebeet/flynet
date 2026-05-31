@@ -6,6 +6,7 @@ from app.handlers import (
     admin_customers,
     admin_offer,
     admin_order,
+    admin_roles,
     log_channel,
     admin_panel,
     my_services,
@@ -36,6 +37,7 @@ def build_root_router() -> Router:
     root.include_router(log_channel.router)
     root.include_router(admin_customers.router)
     root.include_router(admin_offer.router)
+    root.include_router(admin_roles.router)
     root.include_router(admin_panel.router)
     root.include_router(admin.router)
     return root

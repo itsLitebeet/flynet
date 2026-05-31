@@ -10,8 +10,19 @@ from aiogram.types import CallbackQuery, Message
 from app import keyboards, texts
 from app.config import Settings
 from app.db import Database
+from app.admin_perms import (
+    DASHBOARD,
+    LOCATIONS,
+    ORDERS_MANAGE,
+    ORDERS_REVIEW,
+    SERVICES,
+    SETTINGS,
+    TOOLS_MISC,
+    TOOLS_SYNC,
+    USERS,
+)
 from app.handlers.admin_helpers import (
-    admin_from_message,
+    guard_admin_message,
     format_settings_text,
     location_pricing_label,
     normalize_panel_url,
@@ -25,25 +36,19 @@ router = Router(name="admin")
 log = logging.getLogger(__name__)
 
 
-def _require_admin(message: Message, settings: Settings) -> bool:
-    return admin_from_message(message, settings)
-
-
 # ---------- generic ----------
 @router.message(Command("stats"))
 async def cmd_stats(message: Message, settings: Settings, db: Database) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, DASHBOARD):
         return
-    await send_dashboard(message, db)
+    await send_dashboard(message, settings, db, message.from_user.id)
 
 
 @router.message(Command("users"))
 async def cmd_users(message: Message, settings: Settings, db: Database) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, USERS):
         return
-    await send_users(message, db, page=0)
+    await send_users(message, settings, db, page=0, user_id=message.from_user.id)
 
 
 # ---------- predefined service packages (manual purchase) ----------
@@ -51,8 +56,7 @@ async def cmd_users(message: Message, settings: Settings, db: Database) -> None:
 async def cmd_addservice(
     message: Message, command: CommandObject, settings: Settings, db: Database
 ) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, SERVICES):
         return
 
     parts = (command.args or "").split()
@@ -102,8 +106,7 @@ async def cmd_addservice(
 async def cmd_delservice(
     message: Message, command: CommandObject, settings: Settings, db: Database
 ) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, SERVICES):
         return
 
     raw = (command.args or "").strip()
@@ -126,8 +129,7 @@ async def cmd_delservice(
 async def cmd_listservices(
     message: Message, command: CommandObject, settings: Settings, db: Database
 ) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, SERVICES):
         return
 
     raw = (command.args or "").strip()
@@ -184,8 +186,7 @@ async def cmd_listservices(
 async def cmd_toggle_manual_purchase(
     message: Message, command: CommandObject, settings: Settings, db: Database
 ) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, SERVICES):
         return
 
     raw = (command.args or "").strip().lower()
@@ -212,8 +213,7 @@ async def cmd_toggle_manual_purchase(
 async def cmd_editservice(
     message: Message, command: CommandObject, settings: Settings, db: Database
 ) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, SERVICES):
         return
 
     parts = (command.args or "").split()
@@ -259,8 +259,7 @@ async def cmd_editservice(
 async def cmd_ban(
     message: Message, command: CommandObject, settings: Settings, db: Database, bot: Bot
 ) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, USERS):
         return
     user_id = _parse_admin_user_id(message, command)
     if user_id is None:
@@ -281,8 +280,7 @@ async def cmd_ban(
 async def cmd_unban(
     message: Message, command: CommandObject, settings: Settings, db: Database, bot: Bot
 ) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, USERS):
         return
     user_id = _parse_admin_user_id(message, command)
     if user_id is None:
@@ -333,8 +331,7 @@ async def _log_ban_toggle(
 async def cmd_setcard(
     message: Message, command: CommandObject, settings: Settings, db: Database
 ) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, SETTINGS):
         return
 
     raw = (command.args or "").strip()
@@ -360,8 +357,7 @@ async def cmd_setcard(
 async def cmd_setprice(
     message: Message, command: CommandObject, settings: Settings, db: Database
 ) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, SETTINGS):
         return
 
     parts = (command.args or "").split()
@@ -385,8 +381,7 @@ async def cmd_setprice(
 
 @router.message(Command("showsettings"))
 async def cmd_showsettings(message: Message, settings: Settings, db: Database) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, SETTINGS):
         return
     await message.answer(format_settings_text(db))
 
@@ -394,8 +389,7 @@ async def cmd_showsettings(message: Message, settings: Settings, db: Database) -
 # ---------- base buy plans (volume / duration presets) ----------
 @router.message(Command("plans"))
 async def cmd_plans(message: Message, settings: Settings, db: Database) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, SERVICES):
         return
     await send_base_plans(message, db)
 
@@ -404,8 +398,7 @@ async def cmd_plans(message: Message, settings: Settings, db: Database) -> None:
 async def cmd_add_volume(
     message: Message, command: CommandObject, settings: Settings, db: Database
 ) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, SERVICES):
         return
     raw = (command.args or "").strip()
     if not raw:
@@ -432,8 +425,7 @@ async def cmd_add_volume(
 async def cmd_del_volume(
     message: Message, command: CommandObject, settings: Settings, db: Database
 ) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, SERVICES):
         return
     raw = (command.args or "").strip()
     if not raw:
@@ -460,8 +452,7 @@ async def cmd_del_volume(
 async def cmd_add_duration(
     message: Message, command: CommandObject, settings: Settings, db: Database
 ) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, SERVICES):
         return
     raw = (command.args or "").strip()
     if not raw:
@@ -488,8 +479,7 @@ async def cmd_add_duration(
 async def cmd_del_duration(
     message: Message, command: CommandObject, settings: Settings, db: Database
 ) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, SERVICES):
         return
     raw = (command.args or "").strip()
     if not raw:
@@ -515,8 +505,7 @@ async def cmd_del_duration(
 # ---------- locations ----------
 @router.message(Command("locations"))
 async def cmd_locations(message: Message, settings: Settings, db: Database) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, LOCATIONS):
         return
 
     locs = db.list_locations(only_enabled=False)
@@ -546,8 +535,7 @@ async def cmd_locations(message: Message, settings: Settings, db: Database) -> N
 async def cmd_addlocation(
     message: Message, command: CommandObject, settings: Settings, db: Database
 ) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, LOCATIONS):
         return
 
     raw = (command.args or "").strip()
@@ -599,8 +587,7 @@ async def cmd_addlocation(
 async def cmd_addtestlocation(
     message: Message, command: CommandObject, settings: Settings, db: Database
 ) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, LOCATIONS):
         return
 
     raw = (command.args or "").strip()
@@ -656,8 +643,7 @@ async def cmd_addtestlocation(
 async def cmd_toggletest(
     message: Message, command: CommandObject, settings: Settings, db: Database
 ) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, TOOLS_MISC):
         return
 
     raw = (command.args or "").strip().lower()
@@ -684,8 +670,7 @@ async def cmd_toggletest(
 async def cmd_setlocationprice(
     message: Message, command: CommandObject, settings: Settings, db: Database
 ) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, LOCATIONS):
         return
 
     parts = (command.args or "").split()
@@ -736,8 +721,7 @@ async def cmd_setlocationprice(
 async def cmd_setsuburl(
     message: Message, command: CommandObject, settings: Settings, db: Database
 ) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, LOCATIONS):
         return
 
     raw = (command.args or "").strip()
@@ -776,8 +760,7 @@ async def cmd_setsuburl(
 async def cmd_dellocation(
     message: Message, command: CommandObject, settings: Settings, db: Database
 ) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, LOCATIONS):
         return
 
     raw = (command.args or "").strip()
@@ -800,8 +783,7 @@ async def cmd_dellocation(
 async def cmd_purgelocation(
     message: Message, command: CommandObject, settings: Settings, db: Database
 ) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, LOCATIONS):
         return
 
     raw = (command.args or "").strip()
@@ -863,8 +845,7 @@ async def cb_purge_cancel(callback: CallbackQuery) -> None:
 async def cmd_togglelocation(
     message: Message, command: CommandObject, settings: Settings, db: Database
 ) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, LOCATIONS):
         return
 
     raw = (command.args or "").strip()
@@ -889,10 +870,9 @@ async def cmd_togglelocation(
 # ---------- pending orders ----------
 @router.message(Command("pending"))
 async def cmd_pending(message: Message, settings: Settings, db: Database) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, ORDERS_REVIEW):
         return
-    await send_pending_list(message, db)
+    await send_pending_list(message, settings, db, message.from_user.id)
 
 
 # ---------- panel sync (manual client deletion on 3x-ui) ----------
@@ -901,8 +881,7 @@ async def cmd_clearorder(
     message: Message, command: CommandObject, settings: Settings, db: Database
 ) -> None:
     """Hard-delete one order from the database."""
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, ORDERS_MANAGE):
         return
 
     raw = (command.args or "").strip()
@@ -920,8 +899,7 @@ async def cmd_clearorder(
 
 @router.message(Command("cleardeclined"))
 async def cmd_cleardeclined(message: Message, settings: Settings, db: Database) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, TOOLS_SYNC):
         return
     await message.answer(run_clear_declined(db))
 
@@ -931,8 +909,7 @@ async def cmd_syncpanel(
     message: Message, command: CommandObject, settings: Settings, db: Database
 ) -> None:
     """Compare bot DB with panel /clients/list and clear orphaned orders."""
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
+    if not await guard_admin_message(message, settings, db, TOOLS_SYNC):
         return
 
     raw = (command.args or "").strip()

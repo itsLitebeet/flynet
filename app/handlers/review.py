@@ -22,8 +22,10 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
 
 from app import keyboards, texts
+from app.admin_perms import ORDERS_REVIEW
 from app.config import Settings
 from app.db import TEST_VOLUME_BYTES, Database
+from app.handlers.admin_helpers import guard_admin_callback, guard_admin_message
 from app.handlers.review_notify import clear_admin_receipt_buttons
 from app.logs import Actor, make_logger
 from app.xui import XuiClient, XuiError, build_client_email
@@ -35,10 +37,6 @@ log = logging.getLogger(__name__)
 
 class DeclineFlow(StatesGroup):
     waiting_reason = State()
-
-
-def _is_admin(user_id: int, settings: Settings) -> bool:
-    return user_id in settings.admin_ids
 
 
 def _status_label(status: str) -> str:
@@ -72,8 +70,7 @@ async def cb_accept_order(
     bot: Bot,
     settings: Settings,
 ) -> None:
-    if callback.from_user is None or not _is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+    if not await guard_admin_callback(callback, settings, db, ORDERS_REVIEW):
         return
 
     raw = (callback.data or "").removeprefix(keyboards.CB_ADMIN_ACCEPT_PREFIX)
@@ -241,8 +238,7 @@ async def cb_decline_order(
     db: Database,
     settings: Settings,
 ) -> None:
-    if callback.from_user is None or not _is_admin(callback.from_user.id, settings):
-        await callback.answer(texts.NOT_ADMIN, show_alert=True)
+    if not await guard_admin_callback(callback, settings, db, ORDERS_REVIEW):
         return
 
     raw = (callback.data or "").removeprefix(keyboards.CB_ADMIN_DECLINE_PREFIX)
@@ -279,8 +275,7 @@ async def on_decline_reason(
     bot: Bot,
     settings: Settings,
 ) -> None:
-    if message.from_user is None or not _is_admin(message.from_user.id, settings):
-        # Ignore non-admin messages that somehow land here.
+    if not await guard_admin_message(message, settings, db, ORDERS_REVIEW):
         await state.clear()
         return
 
