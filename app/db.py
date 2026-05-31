@@ -372,11 +372,108 @@ class Database:
             cur.execute(
                 "SELECT id, status, xui_email, location_id, location_name, "
                 "volume_gb, duration_days, nickname, price, created_at, "
-                "updated_at, is_test "
+                "updated_at, is_test, xui_sub_id, admin_id, decline_reason, "
+                "screenshot_file_id "
                 "FROM orders WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?",
                 (user_id, limit),
             )
             return list(cur.fetchall())
+
+    def count_customers(self) -> int:
+        """Users with at least one order."""
+        with self._cursor() as cur:
+            cur.execute("SELECT COUNT(DISTINCT user_id) AS c FROM orders")
+            return int(cur.fetchone()["c"])
+
+    def list_customers_paginated(
+        self, offset: int, limit: int
+    ) -> list[sqlite3.Row]:
+        with self._cursor() as cur:
+            cur.execute(
+                "SELECT u.user_id, u.username, u.first_name, u.last_name, "
+                "u.created_at, u.is_banned, "
+                "COUNT(o.id) AS order_count, "
+                "SUM(CASE WHEN o.status = 'provisioned' THEN 1 ELSE 0 END) "
+                "AS provisioned_count, "
+                "SUM(CASE WHEN o.status = 'provisioned' THEN o.price ELSE 0 END) "
+                "AS total_spent, "
+                "MAX(o.updated_at) AS last_order_at "
+                "FROM users u "
+                "INNER JOIN orders o ON o.user_id = u.user_id "
+                "GROUP BY u.user_id "
+                "ORDER BY last_order_at DESC "
+                "LIMIT ? OFFSET ?",
+                (limit, offset),
+            )
+            return list(cur.fetchall())
+
+    def search_customers(self, query: str, *, limit: int = 15) -> list[sqlite3.Row]:
+        """Find buyers by id, order id, username, name, panel email, nickname."""
+        q = (query or "").strip()
+        if not q:
+            return []
+
+        agg = (
+            "COUNT(o.id) AS order_count, "
+            "SUM(CASE WHEN o.status = 'provisioned' THEN 1 ELSE 0 END) "
+            "AS provisioned_count, "
+            "SUM(CASE WHEN o.status = 'provisioned' THEN o.price ELSE 0 END) "
+            "AS total_spent, "
+            "MAX(o.updated_at) AS last_order_at "
+        )
+        base = (
+            "SELECT u.user_id, u.username, u.first_name, u.last_name, "
+            "u.created_at, u.is_banned, " + agg + " "
+            "FROM users u INNER JOIN orders o ON o.user_id = u.user_id "
+        )
+
+        with self._cursor() as cur:
+            if q.isdigit():
+                num = int(q)
+                cur.execute(
+                    base + "WHERE u.user_id = ? OR o.id = ? "
+                    "GROUP BY u.user_id ORDER BY last_order_at DESC LIMIT ?",
+                    (num, num, limit),
+                )
+            else:
+                like = f"%{q.lstrip('@')}%"
+                cur.execute(
+                    base + "WHERE u.username LIKE ? OR u.first_name LIKE ? "
+                    "OR u.last_name LIKE ? OR o.xui_email LIKE ? "
+                    "OR o.nickname LIKE ? OR o.location_name LIKE ? "
+                    "GROUP BY u.user_id ORDER BY last_order_at DESC LIMIT ?",
+                    (like, like, like, like, like, like, limit),
+                )
+            return list(cur.fetchall())
+
+    def get_customer_order_stats(self, user_id: int) -> sqlite3.Row | None:
+        with self._cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(o.id) AS total_orders, "
+                "SUM(CASE WHEN o.status = 'provisioned' THEN 1 ELSE 0 END) "
+                "AS provisioned, "
+                "SUM(CASE WHEN o.status = 'awaiting_review' THEN 1 ELSE 0 END) "
+                "AS awaiting_review, "
+                "SUM(CASE WHEN o.status = 'awaiting_payment' THEN 1 ELSE 0 END) "
+                "AS awaiting_payment, "
+                "SUM(CASE WHEN o.status = 'declined' THEN 1 ELSE 0 END) "
+                "AS declined, "
+                "SUM(CASE WHEN o.status = 'failed' THEN 1 ELSE 0 END) "
+                "AS failed, "
+                "SUM(CASE WHEN o.is_test = 1 THEN 1 ELSE 0 END) AS test_orders, "
+                "SUM(CASE WHEN o.status = 'provisioned' AND o.is_test = 0 "
+                "THEN o.price ELSE 0 END) AS paid_revenue, "
+                "SUM(CASE WHEN o.status = 'provisioned' THEN o.price ELSE 0 END) "
+                "AS total_spent, "
+                "MIN(o.created_at) AS first_order_at, "
+                "MAX(o.updated_at) AS last_order_at "
+                "FROM orders o WHERE o.user_id = ?",
+                (user_id,),
+            )
+            row = cur.fetchone()
+            if row is None or int(row["total_orders"]) == 0:
+                return None
+            return row
 
     # ---------- settings (key/value) ----------
     def get_setting(self, key: str, default: str | None = None) -> str | None:

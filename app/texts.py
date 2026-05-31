@@ -438,6 +438,8 @@ ADMIN_BTN_SETTINGS  = "⚙️ تنظیمات"
 ADMIN_BTN_LOCATIONS = "📍 لوکیشن‌ها"
 ADMIN_BTN_TOOLS     = "🛠 ابزارها"
 ADMIN_BTN_USERS     = "👥 کاربران"
+ADMIN_BTN_CUSTOMERS = "🛒 مشتریان"
+ADMIN_BTN_CUSTOMERS_SEARCH = "🔎 جستجوی مشتری"
 ADMIN_BTN_PANEL     = "🏠 پنل ادمین"
 ADMIN_BTN_REFRESH   = "🔄 بروزرسانی"
 ADMIN_BTN_SERVICES  = "🛒 پلن‌های فروش"
@@ -595,6 +597,61 @@ ADMIN_USER_ORDER_LINE = (
 ADMIN_USER_ORDER_PANEL = "  🆔 پنل: <code>{email}</code>\n"
 ADMIN_USER_ORDER_NO_PANEL = "  🆔 پنل: <i>هنوز ساخته نشده</i>\n"
 ADMIN_USER_NO_ORDERS = "<i>هیچ سفارشی ثبت نشده.</i>"
+
+ADMIN_CUSTOMERS_HEADER = (
+    "🛒 <b>مشتریان (خریداران)</b>\n"
+    "صفحه <b>{page}</b> از <b>{pages}</b> — جمع: <b>{total}</b> مشتری\n\n"
+    "فقط کاربرانی که حداقل یک سفارش دارند.\n"
+    "روی هر نام بزنید برای جزئیات خرید و پنل.\n"
+    "<i>وضعیت سرویس‌های فعال از پنل خوانده می‌شود.</i>"
+)
+ADMIN_CUSTOMERS_EMPTY = "هنوز مشتری (سفارش ثبت‌شده) وجود ندارد."
+ADMIN_CUSTOMERS_SEARCH_PROMPT = (
+    "🔎 <b>جستجوی مشتری</b>\n\n"
+    "شناسه کاربر، شماره سفارش، یوزرنیم، نام، "
+    "ایمیل پنل (<code>nf12</code>) یا نام مستعار را بفرستید.\n\n"
+    "انصراف: دکمه زیر یا <code>/cancel</code>"
+)
+ADMIN_CUSTOMERS_SEARCH_EMPTY = (
+    "❗ نتیجه‌ای برای <code>{query}</code> یافت نشد."
+)
+ADMIN_CUSTOMERS_SEARCH_HEADER = (
+    "🔎 نتایج جستجو برای <code>{query}</code> — <b>{count}</b> مورد\n\n"
+    "روی مشتری بزنید:"
+)
+ADMIN_CUSTOMER_LIST_LINE = (
+    "▸ <b>{full_name}</b> ({username}) — <code>{user_id}</code> {ban}\n"
+    "   📦 {order_count} سفارش · 💰 {total_spent} · 🟢 {provisioned} فعال"
+    " · 🕐 {last_order}"
+)
+ADMIN_CUSTOMER_DETAIL = (
+    "🛒 <b>مشتری</b>\n\n"
+    "🆔 شناسه: <code>{user_id}</code>\n"
+    "👤 نام: <b>{full_name}</b>\n"
+    "📎 یوزرنیم: {username}\n"
+    "📅 عضو از: {created_at}\n"
+    "🚫 وضعیت حساب: <b>{ban_state}</b>\n\n"
+    "<b>خلاصه خرید:</b>\n"
+    "📦 کل سفارش‌ها: <b>{total_orders}</b> "
+    "(🧪 تست: {test_orders} · ❌ رد: {declined} · ⏳ بررسی: {awaiting_review})\n"
+    "🟢 فعال‌شده: <b>{provisioned}</b> · 💳 در انتظار پرداخت: {awaiting_payment}\n"
+    "💰 درآمد (غیرتست): <b>{paid_revenue}</b> · جمع فعال‌شده: {total_spent}\n"
+    "🕐 اولین سفارش: {first_order} · آخرین: {last_order}\n\n"
+    "<b>سفارش‌ها ({order_count}):</b>\n"
+    "{orders_block}"
+)
+ADMIN_CUSTOMER_ORDER_LINE = (
+    "• <b>#{order_id}</b> {test_mark} — {status}\n"
+    "  📍 {location} · {volume} · {days} روز · {price}\n"
+    "  🏷 نام: {nickname} · 🕐 {created_at}\n"
+    "  {panel_line}"
+    "{extra_lines}"
+)
+ADMIN_CUSTOMER_ORDER_SUB = "  🔔 subId: <code>{sub_id}</code>\n"
+ADMIN_CUSTOMER_ORDER_REVIEWER = "  👮 بررسی: {reviewer}\n"
+ADMIN_CUSTOMER_ORDER_DECLINE = "  📝 رد: {decline}\n"
+ADMIN_CUSTOMER_ORDER_RECEIPT = "  📷 رسید: ✅\n"
+ADMIN_CUSTOMER_NO_ORDERS = "<i>بدون سفارش.</i>"
 
 ADMIN_TOOL_SYNC_DONE = "✅ همگام‌سازی پنل انجام شد (همان نتیجه <code>/syncpanel</code>)."
 

@@ -53,6 +53,12 @@ CB_ADM_TOOLS             = "adm:tools"
 CB_ADM_USERS                 = "adm:usr"
 CB_ADM_USERS_PAGE_PREFIX     = "adm:usrp:"   # adm:usrp:<page>
 CB_ADM_USER_DETAIL_PREFIX    = "adm:u:"      # adm:u:<user_id>
+CB_ADM_CUSTOMERS             = "adm:cust"
+CB_ADM_CUSTOMERS_PAGE_PREFIX = "adm:custp:"  # adm:custp:<page>
+CB_ADM_CUST_DETAIL_PREFIX    = "adm:custd:"  # adm:custd:<user_id>
+CB_ADM_CUSTOMERS_SEARCH      = "adm:custq"
+CB_ADM_CUST_BAN_PREFIX       = "adm:cbn:"    # adm:cbn:<user_id>
+CB_ADM_CUST_UNBAN_PREFIX     = "adm:cub:"    # adm:cub:<user_id>
 CB_ADM_CMD_HELP          = "adm:cmdhelp"
 CB_ADM_ORDERS            = "adm:orders"
 CB_ADM_ORDER_LOOKUP      = "adm:olookup"
@@ -158,6 +164,7 @@ ADMIN_MENU_BUTTONS = frozenset({
     texts.ADMIN_BTN_LOCATIONS,
     texts.ADMIN_BTN_TOOLS,
     texts.ADMIN_BTN_USERS,
+    texts.ADMIN_BTN_CUSTOMERS,
     texts.ADMIN_BTN_PANEL,
 })
 
@@ -410,6 +417,9 @@ def admin_reply_keyboard() -> ReplyKeyboardMarkup:
             ],
             [
                 KeyboardButton(text=texts.ADMIN_BTN_ORDERS),
+                KeyboardButton(text=texts.ADMIN_BTN_CUSTOMERS),
+            ],
+            [
                 KeyboardButton(text=texts.ADMIN_BTN_USERS),
             ],
             [
@@ -442,6 +452,11 @@ def admin_home_inline() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text=texts.ADMIN_BTN_ORDERS, callback_data=CB_ADM_ORDERS
                 ),
+                InlineKeyboardButton(
+                    text=texts.ADMIN_BTN_CUSTOMERS, callback_data=CB_ADM_CUSTOMERS
+                ),
+            ],
+            [
                 InlineKeyboardButton(
                     text=texts.ADMIN_BTN_USERS, callback_data=CB_ADM_USERS
                 ),
@@ -704,6 +719,133 @@ def admin_user_detail_keyboard(
     rows.append([
         InlineKeyboardButton(
             text="🔙 لیست کاربران", callback_data=CB_ADM_USERS
+        ),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_customers_keyboard(
+    customers: list, *, page: int, total_pages: int
+) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    for c in customers:
+        uid = int(c["user_id"])
+        label = (c["first_name"] or "").strip() or str(uid)
+        if len(label) > 16:
+            label = label[:15] + "…"
+        orders_n = int(c["order_count"])
+        rows.append([
+            InlineKeyboardButton(
+                text=f"🛒 {label} ({orders_n})",
+                callback_data=f"{CB_ADM_CUST_DETAIL_PREFIX}{uid}",
+            )
+        ])
+    nav: list[InlineKeyboardButton] = []
+    if page > 0:
+        nav.append(
+            InlineKeyboardButton(
+                text="◀️ قبلی",
+                callback_data=f"{CB_ADM_CUSTOMERS_PAGE_PREFIX}{page - 1}",
+            )
+        )
+    if page < total_pages - 1:
+        nav.append(
+            InlineKeyboardButton(
+                text="بعدی ▶️",
+                callback_data=f"{CB_ADM_CUSTOMERS_PAGE_PREFIX}{page + 1}",
+            )
+        )
+    if nav:
+        rows.append(nav)
+    rows.append([
+        InlineKeyboardButton(
+            text=texts.ADMIN_BTN_CUSTOMERS_SEARCH,
+            callback_data=CB_ADM_CUSTOMERS_SEARCH,
+        ),
+    ])
+    rows.append([
+        InlineKeyboardButton(
+            text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_CUSTOMERS
+        ),
+        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_customers_search_keyboard(customers: list) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    for c in customers:
+        uid = int(c["user_id"])
+        label = (c["first_name"] or "").strip() or str(uid)
+        if len(label) > 18:
+            label = label[:17] + "…"
+        rows.append([
+            InlineKeyboardButton(
+                text=f"🛒 {label}",
+                callback_data=f"{CB_ADM_CUST_DETAIL_PREFIX}{uid}",
+            )
+        ])
+    rows.append([
+        InlineKeyboardButton(
+            text=texts.ADMIN_BTN_CUSTOMERS_SEARCH,
+            callback_data=CB_ADM_CUSTOMERS_SEARCH,
+        ),
+        InlineKeyboardButton(
+            text="🔙 لیست مشتریان", callback_data=CB_ADM_CUSTOMERS
+        ),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_customer_detail_keyboard(
+    user_id: int,
+    *,
+    is_banned: bool = False,
+    order_ids: list[int] | None = None,
+) -> InlineKeyboardMarkup:
+    ban_btn = (
+        InlineKeyboardButton(
+            text=texts.BTN_USER_UNBAN,
+            callback_data=f"{CB_ADM_CUST_UNBAN_PREFIX}{user_id}",
+        )
+        if is_banned
+        else InlineKeyboardButton(
+            text=texts.BTN_USER_BAN,
+            callback_data=f"{CB_ADM_CUST_BAN_PREFIX}{user_id}",
+        )
+    )
+    rows: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(
+                text=texts.BTN_VIEW_USER,
+                url=f"tg://user?id={user_id}",
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text="👥 نمای کاربران",
+                callback_data=f"{CB_ADM_USER_DETAIL_PREFIX}{user_id}",
+            ),
+            ban_btn,
+        ],
+    ]
+    if order_ids:
+        order_row: list[InlineKeyboardButton] = []
+        for oid in order_ids[:8]:
+            order_row.append(
+                InlineKeyboardButton(
+                    text=f"{texts.ADMIN_BTN_ORDER_MANAGE} #{oid}",
+                    callback_data=f"{CB_ADM_ORDER_MANAGE_PREFIX}{oid}",
+                )
+            )
+            if len(order_row) == 2:
+                rows.append(order_row)
+                order_row = []
+        if order_row:
+            rows.append(order_row)
+    rows.append([
+        InlineKeyboardButton(
+            text="🔙 لیست مشتریان", callback_data=CB_ADM_CUSTOMERS
         ),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
