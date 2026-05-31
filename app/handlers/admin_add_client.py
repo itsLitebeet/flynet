@@ -224,7 +224,13 @@ async def add_client_user_id(
         await _wizard_reply(message, state, texts.ADMIN_ADD_CLIENT_USER_INVALID)
         return
 
-    db.upsert_user(user_id=user_id, username=None, first_name=None, last_name=None)
+    db.upsert_user(
+        user_id=user_id,
+        username=None,
+        first_name=None,
+        last_name=None,
+        lang_code=None,
+    )
     await state.update_data(target_user_id=user_id)
     await _prompt_volume(message, state)
 
@@ -369,6 +375,7 @@ async def add_client_pick_location(
             username=callback.from_user.username,
             first_name=callback.from_user.first_name,
             last_name=callback.from_user.last_name,
+            lang_code=callback.from_user.language_code,
         )
         order_user_id = admin_id
     else:
