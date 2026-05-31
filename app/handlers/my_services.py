@@ -97,8 +97,12 @@ def _format_expiry(ms: int) -> tuple[str, str]:
     return (absolute, time_left)
 
 
+def _is_test_order(row) -> bool:
+    return bool(row["is_test"]) if "is_test" in row.keys() else False
+
+
 def _order_volume_label(row) -> str:
-    is_test = bool(row["is_test"]) if "is_test" in row.keys() else False
+    is_test = _is_test_order(row)
     if is_test:
         return texts.format_test_volume()
     return f"{int(row['volume_gb'])}GB"
@@ -157,13 +161,13 @@ def _build_detail_text(
         elif usage is not None:
             usage_block = _format_usage_block(usage)
 
-    return texts.SERVICE_DETAIL.format(
+    detail = texts.SERVICE_DETAIL.format(
         order_id=row["id"],
         nickname_part=nickname_part,
         location=escape(str(row["location_name"])),
         volume=texts.format_order_volume(
             int(row["volume_gb"]),
-            is_test=bool(row["is_test"]) if "is_test" in row.keys() else False,
+            is_test=_is_test_order(row),
         ),
         days=int(row["duration_days"]),
         price=texts.format_price(int(row["price"])),
@@ -172,6 +176,9 @@ def _build_detail_text(
         usage_block=usage_block,
         created_at=str(row["created_at"]),
     )
+    if _is_test_order(row) and str(row["status"]) == "provisioned":
+        detail += texts.TEST_SERVICE_LIMITED
+    return detail
 
 
 async def _fetch_panel_usage(row, location) -> tuple[ClientUsage | None, str | None]:
@@ -214,6 +221,7 @@ async def _show_service_detail(
             if usage is not None:
                 enabled = usage.enable
 
+    is_test = _is_test_order(row)
     text = _build_detail_text(row, usage=usage, usage_error=usage_error)
     if not provisioned:
         text += texts.SERVICE_NOT_PROVISIONED_ACTIONS
@@ -222,7 +230,10 @@ async def _show_service_detail(
         callback,
         text,
         keyboards.my_service_detail(
-            order_id, provisioned=provisioned, enabled=enabled
+            order_id,
+            provisioned=provisioned,
+            enabled=enabled,
+            is_test=is_test,
         ),
     )
     if refresh:
@@ -408,6 +419,9 @@ async def cb_toggle(callback: CallbackQuery, db: Database) -> None:
     if row is None or row["status"] != "provisioned":
         await callback.answer("این سرویس فعال نیست.", show_alert=True)
         return
+    if _is_test_order(row):
+        await callback.answer(texts.TEST_SERVICE_ACTION_BLOCKED, show_alert=True)
+        return
 
     location = db.get_location(int(row["location_id"]))
     if location is None or not row["xui_email"]:
@@ -462,6 +476,9 @@ async def cb_rename(callback: CallbackQuery, state: FSMContext, db: Database) ->
     if row is None:
         await callback.answer("سرویس یافت نشد.", show_alert=True)
         return
+    if _is_test_order(row):
+        await callback.answer(texts.TEST_SERVICE_ACTION_BLOCKED, show_alert=True)
+        return
 
     await state.set_state(RenameFlow.waiting_for_nickname)
     await state.update_data(rename_order_id=order_id)
@@ -495,6 +512,10 @@ async def on_nickname_received(
         await state.clear()
         await message.answer("سرویس یافت نشد.")
         return
+    if _is_test_order(row):
+        await state.clear()
+        await message.answer(texts.TEST_SERVICE_ACTION_BLOCKED)
+        return
 
     nick = (message.text or "").strip()
     if nick == "-":
@@ -509,9 +530,10 @@ async def on_nickname_received(
         await message.answer(texts.RENAME_TOO_LONG)
         return
 
+    is_test = bool(row["is_test"]) if "is_test" in row.keys() else False
     new_panel_id: str | None = None
     if row["status"] == "provisioned" and row["xui_email"]:
-        new_panel_id = email_from_user_label(nick, order_id)
+        new_panel_id = email_from_user_label(nick, order_id, is_test=is_test)
         if new_panel_id is None:
             await message.answer(texts.RENAME_INVALID_LABEL)
             return
@@ -580,6 +602,9 @@ async def cb_regen_ask(callback: CallbackQuery, db: Database) -> None:
     if row is None or row["status"] != "provisioned":
         await callback.answer("این سرویس فعال نیست.", show_alert=True)
         return
+    if _is_test_order(row):
+        await callback.answer(texts.TEST_SERVICE_ACTION_BLOCKED, show_alert=True)
+        return
     if not row["xui_email"]:
         await callback.answer(texts.REGEN_NOT_SUPPORTED, show_alert=True)
         return
@@ -604,6 +629,9 @@ async def cb_regen_confirm(callback: CallbackQuery, db: Database) -> None:
     if row is None or row["status"] != "provisioned":
         await callback.answer("این سرویس فعال نیست.", show_alert=True)
         return
+    if _is_test_order(row):
+        await callback.answer(texts.TEST_SERVICE_ACTION_BLOCKED, show_alert=True)
+        return
 
     location = db.get_location(int(row["location_id"]))
     if location is None or not row["xui_email"]:
@@ -615,6 +643,7 @@ async def cb_regen_confirm(callback: CallbackQuery, db: Database) -> None:
 
     old_email = str(row["xui_email"])
     user_id = int(row["user_id"])
+    is_test = bool(row["is_test"]) if "is_test" in row.keys() else False
 
     try:
         async with XuiClient(location.base_url, location.api_token) as xui:
@@ -623,8 +652,9 @@ async def cb_regen_confirm(callback: CallbackQuery, db: Database) -> None:
                 order_id=order_id,
                 inbound_ids=location.inbound_ids,
                 tg_user_id=user_id,
-                volume_gb_fallback=int(row["volume_gb"]),
+                volume_gb_fallback=int(row["volume_gb"]) or 1,
                 duration_days_fallback=int(row["duration_days"]),
+                is_test=is_test,
             )
     except Exception as exc:  # noqa: BLE001 — any failure → tell user, leave DB alone
         log.exception("Regen failed for order %s", order_id)

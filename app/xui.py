@@ -98,20 +98,25 @@ def _gb_to_bytes(gb: int) -> int:
     return gb * GIB_IN_BYTES
 
 
-def build_client_email(order_id: int) -> str:
+def build_client_email(order_id: int, *, is_test: bool = False) -> str:
     """Short unique panel client id (3x-ui uses the ``email`` field as the primary key)."""
+    if is_test:
+        return f"test-nf{order_id}"
     return f"nf{order_id}"
 
 
 _EMAIL_LABEL_RE = re.compile(r"[^a-z0-9_-]+")
 
 
-def email_from_user_label(label: str, order_id: int, *, max_suffix: int = 20) -> str | None:
+def email_from_user_label(
+    label: str, order_id: int, *, is_test: bool = False, max_suffix: int = 20
+) -> str | None:
     """Turn a user-chosen label into a panel-safe client id, e.g. ``nf9-phone``."""
     cleaned = _EMAIL_LABEL_RE.sub("", label.strip().lower().replace(" ", "-"))
     if not cleaned or len(cleaned) > max_suffix:
         return None
-    return f"nf{order_id}-{cleaned}"
+    prefix = f"test-nf{order_id}" if is_test else f"nf{order_id}"
+    return f"{prefix}-{cleaned}"
 
 
 def _extract_sub_id(obj: Any) -> str | None:
@@ -342,9 +347,9 @@ class XuiClient:
             json_body=body,
         )
 
-    async def allocate_regen_email(self, order_id: int) -> str:
-        """Pick a free client id for regen: nf9, nf9r1, nf9r2, …"""
-        base = build_client_email(order_id)
+    async def allocate_regen_email(self, order_id: int, *, is_test: bool = False) -> str:
+        """Pick a free client id for regen: nf9 / test-nf9, then …r1, …r2."""
+        base = build_client_email(order_id, is_test=is_test)
         for i in range(0, 50):
             candidate = base if i == 0 else f"{base}r{i}"
             if not await self.client_exists(candidate):
@@ -495,10 +500,19 @@ class XuiClient:
         tg_user_id: int,
         volume_gb_fallback: int,
         duration_days_fallback: int,
+        is_test: bool = False,
     ) -> ProvisionedClient:
         """Disable old client and create a new one with remaining quota + same expiry."""
+        from app import texts as _texts
+
+        test_cap_bytes = _texts.TEST_VOLUME_MB * 1024 * 1024
         usage = await self.get_usage(old_email)
-        if usage.is_unlimited_traffic or usage.total_bytes <= 0:
+        if is_test:
+            if usage.is_unlimited_traffic or usage.total_bytes <= 0:
+                total_bytes = test_cap_bytes
+            else:
+                total_bytes = max(0, min(usage.remaining_bytes, test_cap_bytes))
+        elif usage.is_unlimited_traffic or usage.total_bytes <= 0:
             total_bytes = _gb_to_bytes(volume_gb_fallback)
         else:
             total_bytes = max(0, usage.remaining_bytes)
@@ -508,7 +522,7 @@ class XuiClient:
         else:
             expiry_ms = _expiry_ms_from_days(duration_days_fallback)
 
-        new_email = await self.allocate_regen_email(order_id)
+        new_email = await self.allocate_regen_email(order_id, is_test=is_test)
         try:
             await self.update_client(email=old_email, enable=False)
         except XuiError as exc:

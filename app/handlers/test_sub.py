@@ -111,7 +111,7 @@ async def cb_test_confirm(
         price=0,
         is_test=True,
     )
-    email = build_client_email(order_id)
+    email = build_client_email(order_id, is_test=True)
 
     try:
         async with XuiClient(loc.base_url, loc.api_token) as xui:

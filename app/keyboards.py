@@ -283,7 +283,9 @@ def my_services_list(orders: list[dict]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def my_service_detail(order_id: int, *, provisioned: bool, enabled: bool) -> InlineKeyboardMarkup:
+def my_service_detail(
+    order_id: int, *, provisioned: bool, enabled: bool, is_test: bool = False
+) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     if provisioned:
         rows.append([
@@ -298,19 +300,26 @@ def my_service_detail(order_id: int, *, provisioned: bool, enabled: bool) -> Inl
                 callback_data=f"{CB_MY_REFRESH_USAGE_PREFIX}{order_id}",
             ),
         ])
-        toggle_text = texts.BTN_TOGGLE_OFF if enabled else texts.BTN_TOGGLE_ON
+        if not is_test:
+            toggle_text = texts.BTN_TOGGLE_OFF if enabled else texts.BTN_TOGGLE_ON
+            rows.append([
+                InlineKeyboardButton(
+                    text=toggle_text, callback_data=f"{CB_MY_TOGGLE_PREFIX}{order_id}"
+                ),
+                InlineKeyboardButton(
+                    text=texts.BTN_RENAME, callback_data=f"{CB_MY_RENAME_PREFIX}{order_id}"
+                ),
+            ])
+            rows.append([
+                InlineKeyboardButton(
+                    text=texts.BTN_REGEN, callback_data=f"{CB_MY_REGEN_PREFIX}{order_id}"
+                ),
+            ])
+    elif not is_test:
         rows.append([
-            InlineKeyboardButton(text=toggle_text,        callback_data=f"{CB_MY_TOGGLE_PREFIX}{order_id}"),
-            InlineKeyboardButton(text=texts.BTN_RENAME,   callback_data=f"{CB_MY_RENAME_PREFIX}{order_id}"),
-        ])
-        rows.append([
-            InlineKeyboardButton(text=texts.BTN_REGEN,    callback_data=f"{CB_MY_REGEN_PREFIX}{order_id}"),
-        ])
-    else:
-        # Non-provisioned orders only get a rename + back so users can
-        # at least label their pending/declined orders for reference.
-        rows.append([
-            InlineKeyboardButton(text=texts.BTN_RENAME, callback_data=f"{CB_MY_RENAME_PREFIX}{order_id}"),
+            InlineKeyboardButton(
+                text=texts.BTN_RENAME, callback_data=f"{CB_MY_RENAME_PREFIX}{order_id}"
+            ),
         ])
     rows.append([InlineKeyboardButton(text="🔙 لیست سرویس‌ها", callback_data=CB_MY_LIST)])
     return InlineKeyboardMarkup(inline_keyboard=rows)

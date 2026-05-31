@@ -133,6 +133,15 @@ SERVICE_NOT_PROVISIONED_ACTIONS = (
     "\n\nℹ️ این سرویس هنوز فعال نشده، بنابراین گزینه‌های مدیریت در دسترس نیستند."
 )
 
+TEST_SERVICE_LIMITED = (
+    "\n\n🧪 <i>سرویس تست — فقط مشاهده کانفیگ و مصرف؛ "
+    "تغییر نام، توقف و تولید مجدد غیرفعال است.</i>"
+)
+
+TEST_SERVICE_ACTION_BLOCKED = (
+    "🧪 این گزینه برای سرویس تست در دسترس نیست."
+)
+
 VIEW_CONFIGS_TITLE = (
     "🔗 <b>اطلاعات اتصال — سرویس #{order_id}</b>\n\n{configs_block}"
 )
