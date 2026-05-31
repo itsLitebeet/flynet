@@ -46,45 +46,6 @@ ROLE_REVIEWER = "reviewer"
 ROLE_SUPPORT = "support"
 ROLE_VIEWER = "viewer"
 
-ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
-    ROLE_OWNER: ALL_PERMS,
-    ROLE_MANAGER: frozenset({
-        PANEL,
-        DASHBOARD,
-        ORDERS_REVIEW,
-        ORDERS_MANAGE,
-        USERS,
-        CUSTOMERS,
-        SETTINGS,
-        SERVICES,
-        OFFER,
-        LOCATIONS,
-        TOOLS_BROADCAST,
-        TOOLS_SYNC,
-        TOOLS_MISC,
-    }),
-    ROLE_REVIEWER: frozenset({
-        PANEL,
-        DASHBOARD,
-        ORDERS_REVIEW,
-        ORDERS_MANAGE,
-        CUSTOMERS,
-    }),
-    ROLE_SUPPORT: frozenset({
-        PANEL,
-        DASHBOARD,
-        ORDERS_REVIEW,
-        USERS,
-        CUSTOMERS,
-    }),
-    ROLE_VIEWER: frozenset({
-        PANEL,
-        DASHBOARD,
-        USERS,
-        CUSTOMERS,
-    }),
-}
-
 VALID_ROLES: Final[tuple[str, ...]] = (
     ROLE_MANAGER,
     ROLE_REVIEWER,
@@ -113,8 +74,10 @@ def get_role(user_id: int, settings: Settings, db: Database) -> str:
 
 
 def permissions_for(user_id: int, settings: Settings, db: Database) -> frozenset[str]:
+    from app.role_permissions import permissions_for_role
+
     role = get_role(user_id, settings, db)
-    return ROLE_PERMISSIONS.get(role, ROLE_PERMISSIONS[ROLE_VIEWER])
+    return permissions_for_role(db, role)
 
 
 def has_permission(

@@ -86,6 +86,11 @@ CB_ADM_OFFER_AMOUNT      = "adm:ofamt"
 CB_ADM_OFFER_FIXED       = "adm:offix"
 CB_ADM_ROLES             = "adm:roles"
 CB_ADM_ROLE_SET_PREFIX   = "adm:rlset:"  # adm:rlset:<user_id>:<role>
+CB_ADM_PERM_MATRIX       = "adm:pmat"
+CB_ADM_PERM_ROLE_PREFIX  = "adm:perm:r:"   # adm:perm:r:<role>
+CB_ADM_PERM_TOGGLE_PREFIX = "adm:perm:t:"  # adm:perm:t:<role>:<perm>
+CB_ADM_PERM_RESET_PREFIX = "adm:perm:rs:"  # adm:perm:rs:<role>
+CB_ADM_PERM_RESET_ALL    = "adm:perm:ra"
 CB_ADM_ORDER_VIEW_PREFIX = "adm:ov:"    # adm:ov:<order_id>
 CB_ADM_ORDER_ENABLE_PREFIX   = "adm:oen:"   # adm:oen:<order_id>
 CB_ADM_ORDER_DISABLE_PREFIX  = "adm:odis:"  # adm:odis:<order_id>
@@ -776,7 +781,76 @@ def admin_roles_keyboard(settings, db) -> InlineKeyboardMarkup:
             for r in VALID_ROLES
         ])
     rows.append([
+        InlineKeyboardButton(
+            text=texts.ADMIN_BTN_PERM_MATRIX,
+            callback_data=CB_ADM_PERM_MATRIX,
+        ),
+    ])
+    rows.append([
         InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_SETTINGS),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_perm_matrix_home_keyboard() -> InlineKeyboardMarkup:
+    from app.role_permissions import CONFIGURABLE_ROLES
+    from app.texts import ADMIN_ROLE_LABELS
+
+    rows: list[list[InlineKeyboardButton]] = []
+    for role in CONFIGURABLE_ROLES:
+        label = ADMIN_ROLE_LABELS.get(role, role)
+        rows.append([
+            InlineKeyboardButton(
+                text=f"✏️ {label}",
+                callback_data=f"{CB_ADM_PERM_ROLE_PREFIX}{role}",
+            ),
+        ])
+    rows.append([
+        InlineKeyboardButton(
+            text=texts.ADMIN_BTN_PERM_RESET_ALL,
+            callback_data=CB_ADM_PERM_RESET_ALL,
+        ),
+    ])
+    rows.append([
+        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_ROLES),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_perm_role_keyboard(role: str, db) -> InlineKeyboardMarkup:
+    from app.role_permissions import (
+        PERM_LABELS,
+        TOGGLABLE_PERMS,
+        permissions_for_role,
+    )
+
+    rows: list[list[InlineKeyboardButton]] = []
+    perms = permissions_for_role(db, role)
+    pair: list[InlineKeyboardButton] = []
+    for perm in TOGGLABLE_PERMS:
+        on = perm in perms
+        label = f"{'✅' if on else '❌'} {PERM_LABELS[perm]}"
+        pair.append(
+            InlineKeyboardButton(
+                text=label,
+                callback_data=f"{CB_ADM_PERM_TOGGLE_PREFIX}{role}:{perm}",
+            )
+        )
+        if len(pair) == 2:
+            rows.append(pair)
+            pair = []
+    if pair:
+        rows.append(pair)
+    rows.append([
+        InlineKeyboardButton(
+            text=texts.ADMIN_BTN_PERM_RESET_ROLE,
+            callback_data=f"{CB_ADM_PERM_RESET_PREFIX}{role}",
+        ),
+    ])
+    rows.append([
+        InlineKeyboardButton(
+            text=texts.BTN_BACK, callback_data=CB_ADM_PERM_MATRIX
+        ),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

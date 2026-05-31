@@ -455,6 +455,17 @@ ADMIN_ROLE_USAGE = (
     "• <b>support</b> — کاربران، مشتریان، تأیید رسید\n"
     "• <b>viewer</b> — فقط مشاهده"
 )
+ADMIN_BTN_PERM_MATRIX = "📋 ماتریس دسترسی نقش‌ها"
+ADMIN_BTN_PERM_RESET_ROLE = "🔄 بازنشانی این نقش"
+ADMIN_BTN_PERM_RESET_ALL = "🔄 بازنشانی همه به پیش‌فرض"
+ADMIN_PERM_MATRIX_HINT = (
+    "<i>برای تغییر: یک نقش را انتخاب کنید و روی هر دسترسی بزنید.</i>\n"
+    "<i>مالک همیشه همه دسترسی‌ها را دارد.</i>"
+)
+ADMIN_PERM_ROLE_HEADER = "✏️ <b>{role_label}</b>{custom}\n\n<i>روی هر ردیف بزنید تا روشن/خاموش شود:</i>"
+ADMIN_PERM_RESET_ROLE_OK = "✅ این نقش به پیش‌فرض برگشت."
+ADMIN_PERM_RESET_ALL_OK = "✅ همه نقش‌ها به پیش‌فرض برگشتند."
+ADMIN_PERM_PANEL_REQUIRED = "⛔ دسترسی panel همیشه باید روشن باشد."
 USER_BANNED = "⛔ دسترسی شما به ربات مسدود شده است."
 
 

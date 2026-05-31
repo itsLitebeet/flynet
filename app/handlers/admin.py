@@ -41,12 +41,16 @@ log = logging.getLogger(__name__)
 async def cmd_stats(message: Message, settings: Settings, db: Database) -> None:
     if not await guard_admin_message(message, settings, db, DASHBOARD):
         return
+    if message.from_user is None:
+        return
     await send_dashboard(message, settings, db, message.from_user.id)
 
 
 @router.message(Command("users"))
 async def cmd_users(message: Message, settings: Settings, db: Database) -> None:
     if not await guard_admin_message(message, settings, db, USERS):
+        return
+    if message.from_user is None:
         return
     await send_users(message, settings, db, page=0, user_id=message.from_user.id)
 
@@ -871,6 +875,8 @@ async def cmd_togglelocation(
 @router.message(Command("pending"))
 async def cmd_pending(message: Message, settings: Settings, db: Database) -> None:
     if not await guard_admin_message(message, settings, db, ORDERS_REVIEW):
+        return
+    if message.from_user is None:
         return
     await send_pending_list(message, settings, db, message.from_user.id)
 

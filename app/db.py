@@ -278,6 +278,7 @@ class Database:
                 (SETTING_OFFER_KIND, "none"),
                 (SETTING_OFFER_VALUE, "0"),
                 (SETTING_ADMIN_ROLES, "{}"),
+                ("role_permissions_json", "{}"),
             ):
                 cur.execute(
                     "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
