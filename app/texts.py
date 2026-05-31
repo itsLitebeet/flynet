@@ -639,6 +639,58 @@ ADMIN_TOOLS_MENU = (
     "🧪 دکمه اشتراک تست: <b>{test_sub}</b>\n\n"
     "همگام‌سازی پنل، پاکسازی و همگانی از دکمه‌های زیر."
 )
+ADMIN_BTN_ADD_CLIENT = "➕ ساخت کلاینت دستی"
+ADMIN_ADD_CLIENT_USER_PROMPT = (
+    "➕ <b>ساخت کلاینت دستی</b>\n\n"
+    "🆔 <b>شناسه عددی کاربر تلگرام</b> را بفرستید\n"
+    "(سرویس در «سرویس‌های من» همان کاربر ثبت می‌شود).\n\n"
+    "انصراف: دکمه زیر یا <code>/cancel</code>"
+)
+ADMIN_ADD_CLIENT_USER_INVALID = (
+    "❗ شناسه کاربر باید یک <b>عدد</b> مثبت باشد (مثل <code>123456789</code>)."
+)
+ADMIN_ADD_CLIENT_VOLUME_PROMPT = (
+    "💾 <b>حجم سرویس</b> را به <b>گیگابایت</b> بفرستید\n"
+    "(فقط عدد، مثلاً <code>5</code> برای ۵ گیگ).\n\n"
+    "محدوده: <b>{min_gb}</b> تا <b>{max_gb}</b> گیگ"
+)
+ADMIN_ADD_CLIENT_VOLUME_INVALID = (
+    "❗ حجم نامعتبر. عددی بین <b>{min_gb}</b> و <b>{max_gb}</b> گیگ بفرستید."
+)
+ADMIN_ADD_CLIENT_DAYS_PROMPT = (
+    "📅 <b>مدت اعتبار</b> را به <b>روز</b> بفرستید\n"
+    "(فقط عدد، مثلاً <code>30</code> برای ۳۰ روز)."
+)
+ADMIN_ADD_CLIENT_DAYS_INVALID = (
+    "❗ مدت نامعتبر. عددی بین <b>{min_days}</b> و <b>{max_days}</b> روز بفرستید."
+)
+ADMIN_ADD_CLIENT_LOCATION_PROMPT = (
+    "📍 <b>لوکیشن</b> را انتخاب کنید:"
+)
+ADMIN_ADD_CLIENT_NO_LOCATIONS = (
+    "❗ هیچ لوکیشن فعالی برای ساخت کلاینت وجود ندارد."
+)
+ADMIN_ADD_CLIENT_PROVISIONING = "⏳ در حال ساخت کلاینت روی پنل..."
+ADMIN_ADD_CLIENT_OK = (
+    "✅ <b>کلاینت ساخته شد</b>\n\n"
+    "🆔 سفارش: <code>#{order_id}</code>\n"
+    "👤 کاربر: <code>{user_id}</code>\n"
+    "📍 لوکیشن: <b>{location}</b>\n"
+    "💾 {volume} گیگ · 📅 {days} روز\n"
+    "📧 پنل: <code>{panel_email}</code>\n\n"
+    "{configs_block}"
+)
+ADMIN_ADD_CLIENT_FAILED = (
+    "⚠️ ساخت کلاینت ناموفق بود (سفارش <code>#{order_id}</code>):\n"
+    "<code>{error}</code>"
+)
+ADMIN_ADD_CLIENT_USER_NOTIFY = (
+    "🎉 <b>سرویس شما توسط پشتیبانی فعال شد</b>\n\n"
+    "🆔 سفارش: <code>#{order_id}</code>\n"
+    "📍 {location} · {volume} گیگ · {days} روز\n\n"
+    "{configs_block}\n\n"
+    "از «سرویس‌های من» می‌توانید مصرف را ببینید."
+)
 
 ADMIN_LOCATIONS_MENU = (
     "📍 <b>لوکیشن‌ها</b> ({count} مورد)\n\n"

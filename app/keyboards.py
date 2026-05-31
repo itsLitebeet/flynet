@@ -108,6 +108,8 @@ CB_ADM_LOC_TOGGLE_PREFIX = "adm:lt:"    # adm:lt:<location_id>
 CB_ADM_LOC_PURCHASE_PREFIX = "adm:lp:"  # adm:lp:<location_id>
 CB_ADM_TOOL_SYNC         = "adm:tsync"
 CB_ADM_TOOL_CLEAR        = "adm:tclr"
+CB_ADM_ADD_CLIENT        = "adm:addcl"
+CB_ADM_ADD_CLIENT_LOC_PREFIX = "adm:acl:"  # adm:acl:<location_id>
 CB_ADM_BROADCAST         = "adm:bcast"
 CB_BROADCAST_CONFIRM     = "adm:bcast:ok"
 CB_BROADCAST_CANCEL      = "adm:bcast:no"
@@ -1232,7 +1234,7 @@ def broadcast_cancel_keyboard() -> InlineKeyboardMarkup:
 def admin_tools_inline(
     user_id: int, settings, db, *, has_log_channel: bool
 ) -> InlineKeyboardMarkup:
-    from app.admin_perms import TOOLS_BROADCAST, TOOLS_MISC, TOOLS_SYNC
+    from app.admin_perms import ORDERS_MANAGE, TOOLS_BROADCAST, TOOLS_MISC, TOOLS_SYNC
 
     rows: list[list[InlineKeyboardButton]] = []
     if _admin_perm(user_id, TOOLS_BROADCAST, settings, db):
@@ -1257,6 +1259,12 @@ def admin_tools_inline(
         rows.append([
             InlineKeyboardButton(
                 text=texts.ADMIN_BTN_TOGGLE_TEST, callback_data=CB_ADM_TOGGLE_TEST
+            ),
+        ])
+    if _admin_perm(user_id, ORDERS_MANAGE, settings, db):
+        rows.append([
+            InlineKeyboardButton(
+                text=texts.ADMIN_BTN_ADD_CLIENT, callback_data=CB_ADM_ADD_CLIENT
             ),
         ])
     if _admin_perm(user_id, TOOLS_SYNC, settings, db):
@@ -1296,6 +1304,41 @@ def admin_pending_list(orders: list[dict]) -> InlineKeyboardMarkup:
         InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_ORDERS),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_add_client_locations(locs: list[Location]) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    for loc in locs:
+        rows.append([
+            InlineKeyboardButton(
+                text=loc.name,
+                callback_data=f"{CB_ADM_ADD_CLIENT_LOC_PREFIX}{loc.id}",
+            )
+        ])
+    rows.append([
+        InlineKeyboardButton(
+            text=texts.BTN_CANCEL, callback_data=CB_ADM_FLOW_CANCEL
+        ),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_add_client_done_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.ADMIN_BTN_ADD_CLIENT,
+                    callback_data=CB_ADM_ADD_CLIENT,
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.ADMIN_BTN_TOOLS, callback_data=CB_ADM_TOOLS
+                ),
+            ],
+        ]
+    )
 
 
 def _location_list_emoji(loc: Location) -> str:

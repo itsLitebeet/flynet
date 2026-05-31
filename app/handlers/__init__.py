@@ -6,6 +6,7 @@ from app.handlers import (
     admin_customers,
     admin_offer,
     admin_location_edit,
+    admin_add_client,
     admin_order,
     admin_roles,
     admin_permission_management,
@@ -40,6 +41,7 @@ def build_root_router() -> Router:
     root.include_router(admin_customers.router)
     root.include_router(admin_offer.router)
     root.include_router(admin_location_edit.router)
+    root.include_router(admin_add_client.router)
     root.include_router(admin_roles.router)
     root.include_router(admin_permission_management.router)
     root.include_router(admin_panel.router)
