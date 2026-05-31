@@ -63,7 +63,8 @@ UI is in Persian (فارسی). Runs with long polling — no public server requi
 /stats            counts of users / orders / tickets
 /users            20 most recent users
 /pending          orders awaiting payment review
-/broadcast TEXT   DM every (non-banned) user
+/broadcast        Wizard: text, photo, video, file (+ caption), preview & confirm
+/broadcast TEXT   Quick text-only blast to every (non-banned) user
 
 /setcard NUMBER | HOLDER          update the card shown to buyers
 /setprice BASE PER_GB PER_DAY     update the pricing formula

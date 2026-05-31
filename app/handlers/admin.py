@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 from html import escape
 
@@ -45,39 +44,6 @@ async def cmd_users(message: Message, settings: Settings, db: Database) -> None:
         await message.answer(texts.NOT_ADMIN)
         return
     await send_users(message, db, page=0)
-
-
-@router.message(Command("broadcast"))
-async def cmd_broadcast(
-    message: Message,
-    command: CommandObject,
-    settings: Settings,
-    db: Database,
-    bot: Bot,
-) -> None:
-    if not _require_admin(message, settings):
-        await message.answer(texts.NOT_ADMIN)
-        return
-
-    payload = (command.args or "").strip()
-    if not payload:
-        await message.answer(texts.BROADCAST_EMPTY)
-        return
-
-    user_ids = db.all_user_ids()
-    await message.answer(texts.BROADCAST_STARTED.format(count=len(user_ids)))
-
-    ok = 0
-    fail = 0
-    for uid in user_ids:
-        try:
-            await bot.send_message(uid, payload)
-            ok += 1
-        except Exception:  # noqa: BLE001 — user may have blocked the bot
-            fail += 1
-        await asyncio.sleep(0.05)
-
-    await message.answer(texts.BROADCAST_DONE.format(ok=ok, fail=fail))
 
 
 # ---------- settings ----------

@@ -57,6 +57,9 @@ CB_ADM_LOC_DETAIL_PREFIX = "adm:ld:"    # adm:ld:<location_id>
 CB_ADM_LOC_TOGGLE_PREFIX = "adm:lt:"    # adm:lt:<location_id>
 CB_ADM_TOOL_SYNC         = "adm:tsync"
 CB_ADM_TOOL_CLEAR        = "adm:tclr"
+CB_ADM_BROADCAST         = "adm:bcast"
+CB_BROADCAST_CONFIRM     = "adm:bcast:ok"
+CB_BROADCAST_CANCEL      = "adm:bcast:no"
 CB_ADM_PLANS             = "adm:plans"
 CB_ADM_VOL_DEL_PREFIX    = "adm:vd:"   # adm:vd:<gb>
 CB_ADM_DUR_DEL_PREFIX    = "adm:dd:"   # adm:dd:<days>
@@ -527,9 +530,44 @@ def admin_user_detail_keyboard(user_id: int) -> InlineKeyboardMarkup:
     )
 
 
+def broadcast_confirm_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.BTN_BROADCAST_SEND,
+                    callback_data=CB_BROADCAST_CONFIRM,
+                ),
+                InlineKeyboardButton(
+                    text=texts.BTN_BROADCAST_CANCEL,
+                    callback_data=CB_BROADCAST_CANCEL,
+                ),
+            ],
+        ]
+    )
+
+
+def broadcast_cancel_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.BTN_BROADCAST_CANCEL,
+                    callback_data=CB_BROADCAST_CANCEL,
+                ),
+            ],
+        ]
+    )
+
+
 def admin_tools_inline() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.BTN_ADMIN_BROADCAST, callback_data=CB_ADM_BROADCAST
+                ),
+            ],
             [
                 InlineKeyboardButton(
                     text="🔄 همگام‌سازی پنل", callback_data=CB_ADM_TOOL_SYNC

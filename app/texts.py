@@ -542,7 +542,8 @@ ADMIN_HELP = (
     "/stats — آمار کلی\n"
     "/users — کاربران تلگرام + کلاینت‌های پنل\n"
     "/pending — سفارش‌های در انتظار بررسی\n"
-    "/broadcast &lt;متن&gt; — ارسال همگانی\n\n"
+    "/broadcast — ارسال همگانی (متن، عکس، ویدیو، فایل + کپشن)\n"
+    "/broadcast &lt;متن&gt; — ارسال سریع فقط متن\n\n"
     "<b>تنظیمات:</b>\n"
     "/setcard &lt;شماره کارت&gt; | &lt;نام صاحب کارت&gt;\n"
     "/setprice &lt;base&gt; &lt;per_gb&gt; &lt;per_day&gt; — قیمت پیش‌فرض (لوکیشن‌های جدید)\n"
@@ -611,9 +612,53 @@ SYNC_PANEL_DONE = (
 )
 SYNC_PANEL_LOC_ERR  = "⚠️ خطا در لوکیشن <code>#{id}</code> ({name}):\n<code>{error}</code>"
 
-BROADCAST_EMPTY   = "❗ استفاده: <code>/broadcast متن پیام</code>"
-BROADCAST_STARTED = "📣 شروع ارسال همگانی به {count} کاربر..."
-BROADCAST_DONE    = "✅ ارسال همگانی پایان یافت.\nموفق: <b>{ok}</b> | ناموفق: <b>{fail}</b>"
+BTN_ADMIN_BROADCAST = "📣 ارسال همگانی"
+BTN_BROADCAST_SEND   = "✅ ارسال به همه"
+BTN_BROADCAST_CANCEL = "❌ انصراف"
+
+BROADCAST_PROMPT = (
+    "📣 <b>ارسال همگانی</b>\n\n"
+    "یک پیام بفرستید — هر کدام از این‌ها:\n"
+    "• متن (با فرمت تلگرام)\n"
+    "• عکس / ویدیو / فایل / گیف / ویس / استیکر\n"
+    "• همراه با <b>کپشن</b> در صورت نیاز\n\n"
+    "پس از ارسال، پیش‌نمایش و تأیید نمایش داده می‌شود.\n"
+    "انصراف: <code>/cancel</code> یا دکمه زیر"
+)
+
+BROADCAST_PREVIEW = (
+    "👁 <b>پیش‌نمایش ارسال همگانی</b>\n\n"
+    "نوع: <b>{type_label}</b>\n"
+    "متن/کپشن: {caption_preview}\n"
+    "مخاطب: <b>{count}</b> کاربر (غیرمسدود)\n\n"
+    "پیام بالا همان چیزی است که ارسال می‌شود.\n"
+    "تأیید می‌کنید؟"
+)
+
+BROADCAST_ALBUM_UNSUPPORTED = (
+    "⚠️ آلبوم (چند عکس/فایل یکجا) پشتیبانی نمی‌شود.\n"
+    "لطفاً <b>یک پیام</b> بفرستید (مثلاً یک عکس با کپشن)."
+)
+
+BROADCAST_WRONG_ADMIN = "فقط ادمینی که این پیام را ساخت می‌تواند ارسال را تأیید کند."
+
+BROADCAST_CANCELLED = "❌ ارسال همگانی لغو شد."
+
+BROADCAST_CONFIRM_HINT = (
+    "ℹ️ برای ارسال، دکمه «ارسال به همه» را بزنید.\n"
+    "انصراف: <code>/cancel</code>"
+)
+
+BROADCAST_STARTED = "📣 شروع ارسال همگانی به <b>{count}</b> کاربر..."
+BROADCAST_PROGRESS = (
+    "📣 در حال ارسال… <b>{done}</b> / <b>{total}</b>\n"
+    "موفق: <b>{ok}</b> | ناموفق: <b>{fail}</b>"
+)
+BROADCAST_DONE = (
+    "✅ ارسال همگانی پایان یافت.\n"
+    "موفق: <b>{ok}</b> | ناموفق: <b>{fail}</b>\n\n"
+    "<i>ناموفق معمولاً به‌خاطر بلاک ربات یا حذف اکانت است.</i>"
+)
 
 NEW_TICKET_NOTIFY = (
     "🆕 <b>تیکت پشتیبانی جدید #{ticket_id}</b>\n"
