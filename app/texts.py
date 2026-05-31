@@ -583,6 +583,9 @@ ADMIN_HELP = (
     "/addservice &lt;loc_id&gt; &lt;gb&gt; &lt;days&gt; &lt;toman&gt;\n"
     "/listservices [loc_id] — لیست پلن‌ها\n"
     "/delservice &lt;package_id&gt;\n\n"
+    "<b>لاگ:</b>\n"
+    "/logchannel — اتصال کانال لاگ (سفارش، رسید، تأیید/رد، تست، تیکت)\n"
+    "/logchannel off — خاموش\n\n"
     "<b>لوکیشن‌ها:</b>\n"
     "/locations — لیست لوکیشن‌ها\n"
     "/addlocation &lt;name&gt; | &lt;base_url&gt; | &lt;api_token&gt; | &lt;inbound_id1,id2&gt;\n"
@@ -752,6 +755,35 @@ TOGGLE_MANUAL_PURCHASE_OK = (
     "<b>روشن:</b> کاربر پس از انتخاب لوکیشن، پلن‌های ازپیش‌تعریف را می‌بیند.\n"
     "<b>خاموش:</b> انتخاب جداگانه حجم و مدت (فرمول قیمت)."
 )
+
+LOG_CHANNEL_USAGE = (
+    "❗ استفاده:\n"
+    "<code>/logchannel</code> — اتصال کانال (فوروارد یا شناسه)\n"
+    "<code>/logchannel -1001234567890</code> — شناسه مستقیم\n"
+    "<code>/logchannel off</code> — غیرفعال"
+)
+LOG_CHANNEL_PROMPT = (
+    "📋 <b>تنظیم کانال لاگ</b>\n\n"
+    "۱) ربات را در کانال لاگ <b>ادمین</b> کنید (دسترسی ارسال پیام).\n"
+    "۲) یک پیام از همان کانال را <b>فوروارد</b> کنید\n"
+    "   یا شناسه کانال را بفرستید (مثل <code>-1001234567890</code>).\n\n"
+    "انصراف: <code>/cancel</code>"
+)
+LOG_CHANNEL_NEED_FORWARD = (
+    "❗ یک پیام <b>فوروارد‌شده</b> از کانال لاگ بفرستید "
+    "یا شناسه عددی کانال (مثل <code>-100…</code>)."
+)
+LOG_CHANNEL_TEST = "✅ کانال لاگ NetFly متصل شد."
+LOG_CHANNEL_OK = (
+    "✅ کانال لاگ ثبت شد: <code>{chat_id}</code>\n"
+    "پیام آزمایشی ارسال شد."
+)
+LOG_CHANNEL_FORBIDDEN = (
+    "❗ ربات نمی‌تواند در این کانال پیام بفرستد.\n"
+    "ربات را ادمین کانال کنید و دوباره تلاش کنید."
+)
+LOG_CHANNEL_BAD = "❗ خطا: <code>{error}</code>"
+LOG_CHANNEL_CLEARED = "✅ کانال لاگ غیرفعال شد."
 
 SET_LOC_PRICE_USAGE = (
     "❗ استفاده:\n"

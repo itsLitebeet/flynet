@@ -12,6 +12,7 @@ from aiogram.types import CallbackQuery, Message
 from app import keyboards, texts
 from app.config import Settings
 from app.db import Database
+from app.logs import Actor, make_logger
 
 
 router = Router(name="support")
@@ -85,6 +86,14 @@ async def on_support_message(
         full_name=escape(full_name),
         message=escape(text),
     )
+    actor = Actor.from_user(user)
+    if actor is not None:
+        await make_logger(bot, db).log_support_ticket(
+            ticket_id=ticket_id,
+            user=actor,
+            message=text,
+        )
+
     for admin_id in settings.admin_ids:
         try:
             await bot.send_message(admin_id, notify)

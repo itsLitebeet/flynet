@@ -17,6 +17,7 @@ from app import keyboards, texts
 from app.config import Settings
 from app.db import Database
 from app.handlers.admin_helpers import admin_from_message, is_admin
+from app.logs import Actor, make_logger
 
 router = Router(name="admin_broadcast")
 log = logging.getLogger(__name__)
@@ -285,6 +286,15 @@ async def cb_broadcast_confirm(
         reply_markup=keyboards.admin_reply_keyboard(),
         parse_mode=ParseMode.HTML,
     )
+
+    admin = Actor.from_user(callback.from_user)
+    if admin is not None:
+        await make_logger(bot, db).log_broadcast_done(
+            admin=admin,
+            total=len(user_ids),
+            ok=ok,
+            fail=fail,
+        )
 
 
 @router.message(StateFilter(BroadcastFlow.waiting_confirm))

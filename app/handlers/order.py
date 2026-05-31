@@ -21,6 +21,7 @@ from app import keyboards, texts
 from app.config import Settings
 from app.db import Database
 from app.handlers.buyer_ui import buyer_reply_keyboard
+from app.logs import Actor, make_logger
 
 
 router = Router(name="order")
@@ -111,7 +112,7 @@ def _resolve_order_terms(
 
 
 async def _abort_order_flow(
-    message: Message, state: FSMContext, db: Database
+    message: Message, state: FSMContext, db: Database, bot: Bot | None = None
 ) -> None:
     """User cancelled mid-purchase — drop the unpaid order row if one was created."""
     data = await state.get_data()
@@ -120,6 +121,14 @@ async def _abort_order_flow(
         row = db.get_order(order_id)
         # Only delete while still waiting for payment (not after receipt sent).
         if row is not None and str(row["status"]) == "awaiting_payment":
+            if bot is not None:
+                buyer = Actor.from_user(message.from_user)
+                if buyer is not None:
+                    await make_logger(bot, db).log_order_cancelled(
+                        order_id=order_id,
+                        user=buyer,
+                        had_receipt=False,
+                    )
             db.delete_order(order_id)
     await state.clear()
     await message.answer(
@@ -424,6 +433,7 @@ async def cb_confirm_order(
     callback: CallbackQuery,
     state: FSMContext,
     db: Database,
+    bot: Bot,
 ) -> None:
     data = await state.get_data()
     user = callback.from_user
@@ -471,6 +481,17 @@ async def cb_confirm_order(
     await state.update_data(order_id=order_id)
     await state.set_state(OrderFlow.awaiting_receipt)
 
+    buyer = Actor.from_user(user)
+    if buyer is not None:
+        await make_logger(bot, db).log_order_awaiting_payment(
+            order_id=order_id,
+            buyer=buyer,
+            location=location_name,
+            volume_gb=volume_gb,
+            duration_days=duration_days,
+            price=price_toman,
+        )
+
     card_raw = db.get_setting("card_number", "—") or "—"
     card_holder = db.get_setting("card_holder", "—") or "—"
 
@@ -489,8 +510,10 @@ async def cb_confirm_order(
 
 # ---------- back/cancel ----------
 @router.message(Command("cancel"), StateFilter(OrderFlow))
-async def cmd_cancel_order(message: Message, state: FSMContext, db: Database) -> None:
-    await _abort_order_flow(message, state, db)
+async def cmd_cancel_order(
+    message: Message, state: FSMContext, db: Database, bot: Bot
+) -> None:
+    await _abort_order_flow(message, state, db, bot)
 
 
 @router.callback_query(
@@ -498,10 +521,10 @@ async def cmd_cancel_order(message: Message, state: FSMContext, db: Database) ->
     StateFilter(OrderFlow),
 )
 async def cb_cancel_anywhere(
-    callback: CallbackQuery, state: FSMContext, db: Database
+    callback: CallbackQuery, state: FSMContext, db: Database, bot: Bot
 ) -> None:
     if isinstance(callback.message, Message):
-        await _abort_order_flow(callback.message, state, db)
+        await _abort_order_flow(callback.message, state, db, bot)
     else:
         await state.clear()
     await callback.answer()
@@ -573,7 +596,7 @@ async def on_receipt_photo(
     data = await state.get_data()
     order_id = int(data.get("order_id", 0))
     if not order_id or message.photo is None:
-        await _abort_order_flow(message, state, db)
+        await _abort_order_flow(message, state, db, bot)
         return
 
     # Highest-resolution photo size is last.
@@ -603,6 +626,18 @@ async def on_receipt_photo(
         price=texts.format_price(int(data["price"])),
     )
     review_kb = keyboards.admin_review(order_id=order_id, user_id=user_id)
+
+    buyer = Actor.from_user(user)
+    if buyer is not None:
+        await make_logger(bot, db).log_receipt_uploaded(
+            order_id=order_id,
+            buyer=buyer,
+            photo_file_id=file_id,
+            location=str(data["location_name"]),
+            volume_gb=int(data["volume_gb"]),
+            duration_days=int(data["duration_days"]),
+            price=int(data["price"]),
+        )
 
     for admin_id in settings.admin_ids:
         try:

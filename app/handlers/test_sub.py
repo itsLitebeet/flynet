@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from html import escape
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -14,6 +14,7 @@ from aiogram.types import CallbackQuery, Message
 from app import keyboards, texts
 from app.db import Database, TEST_VOLUME_BYTES
 from app.handlers.buyer_ui import buyer_reply_keyboard, buyer_show_test_button
+from app.logs import Actor, make_logger
 from app.xui import XuiClient, XuiError, build_client_email
 
 
@@ -77,7 +78,7 @@ async def cb_test_sub(callback: CallbackQuery, state: FSMContext, db: Database) 
 
 @router.callback_query(F.data == "test:confirm", StateFilter(TestFlow.confirming))
 async def cb_test_confirm(
-    callback: CallbackQuery, state: FSMContext, db: Database
+    callback: CallbackQuery, state: FSMContext, db: Database, bot: Bot
 ) -> None:
     user = callback.from_user
     if user is None or callback.message is None:
@@ -126,6 +127,16 @@ async def cb_test_confirm(
     except XuiError as exc:
         log.warning("Test provision failed for order %s: %s", order_id, exc)
         db.set_order_status(order_id, "failed")
+        actor = Actor.from_user(user)
+        if actor is not None:
+            await make_logger(bot, db).log_test_service(
+                order_id=order_id,
+                user=actor,
+                location=loc.name,
+                panel_email=email,
+                success=False,
+                error=str(exc),
+            )
         await callback.message.edit_text(
             texts.TEST_SUB_FAILED.format(error=escape(str(exc)))
         )
@@ -134,6 +145,16 @@ async def cb_test_confirm(
     except Exception as exc:  # noqa: BLE001
         log.exception("Unexpected test provision error for order %s", order_id)
         db.set_order_status(order_id, "failed")
+        actor = Actor.from_user(user)
+        if actor is not None:
+            await make_logger(bot, db).log_test_service(
+                order_id=order_id,
+                user=actor,
+                location=loc.name,
+                panel_email=email,
+                success=False,
+                error=str(exc),
+            )
         await callback.message.edit_text(
             texts.TEST_SUB_FAILED.format(error=escape(str(exc)))
         )
@@ -154,6 +175,16 @@ async def cb_test_confirm(
         sub_url=sub_url,
         sub_links=[escape(x) for x in result.sub_links],
     )
+    actor = Actor.from_user(user)
+    if actor is not None:
+        await make_logger(bot, db).log_test_service(
+            order_id=order_id,
+            user=actor,
+            location=loc.name,
+            panel_email=result.email,
+            success=True,
+        )
+
     show_test = buyer_show_test_button(db, user.id)
     await callback.message.answer(
         texts.TEST_SUB_OK.format(configs_block=configs_block),

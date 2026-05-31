@@ -25,6 +25,7 @@ from app import keyboards, texts
 from app.config import Settings
 from app.db import Database
 from app.handlers.review_notify import clear_admin_receipt_buttons
+from app.logs import Actor, make_logger
 from app.xui import XuiClient, XuiError, build_client_email
 
 
@@ -111,6 +112,18 @@ async def cb_accept_order(
     if location is None or not location.inbound_ids:
         err = "لوکیشن مرتبط با این سفارش حذف شده یا inbound ندارد."
         db.set_order_status(order_id, "failed", admin_id=callback.from_user.id)
+        admin = Actor.from_user(callback.from_user)
+        if admin is not None:
+            await make_logger(bot, db).log_order_provision_failed(
+                order_id=order_id,
+                admin=admin,
+                buyer_id=int(order["user_id"]),
+                location=str(order["location_name"]),
+                volume_gb=int(order["volume_gb"]),
+                duration_days=int(order["duration_days"]),
+                price=int(order["price"]),
+                error=err,
+            )
         await bot.send_message(callback.from_user.id, texts.REVIEW_PROVISION_ERR.format(error=err))
         await bot.send_message(int(order["user_id"]), texts.ORDER_PROVISION_FAILED_USER)
         return
@@ -129,6 +142,18 @@ async def cb_accept_order(
     except XuiError as exc:
         log.warning("Provisioning failed for order %s: %s", order_id, exc)
         db.set_order_status(order_id, "failed", admin_id=callback.from_user.id)
+        admin = Actor.from_user(callback.from_user)
+        if admin is not None:
+            await make_logger(bot, db).log_order_provision_failed(
+                order_id=order_id,
+                admin=admin,
+                buyer_id=int(order["user_id"]),
+                location=str(order["location_name"]),
+                volume_gb=int(order["volume_gb"]),
+                duration_days=int(order["duration_days"]),
+                price=int(order["price"]),
+                error=str(exc),
+            )
         await bot.send_message(
             callback.from_user.id,
             texts.REVIEW_PROVISION_ERR.format(error=escape(str(exc))),
@@ -138,6 +163,18 @@ async def cb_accept_order(
     except Exception as exc:  # noqa: BLE001 — any other failure (network, etc.)
         log.exception("Unexpected provisioning error for order %s", order_id)
         db.set_order_status(order_id, "failed", admin_id=callback.from_user.id)
+        admin = Actor.from_user(callback.from_user)
+        if admin is not None:
+            await make_logger(bot, db).log_order_provision_failed(
+                order_id=order_id,
+                admin=admin,
+                buyer_id=int(order["user_id"]),
+                location=str(order["location_name"]),
+                volume_gb=int(order["volume_gb"]),
+                duration_days=int(order["duration_days"]),
+                price=int(order["price"]),
+                error=str(exc),
+            )
         await bot.send_message(
             callback.from_user.id,
             texts.REVIEW_PROVISION_ERR.format(error=escape(str(exc))),
@@ -173,6 +210,19 @@ async def cb_accept_order(
     except Exception:  # noqa: BLE001 — user may have blocked the bot
         log.exception("Failed to notify user %s about provisioned order %s",
                       order["user_id"], order_id)
+
+    admin = Actor.from_user(callback.from_user)
+    if admin is not None:
+        await make_logger(bot, db).log_order_accepted(
+            order_id=order_id,
+            admin=admin,
+            buyer_id=int(order["user_id"]),
+            location=str(order["location_name"]),
+            volume_gb=int(order["volume_gb"]),
+            duration_days=int(order["duration_days"]),
+            price=int(order["price"]),
+            panel_email=result.email,
+        )
 
     await bot.send_message(callback.from_user.id, texts.REVIEW_PROVISION_OK)
 
@@ -265,6 +315,18 @@ async def on_decline_reason(
         acting_admin_id=admin_id,
         action="رد شد",
     )
+    admin = Actor.from_user(message.from_user)
+    if admin is not None:
+        await make_logger(bot, db).log_order_declined(
+            order_id=order_id,
+            admin=admin,
+            buyer_id=user_id,
+            location=str(order["location_name"]),
+            volume_gb=int(order["volume_gb"]),
+            duration_days=int(order["duration_days"]),
+            price=int(order["price"]),
+            reason=reason,
+        )
     await message.answer(texts.REVIEW_DECLINE_SENT)
 
     try:
