@@ -20,6 +20,7 @@ from aiogram.types import CallbackQuery, Message
 from app import keyboards, texts
 from app.config import Settings
 from app.db import Database
+from app.handlers.buyer_ui import buyer_reply_keyboard
 
 
 router = Router(name="order")
@@ -66,11 +67,13 @@ async def _abort_order_flow(
         if row is not None and str(row["status"]) == "awaiting_payment":
             db.delete_order(order_id)
     await state.clear()
-    await message.answer(texts.CANCELLED, reply_markup=keyboards.main_reply_keyboard())
+    await message.answer(
+        texts.CANCELLED, reply_markup=buyer_reply_keyboard(message, db)
+    )
 
 
 async def _show_locations(callback: CallbackQuery, db: Database, state: FSMContext) -> None:
-    locs = db.list_locations(only_enabled=True)
+    locs = db.list_locations(only_enabled=True, exclude_test=True)
     if not locs:
         await _edit_or_answer(callback, texts.NO_LOCATIONS_USER, keyboards.back_to_menu())
         await state.clear()
@@ -133,10 +136,11 @@ async def _show_review(callback: CallbackQuery, state: FSMContext, db: Database)
 async def _begin_buy_message(message: Message, state: FSMContext, db: Database) -> None:
     """Start buy flow (reply-keyboard button or inline «خرید»)."""
     await state.clear()
-    locs = db.list_locations(only_enabled=True)
+    locs = db.list_locations(only_enabled=True, exclude_test=True)
     if not locs:
         await message.answer(
-            texts.NO_LOCATIONS_USER, reply_markup=keyboards.main_reply_keyboard()
+            texts.NO_LOCATIONS_USER,
+            reply_markup=buyer_reply_keyboard(message, db),
         )
         return
     await state.set_state(OrderFlow.picking_location)
@@ -388,7 +392,8 @@ async def on_receipt_photo(
 
     await state.clear()
     await message.answer(
-        texts.ORDER_RECEIPT_RECEIVED, reply_markup=keyboards.main_reply_keyboard()
+        texts.ORDER_RECEIPT_RECEIVED,
+        reply_markup=buyer_reply_keyboard(message, db),
     )
 
     user = message.from_user

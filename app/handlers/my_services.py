@@ -97,10 +97,19 @@ def _format_expiry(ms: int) -> tuple[str, str]:
     return (absolute, time_left)
 
 
+def _order_volume_label(row) -> str:
+    is_test = bool(row["is_test"]) if "is_test" in row.keys() else False
+    if is_test:
+        return texts.format_test_volume()
+    return f"{int(row['volume_gb'])}GB"
+
+
 def _service_list_label(row) -> str:
     badge = _status_badge(str(row["status"]))
     nick = f" — «{row['nickname']}»" if (row["nickname"] or "") else ""
-    return f"{badge} #{row['id']} · {row['location_name']} · {row['volume_gb']}GB/{row['duration_days']}d{nick}"
+    vol = _order_volume_label(row)
+    test_mark = " 🧪" if ("is_test" in row.keys() and row["is_test"]) else ""
+    return f"{badge} #{row['id']}{test_mark} · {row['location_name']} · {vol}/{row['duration_days']}d{nick}"
 
 
 def _format_usage_block(usage: ClientUsage) -> str:
@@ -152,7 +161,10 @@ def _build_detail_text(
         order_id=row["id"],
         nickname_part=nickname_part,
         location=escape(str(row["location_name"])),
-        volume=int(row["volume_gb"]),
+        volume=texts.format_order_volume(
+            int(row["volume_gb"]),
+            is_test=bool(row["is_test"]) if "is_test" in row.keys() else False,
+        ),
         days=int(row["duration_days"]),
         price=texts.format_price(int(row["price"])),
         status=_status_badge(str(row["status"])),

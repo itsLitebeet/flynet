@@ -20,6 +20,7 @@ CB_MAIN_ACCOUNT       = "main:account"
 CB_MAIN_SUPPORT       = "main:support"
 CB_MAIN_HELP          = "main:help"
 CB_MAIN_ABOUT         = "main:about"
+CB_MAIN_TEST          = "main:test"
 CB_MAIN_HOME          = "main:home"
 
 # Order flow
@@ -77,23 +78,27 @@ CB_MY_REGEN_CONFIRM_PREFIX  = "my:rg!ok:"    # my:rg!ok:<order_id>   (actually r
 
 
 # ---------- reply keyboard (bottom menu, replaces phone keyboard) ----------
-def main_reply_keyboard() -> ReplyKeyboardMarkup:
+def main_reply_keyboard(*, show_test: bool = False) -> ReplyKeyboardMarkup:
     """Persistent bottom buttons — main navigation for buyers."""
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [
-                KeyboardButton(text=texts.BTN_BUY),
-                KeyboardButton(text=texts.BTN_MY_SERVICES),
-            ],
-            [
-                KeyboardButton(text=texts.BTN_MY_ACCOUNT),
-                KeyboardButton(text=texts.BTN_SUPPORT),
-            ],
-            [
-                KeyboardButton(text=texts.BTN_HELP),
-                KeyboardButton(text=texts.BTN_ABOUT),
-            ],
+    rows: list[list[KeyboardButton]] = []
+    if show_test:
+        rows.append([KeyboardButton(text=texts.BTN_TEST_SUB)])
+    rows.extend([
+        [
+            KeyboardButton(text=texts.BTN_BUY),
+            KeyboardButton(text=texts.BTN_MY_SERVICES),
         ],
+        [
+            KeyboardButton(text=texts.BTN_MY_ACCOUNT),
+            KeyboardButton(text=texts.BTN_SUPPORT),
+        ],
+        [
+            KeyboardButton(text=texts.BTN_HELP),
+            KeyboardButton(text=texts.BTN_ABOUT),
+        ],
+    ])
+    return ReplyKeyboardMarkup(
+        keyboard=rows,
         resize_keyboard=True,
         is_persistent=True,
     )
@@ -107,6 +112,7 @@ def hide_reply_keyboard() -> ReplyKeyboardRemove:
 # All main-menu button labels — use with F.text.in_(...) + StateFilter(None).
 MAIN_MENU_BUTTONS = frozenset({
     texts.BTN_BUY,
+    texts.BTN_TEST_SUB,
     texts.BTN_MY_SERVICES,
     texts.BTN_MY_ACCOUNT,
     texts.BTN_SUPPORT,
@@ -126,20 +132,41 @@ ADMIN_MENU_BUTTONS = frozenset({
 
 
 # ---------- inline keyboards (inside messages / wizards) ----------
-def main_menu() -> InlineKeyboardMarkup:
+def main_menu(*, show_test: bool = False) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    if show_test:
+        rows.append([
+            InlineKeyboardButton(
+                text=texts.BTN_TEST_SUB, callback_data=CB_MAIN_TEST
+            ),
+        ])
+    rows.extend([
+        [
+            InlineKeyboardButton(text=texts.BTN_BUY,         callback_data=CB_MAIN_BUY),
+            InlineKeyboardButton(text=texts.BTN_MY_SERVICES, callback_data=CB_MAIN_MY_SERVICES),
+        ],
+        [
+            InlineKeyboardButton(text=texts.BTN_MY_ACCOUNT, callback_data=CB_MAIN_ACCOUNT),
+            InlineKeyboardButton(text=texts.BTN_SUPPORT,    callback_data=CB_MAIN_SUPPORT),
+        ],
+        [
+            InlineKeyboardButton(text=texts.BTN_HELP,  callback_data=CB_MAIN_HELP),
+            InlineKeyboardButton(text=texts.BTN_ABOUT, callback_data=CB_MAIN_ABOUT),
+        ],
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def test_sub_confirm() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text=texts.BTN_BUY,         callback_data=CB_MAIN_BUY),
-                InlineKeyboardButton(text=texts.BTN_MY_SERVICES, callback_data=CB_MAIN_MY_SERVICES),
+                InlineKeyboardButton(
+                    text=texts.BTN_CONFIRM, callback_data="test:confirm"
+                ),
             ],
             [
-                InlineKeyboardButton(text=texts.BTN_MY_ACCOUNT, callback_data=CB_MAIN_ACCOUNT),
-                InlineKeyboardButton(text=texts.BTN_SUPPORT,    callback_data=CB_MAIN_SUPPORT),
-            ],
-            [
-                InlineKeyboardButton(text=texts.BTN_HELP,  callback_data=CB_MAIN_HELP),
-                InlineKeyboardButton(text=texts.BTN_ABOUT, callback_data=CB_MAIN_ABOUT),
+                InlineKeyboardButton(text=texts.BTN_CANCEL, callback_data=CB_MAIN_HOME),
             ],
         ]
     )

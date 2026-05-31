@@ -13,6 +13,10 @@ DURATION_PRESETS_DAYS = DEFAULT_DURATION_PRESETS_DAYS
 CUSTOM_VOLUME_MIN_GB = 1
 CUSTOM_VOLUME_MAX_GB = 500
 
+# Free test subscription (one per user)
+TEST_VOLUME_MB = 100
+TEST_DURATION_DAYS = 3
+
 
 # ---------- helpers ----------
 def format_price(toman: int) -> str:
@@ -50,6 +54,7 @@ def format_bytes(n: int) -> str:
 
 # ---------- buttons ----------
 BTN_BUY          = "🛒 خرید سرویس"
+BTN_TEST_SUB     = "🧪 دریافت اشتراک تست"
 BTN_MY_SERVICES  = "📊 سرویس‌های من"
 BTN_MY_ACCOUNT   = "👤 حساب کاربری"
 BTN_SUPPORT      = "💬 پشتیبانی"
@@ -102,7 +107,7 @@ SERVICE_LIST_ITEM = (
 SERVICE_DETAIL = (
     "📦 <b>سرویس #{order_id}</b>{nickname_part}\n\n"
     "📍 لوکیشن: <b>{location}</b>\n"
-    "💾 حجم سفارش: <b>{volume} گیگابایت</b>\n"
+    "💾 حجم سفارش: <b>{volume}</b>\n"
     "📅 مدت سفارش: <b>{days} روز</b>\n"
     "💰 مبلغ: <b>{price}</b>\n"
     "🏷 وضعیت: <b>{status}</b>\n"
@@ -197,6 +202,45 @@ WELCOME = (
     "و مدیریت کنید.\n\n"
     "از <b>دکمه‌های پایین صفحه</b> یکی از گزینه‌ها را انتخاب کنید 👇"
 )
+
+TEST_SUB_CONFIRM = (
+    "🧪 <b>اشتراک تست رایگان</b>\n\n"
+    "📍 لوکیشن: <b>{location}</b>\n"
+    "💾 حجم: <b>{volume}</b>\n"
+    "📅 مدت: <b>{days} روز</b>\n"
+    "💰 مبلغ: <b>رایگان</b>\n\n"
+    "⚠️ هر کاربر فقط <b>یک‌بار</b> می‌تواند اشتراک تست دریافت کند.\n\n"
+    "ادامه می‌دهید؟"
+)
+TEST_SUB_PROVISIONING = "⏳ در حال ساخت اشتراک تست روی پنل..."
+TEST_SUB_OK = (
+    "🎉 <b>اشتراک تست شما آماده است!</b>\n\n"
+    "{configs_block}\n\n"
+    "از «سرویس‌های من» می‌توانید مصرف و لینک‌ها را ببینید."
+)
+TEST_SUB_ALREADY_USED = (
+    "ℹ️ شما قبلاً اشتراک تست دریافت کرده‌اید.\n"
+    "برای سرویس کامل از «خرید سرویس» استفاده کنید."
+)
+TEST_SUB_DISABLED = (
+    "ℹ️ اشتراک تست در حال حاضر غیرفعال است.\n"
+    "بعداً دوباره امتحان کنید یا از «خرید سرویس» استفاده کنید."
+)
+TEST_SUB_NO_LOCATION = (
+    "ℹ️ لوکیشن تست هنوز توسط ادمین تنظیم نشده است."
+)
+TEST_SUB_FAILED = (
+    "⚠️ ساخت اشتراک تست ناموفق بود:\n<code>{error}</code>\n\n"
+    "لطفاً بعداً دوباره تلاش کنید یا با پشتیبانی تماس بگیرید."
+)
+
+def format_test_volume() -> str:
+    return f"{TEST_VOLUME_MB} مگابایت"
+
+def format_order_volume(volume_gb: int, *, is_test: bool = False) -> str:
+    if is_test:
+        return format_test_volume()
+    return f"{volume_gb} گیگابایت"
 
 HELP = (
     "📖 <b>راهنمای استفاده از NetFly</b>\n\n"
@@ -428,7 +472,8 @@ ADMIN_LOCATIONS_MENU = (
 ADMIN_LOC_EMPTY = "هیچ لوکیشنی ثبت نشده است.\n\n<code>/addlocation ...</code>"
 
 ADMIN_LOC_DETAIL = (
-    "📍 <b>لوکیشن #{id}</b> {state_emoji} <b>{name}</b>\n\n"
+    "📍 <b>لوکیشن #{id}</b> {state_emoji} <b>{name}</b>\n"
+    "{test_line}\n"
     "🔗 <code>{base_url}</code>\n"
     "📡 inbounds: <code>{inbounds}</code>\n"
     "🔔 sub: <code>{sub}</code>\n"
@@ -505,7 +550,9 @@ ADMIN_HELP = (
     "/dellocation &lt;id&gt; — حذف اگر سفارشی ندارد، در غیر این صورت غیرفعال\n"
     "/purgelocation &lt;id&gt; — ⚠️ حذف کامل لوکیشن و همه سفارش‌های آن\n"
     "/togglelocation &lt;id&gt;\n"
-    "/setsuburl &lt;id&gt; &lt;template&gt; — تنظیم لینک اشتراک\n\n"
+    "/setsuburl &lt;id&gt; &lt;template&gt; — تنظیم لینک اشتراک\n"
+    "/addtestlocation — لوکیشن تست (۱۰۰MB، یک‌بار برای هر کاربر)\n"
+    "/toggletest — روشن/خاموش دکمه «دریافت اشتراک تست»\n\n"
     "<b>همگام‌سازی پنل:</b>\n"
     "/clearorder &lt;order_id&gt; — حذف یک سفارش از دیتابیس\n"
     "/syncpanel — حذف سفارش‌های یتیم (پنل) + همه رد‌شده‌ها\n"
@@ -607,6 +654,23 @@ ADD_LOC_OK      = (
     "✅ لوکیشن «{name}» با شناسه <code>{id}</code> اضافه شد.\n"
     "💰 قیمت: {pricing}"
 )
+ADD_TEST_LOC_USAGE = (
+    "❗ استفاده (همان فرمت <code>/addlocation</code>):\n"
+    "<code>/addtestlocation Test 🧪 | https://panel.example.com | "
+    "TOKEN | 1,2</code>\n\n"
+    "فیلد پنجم اختیاری: لینک اشتراک با <code>{subId}</code>\n\n"
+    "• فقط <b>یک</b> لوکیشن تست فعال — لوکیشن تست قبلی غیرفعال/حذف می‌شود\n"
+    "• خریداران: <b>۱۰۰ مگابایت</b>، <b>{days} روز</b>، رایگان، یک‌بار برای هر کاربر\n"
+    "• در لیست «خرید سرویس» نمایش داده <b>نمی‌شود</b>\n"
+    "• دکمه تست را با <code>/toggletest</code> روشن/خاموش کنید"
+).format(days=TEST_DURATION_DAYS)
+ADD_TEST_LOC_OK = (
+    "✅ <b>لوکیشن تست</b> «{name}» با شناسه <code>{id}</code> ثبت شد.\n"
+    "💾 {volume} · 📅 {days} روز · رایگان\n\n"
+    "دکمه تست: <b>{toggle_state}</b> — <code>/toggletest</code> برای تغییر"
+)
+TOGGLE_TEST_OK = "✅ دکمه «دریافت اشتراک تست» اکنون <b>{state}</b> است."
+TOGGLE_TEST_USAGE = "❗ استفاده:\n<code>/toggletest</code> — تغییر وضعیت\n<code>/toggletest on</code> | <code>/toggletest off</code>"
 
 SET_SUBURL_USAGE = (
     "❗ استفاده:\n"
@@ -640,7 +704,7 @@ TOGGLE_LOC_OK    = "✅ لوکیشن <code>{id}</code> اکنون <b>{state}</b>
 LOC_LIST_EMPTY  = "هیچ لوکیشنی ثبت نشده است. با <code>/addlocation</code> یکی اضافه کنید."
 LOC_LIST_HEADER = "📍 <b>لوکیشن‌های ثبت‌شده</b>\n"
 LOC_LIST_ITEM   = (
-    "• <code>#{id}</code> {state_emoji} <b>{name}</b>\n"
+    "• <code>#{id}</code> {state_emoji}{test_tag} <b>{name}</b>\n"
     "    base: <code>{base_url}</code>\n"
     "    inbounds: <code>{inbounds}</code>\n"
     "    sub: <code>{sub_template}</code>\n"

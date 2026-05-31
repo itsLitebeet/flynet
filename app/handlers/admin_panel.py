@@ -536,10 +536,18 @@ async def cb_admin_loc_detail(
         return
 
     sub = escape(loc.sub_url_template) if loc.sub_url_template else "—"
+    test_line = ""
+    if loc.is_test:
+        test_line = (
+            f"\n🧪 <b>لوکیشن تست</b> — {texts.format_test_volume()} · "
+            f"{texts.TEST_DURATION_DAYS} روز · رایگان · "
+            f"دکمه تست: {'روشن' if db.is_test_feature_enabled() else 'خاموش'}\n"
+        )
     text = texts.ADMIN_LOC_DETAIL.format(
         id=loc.id,
         state_emoji="🟢" if loc.enabled else "🔴",
         name=escape(loc.name),
+        test_line=test_line,
         base_url=escape(loc.base_url),
         inbounds=",".join(str(i) for i in loc.inbound_ids) or "—",
         sub=sub,

@@ -552,6 +552,8 @@ class XuiClient:
         duration_days: int,
         inbound_ids: list[int],
         tg_user_id: int,
+        total_bytes: int | None = None,
+        expiry_time_ms: int | None = None,
     ) -> ProvisionedClient:
         """Create a client and fetch its subscription links.
 
@@ -566,6 +568,8 @@ class XuiClient:
             duration_days=duration_days,
             inbound_ids=inbound_ids,
             tg_user_id=tg_user_id,
+            total_bytes=total_bytes,
+            expiry_time_ms=expiry_time_ms,
         )
 
         sub_id, client_uuid = await self.resolve_client_identity(email, add_resp=add_resp)

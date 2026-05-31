@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS locations (
     price_per_gb      INTEGER,
     price_per_day     INTEGER,
     enabled           INTEGER NOT NULL DEFAULT 1,
+    is_test           INTEGER NOT NULL DEFAULT 0,
     created_at        TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -58,6 +59,7 @@ CREATE TABLE IF NOT EXISTS orders (
     xui_client_uuid     TEXT,
     sub_links           TEXT,                    -- JSON array of strings
     nickname            TEXT,                    -- user-chosen local nickname
+    is_test             INTEGER NOT NULL DEFAULT 0,
     created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
     updated_at          TEXT    NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (user_id)     REFERENCES users(user_id),
@@ -87,7 +89,9 @@ DEFAULT_SETTINGS: dict[str, str] = {
 # JSON lists in settings — seeded from app.texts defaults on first run.
 SETTING_VOLUME_PRESETS = "volume_presets_gb"
 SETTING_DURATION_PRESETS = "duration_presets_days"
+SETTING_TEST_ENABLED = "test_feature_enabled"
 MAX_PLAN_PRESETS = 12
+TEST_VOLUME_BYTES = 100 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -102,6 +106,7 @@ class Location:
     price_per_gb: int | None
     price_per_day: int | None
     enabled: bool
+    is_test: bool
 
     def render_sub_url(self, sub_id: str | None) -> str | None:
         if not self.sub_url_template or not sub_id:
@@ -140,6 +145,7 @@ def _row_to_location(row: sqlite3.Row) -> Location:
         price_per_gb=_opt_int("price_per_gb"),
         price_per_day=_opt_int("price_per_day"),
         enabled=bool(row["enabled"]),
+        is_test=bool(row["is_test"]) if "is_test" in row.keys() else False,
     )
 
 
@@ -185,6 +191,8 @@ class Database:
         self._ensure_column("locations", "price_per_day", "INTEGER")
         self._ensure_column("orders", "nickname", "TEXT")
         self._ensure_column("orders", "admin_receipt_refs", "TEXT")
+        self._ensure_column("locations", "is_test", "INTEGER NOT NULL DEFAULT 0")
+        self._ensure_column("orders", "is_test", "INTEGER NOT NULL DEFAULT 0")
         # Legacy status from an earlier version — hard-delete on upgrade.
         with self._cursor() as cur:
             cur.execute("DELETE FROM orders WHERE status = 'panel_removed'")
@@ -217,6 +225,7 @@ class Database:
         extras = {
             SETTING_VOLUME_PRESETS: json.dumps(texts.DEFAULT_VOLUME_PRESETS_GB),
             SETTING_DURATION_PRESETS: json.dumps(texts.DEFAULT_DURATION_PRESETS_DAYS),
+            SETTING_TEST_ENABLED: "0",
         }
         with self._cursor() as cur:
             for k, v in {**DEFAULT_SETTINGS, **extras}.items():
@@ -430,6 +439,7 @@ class Database:
         price_base: int | None = None,
         price_per_gb: int | None = None,
         price_per_day: int | None = None,
+        is_test: bool = False,
     ) -> int:
         if price_base is None:
             price_base, price_per_gb, price_per_day = self.get_pricing()
@@ -437,8 +447,8 @@ class Database:
             cur.execute(
                 "INSERT INTO locations "
                 "(name, base_url, api_token, inbound_ids, sub_url_template, "
-                "price_base, price_per_gb, price_per_day) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "price_base, price_per_gb, price_per_day, is_test) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     name,
                     base_url,
@@ -448,9 +458,70 @@ class Database:
                     price_base,
                     price_per_gb,
                     price_per_day,
+                    1 if is_test else 0,
                 ),
             )
             return int(cur.lastrowid or 0)
+
+    def replace_test_location(
+        self,
+        *,
+        name: str,
+        base_url: str,
+        api_token: str,
+        inbound_ids: list[int],
+        sub_url_template: str | None = None,
+    ) -> int:
+        """Disable or remove the previous test location, then insert the new one."""
+        with self._cursor() as cur:
+            cur.execute("SELECT id FROM locations WHERE is_test = 1")
+            for row in cur.fetchall():
+                old_id = int(row["id"])
+                cur.execute(
+                    "SELECT COUNT(*) AS c FROM orders WHERE location_id = ?",
+                    (old_id,),
+                )
+                if int(cur.fetchone()["c"]) > 0:
+                    cur.execute(
+                        "UPDATE locations SET enabled = 0 WHERE id = ?", (old_id,)
+                    )
+                else:
+                    cur.execute("DELETE FROM locations WHERE id = ?", (old_id,))
+        return self.add_location(
+            name=name,
+            base_url=base_url,
+            api_token=api_token,
+            inbound_ids=inbound_ids,
+            sub_url_template=sub_url_template,
+            price_base=0,
+            price_per_gb=0,
+            price_per_day=0,
+            is_test=True,
+        )
+
+    def get_test_location(self) -> Location | None:
+        with self._cursor() as cur:
+            cur.execute(
+                "SELECT * FROM locations WHERE is_test = 1 AND enabled = 1 "
+                "ORDER BY id DESC LIMIT 1"
+            )
+            row = cur.fetchone()
+            return _row_to_location(row) if row else None
+
+    def is_test_feature_enabled(self) -> bool:
+        return self.get_setting(SETTING_TEST_ENABLED, "0") == "1"
+
+    def set_test_feature_enabled(self, enabled: bool) -> None:
+        self.set_setting(SETTING_TEST_ENABLED, "1" if enabled else "0")
+
+    def user_has_claimed_test(self, user_id: int) -> bool:
+        with self._cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM orders WHERE user_id = ? AND is_test = 1 "
+                "AND status != 'declined' LIMIT 1",
+                (user_id,),
+            )
+            return cur.fetchone() is not None
 
     def set_location_pricing(
         self,
@@ -545,12 +616,23 @@ class Database:
             row = cur.fetchone()
             return _row_to_location(row) if row else None
 
-    def list_locations(self, only_enabled: bool = False) -> list[Location]:
+    def list_locations(
+        self,
+        only_enabled: bool = False,
+        *,
+        exclude_test: bool = False,
+        only_test: bool = False,
+    ) -> list[Location]:
+        clauses: list[str] = []
+        if only_enabled:
+            clauses.append("enabled = 1")
+        if exclude_test:
+            clauses.append("is_test = 0")
+        if only_test:
+            clauses.append("is_test = 1")
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         with self._cursor() as cur:
-            if only_enabled:
-                cur.execute("SELECT * FROM locations WHERE enabled = 1 ORDER BY id")
-            else:
-                cur.execute("SELECT * FROM locations ORDER BY id")
+            cur.execute(f"SELECT * FROM locations {where} ORDER BY id")
             return [_row_to_location(r) for r in cur.fetchall()]
 
     # ---------- orders ----------
@@ -562,13 +644,24 @@ class Database:
         volume_gb: int,
         duration_days: int,
         price: int,
+        *,
+        is_test: bool = False,
     ) -> int:
         with self._cursor() as cur:
             cur.execute(
                 "INSERT INTO orders "
-                "(user_id, location_id, location_name, volume_gb, duration_days, price) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (user_id, location_id, location_name, volume_gb, duration_days, price),
+                "(user_id, location_id, location_name, volume_gb, duration_days, price, "
+                "is_test) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    user_id,
+                    location_id,
+                    location_name,
+                    volume_gb,
+                    duration_days,
+                    price,
+                    1 if is_test else 0,
+                ),
             )
             return int(cur.lastrowid or 0)
 

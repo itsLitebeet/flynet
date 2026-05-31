@@ -278,10 +278,12 @@ async def cmd_locations(message: Message, settings: Settings, db: Database) -> N
 
     lines = [texts.LOC_LIST_HEADER]
     for loc in locs:
+        test_tag = "🧪 " if loc.is_test else ""
         lines.append(
             texts.LOC_LIST_ITEM.format(
                 id=loc.id,
                 state_emoji="🟢" if loc.enabled else "🔴",
+                test_tag=test_tag,
                 name=escape(loc.name),
                 base_url=escape(loc.base_url),
                 inbounds=",".join(str(i) for i in loc.inbound_ids) or "—",
@@ -343,6 +345,91 @@ async def cmd_addlocation(
         + f"\n📡 inbounds: <code>{','.join(str(i) for i in inbound_ids)}</code>"
         + extra_sub_line
     )
+
+
+@router.message(Command("addtestlocation"))
+async def cmd_addtestlocation(
+    message: Message, command: CommandObject, settings: Settings, db: Database
+) -> None:
+    if not _require_admin(message, settings):
+        await message.answer(texts.NOT_ADMIN)
+        return
+
+    raw = (command.args or "").strip()
+    parts = [p.strip() for p in raw.split("|")]
+    if len(parts) not in (4, 5) or not all(parts[:4]):
+        await message.answer(texts.ADD_TEST_LOC_USAGE)
+        return
+
+    name, base_url, api_token, inbound_str = parts[:4]
+    sub_url_template = parts[4].strip() if len(parts) == 5 and parts[4].strip() else None
+
+    base_url = normalize_panel_url(base_url)
+    try:
+        inbound_ids = [int(x.strip()) for x in inbound_str.split(",") if x.strip()]
+    except ValueError:
+        await message.answer(texts.ADD_TEST_LOC_USAGE)
+        return
+    if not inbound_ids:
+        await message.answer(texts.ADD_TEST_LOC_USAGE)
+        return
+
+    if sub_url_template is not None and "{subId}" not in sub_url_template:
+        await message.answer(texts.SET_SUBURL_BAD)
+        return
+
+    loc_id = db.replace_test_location(
+        name=name,
+        base_url=base_url,
+        api_token=api_token,
+        inbound_ids=inbound_ids,
+        sub_url_template=sub_url_template,
+    )
+    toggle_state = "روشن ✅" if db.is_test_feature_enabled() else "خاموش ❌"
+    extra_sub_line = (
+        f"\n🔔 sub: <code>{escape(sub_url_template)}</code>"
+        if sub_url_template else ""
+    )
+    await message.answer(
+        texts.ADD_TEST_LOC_OK.format(
+            name=escape(name),
+            id=loc_id,
+            volume=texts.format_test_volume(),
+            days=texts.TEST_DURATION_DAYS,
+            toggle_state=toggle_state,
+        )
+        + f"\n\n🔗 base_url:\n<code>{escape(base_url)}</code>"
+        + f"\n📡 inbounds: <code>{','.join(str(i) for i in inbound_ids)}</code>"
+        + extra_sub_line
+    )
+
+
+@router.message(Command("toggletest"))
+async def cmd_toggletest(
+    message: Message, command: CommandObject, settings: Settings, db: Database
+) -> None:
+    if not _require_admin(message, settings):
+        await message.answer(texts.NOT_ADMIN)
+        return
+
+    raw = (command.args or "").strip().lower()
+    if raw in ("on", "1", "yes"):
+        enabled = True
+    elif raw in ("off", "0", "no"):
+        enabled = False
+    elif not raw:
+        enabled = not db.is_test_feature_enabled()
+    else:
+        await message.answer(texts.TOGGLE_TEST_USAGE)
+        return
+
+    db.set_test_feature_enabled(enabled)
+    state = "روشن ✅" if enabled else "خاموش ❌"
+    loc = db.get_test_location()
+    extra = ""
+    if enabled and loc is None:
+        extra = "\n\n⚠️ لوکیشن تست ثبت نشده — ابتدا <code>/addtestlocation</code> بزنید."
+    await message.answer(texts.TOGGLE_TEST_OK.format(state=state) + extra)
 
 
 @router.message(Command("setlocationprice"))
