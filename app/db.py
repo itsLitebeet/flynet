@@ -921,6 +921,31 @@ class Database:
             )
             return cur.rowcount > 0
 
+    def update_location(
+        self,
+        location_id: int,
+        *,
+        name: str,
+        base_url: str,
+        api_token: str,
+        inbound_ids: list[int],
+        sub_url_template: str | None,
+    ) -> bool:
+        with self._cursor() as cur:
+            cur.execute(
+                "UPDATE locations SET name = ?, base_url = ?, api_token = ?, "
+                "inbound_ids = ?, sub_url_template = ? WHERE id = ?",
+                (
+                    name,
+                    base_url,
+                    api_token,
+                    json.dumps(inbound_ids),
+                    sub_url_template,
+                    location_id,
+                ),
+            )
+            return cur.rowcount > 0
+
     def remove_location(self, location_id: int) -> str:
         """Hard-delete a location, or disable it if orders still reference it.
 

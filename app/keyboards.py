@@ -103,6 +103,7 @@ CB_ADM_ORDER_DELETE_CANCEL     = "adm:odelno"
 CB_ADM_USER_BAN_PREFIX       = "adm:ban:"   # adm:ban:<user_id>
 CB_ADM_USER_UNBAN_PREFIX     = "adm:unban:" # adm:unban:<user_id>
 CB_ADM_LOC_DETAIL_PREFIX = "adm:ld:"    # adm:ld:<location_id>
+CB_ADM_LOC_EDIT_PREFIX   = "adm:le:"    # adm:le:<location_id>
 CB_ADM_LOC_TOGGLE_PREFIX = "adm:lt:"    # adm:lt:<location_id>
 CB_ADM_TOOL_SYNC         = "adm:tsync"
 CB_ADM_TOOL_CLEAR        = "adm:tclr"
@@ -1321,6 +1322,12 @@ def admin_location_detail(
 ) -> InlineKeyboardMarkup:
     toggle_label = "🔴 غیرفعال کردن" if enabled else "🟢 فعال کردن"
     rows: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(
+                text=texts.ADMIN_BTN_EDIT_LOC,
+                callback_data=f"{CB_ADM_LOC_EDIT_PREFIX}{location_id}",
+            ),
+        ],
         [
             InlineKeyboardButton(
                 text=toggle_label,

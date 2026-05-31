@@ -493,6 +493,7 @@ ADMIN_BTN_TOGGLE_MANUAL = "🔀 خرید از دکمه‌ها"
 ADMIN_BTN_LOG_CHANNEL = "📋 کانال لاگ"
 ADMIN_BTN_TOGGLE_TEST = "🧪 دکمه تست"
 ADMIN_BTN_ADD_LOC_HELP = "➕ افزودن لوکیشن"
+ADMIN_BTN_EDIT_LOC = "✏️ ویرایش لوکیشن"
 ADMIN_BTN_ADD_SVC_HELP = "➕ افزودن پلن"
 ADMIN_BTN_EDIT_SVC_HELP = "✏️ ویرایش پلن"
 ADMIN_BTN_SETCARD_HELP = "💳 تنظیم کارت"
@@ -643,6 +644,7 @@ ADMIN_LOC_DETAIL = (
     "🔔 sub: <code>{sub}</code>\n"
     "💰 {pricing}\n\n"
     "<b>دستورات:</b>\n"
+    "<code>/editlocation {id} ...</code> — ویرایش کامل\n"
     "<code>/setlocationprice {id} base per_gb per_day</code>\n"
     "<code>/setsuburl {id} https://host:2096/sub/{{subId}}</code>\n"
     "<code>/purgelocation {id}</code>"
@@ -1064,6 +1066,54 @@ ADD_LOC_OK      = (
     "✅ لوکیشن «{name}» با شناسه <code>{id}</code> اضافه شد.\n"
     "💰 قیمت: {pricing}"
 )
+EDIT_LOC_KEEP_HINT = "<i>خط تنه <code>-</code> = بدون تغییر</i>"
+EDIT_LOC_PROMPT_NAME = (
+    "✏️ <b>ویرایش لوکیشن #{id}</b>\n\n"
+    "📝 <b>نام نمایشی</b>\n"
+    "فعلی: <b>{current}</b>\n\n"
+    "نام جدید را بفرستید.\n"
+    + EDIT_LOC_KEEP_HINT
+)
+EDIT_LOC_PROMPT_BASE_URL = (
+    "✏️ <b>ویرایش لوکیشن #{id}</b>\n\n"
+    "🔗 <b>آدرس پنل (base_url)</b>\n"
+    "فعلی:\n<code>{current}</code>\n\n"
+    "آدرس جدید را بفرستید.\n"
+    + EDIT_LOC_KEEP_HINT
+)
+EDIT_LOC_PROMPT_TOKEN = (
+    "✏️ <b>ویرایش لوکیشن #{id}</b>\n\n"
+    "🔑 <b>توکن API</b>\n"
+    "توکن جدید را بفرستید.\n"
+    + EDIT_LOC_KEEP_HINT
+)
+EDIT_LOC_PROMPT_INBOUNDS = (
+    "✏️ <b>ویرایش لوکیشن #{id}</b>\n\n"
+    "📡 <b>inboundها</b> (با ویرگول)\n"
+    "فعلی: <code>{current}</code>\n\n"
+    "مثال: <code>3,5</code>\n"
+    + EDIT_LOC_KEEP_HINT
+)
+EDIT_LOC_PROMPT_SUB = (
+    "✏️ <b>ویرایش لوکیشن #{id}</b>\n\n"
+    "🔔 <b>لینک اشتراک</b>\n"
+    "فعلی: <code>{current}</code>\n\n"
+    "الگوی جدید (با <code>{{subId}}</code>)، "
+    "<code>-</code> بدون تغییر، یا <code>0</code> برای حذف."
+)
+EDIT_LOC_USAGE = (
+    "❗ استفاده:\n"
+    "<code>/editlocation 3 | Germany 🇩🇪 | https://panel.example.com | "
+    "MY_API_TOKEN | 3,5</code>\n\n"
+    "فیلد ششم اختیاری — لینک اشتراک:\n"
+    "<code>/editlocation 3 | ... | 3,5 | https://host:2096/sub/{subId}</code>"
+)
+EDIT_LOC_OK = (
+    "✅ لوکیشن <code>#{id}</code> «{name}» به‌روزرسانی شد.\n"
+    "🔗 <code>{base_url}</code>\n"
+    "📡 inbounds: <code>{inbounds}</code>"
+)
+EDIT_LOC_NOT_FOUND = "❗ لوکیشن با شناسه <code>{id}</code> یافت نشد."
 ADD_TEST_LOC_USAGE = (
     "❗ استفاده (همان فرمت <code>/addlocation</code>):\n"
     "<code>/addtestlocation Test 🧪 | https://panel.example.com | "
