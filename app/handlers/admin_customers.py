@@ -61,7 +61,7 @@ async def send_customer_detail(
     row = db.get_user(user_id)
     if row is None:
         return False
-    orders = db.list_user_orders_admin(user_id, limit=30)
+    orders = db.list_user_orders_admin(user_id, limit=30, exclude_test=True)
     order_ids = [int(o["id"]) for o in orders][:8]
     markup = keyboards.admin_customer_detail_keyboard(
         user_id,

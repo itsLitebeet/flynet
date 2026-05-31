@@ -424,24 +424,28 @@ class Database:
             return list(cur.fetchall())
 
     def list_user_orders_admin(
-        self, user_id: int, limit: int = 30
+        self, user_id: int, limit: int = 30, *, exclude_test: bool = False
     ) -> list[sqlite3.Row]:
         """All orders for a user (admin view), newest first."""
+        test_clause = " AND is_test = 0" if exclude_test else ""
         with self._cursor() as cur:
             cur.execute(
                 "SELECT id, status, xui_email, location_id, location_name, "
                 "volume_gb, duration_days, nickname, price, created_at, "
                 "updated_at, is_test, xui_sub_id, admin_id, decline_reason, "
                 "screenshot_file_id "
-                "FROM orders WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?",
+                f"FROM orders WHERE user_id = ?{test_clause} "
+                "ORDER BY updated_at DESC LIMIT ?",
                 (user_id, limit),
             )
             return list(cur.fetchall())
 
     def count_customers(self) -> int:
-        """Users with at least one order."""
+        """Users with at least one non-test (paid) order."""
         with self._cursor() as cur:
-            cur.execute("SELECT COUNT(DISTINCT user_id) AS c FROM orders")
+            cur.execute(
+                "SELECT COUNT(DISTINCT user_id) AS c FROM orders WHERE is_test = 0"
+            )
             return int(cur.fetchone()["c"])
 
     def list_customers_paginated(
@@ -458,7 +462,7 @@ class Database:
                 "AS total_spent, "
                 "MAX(o.updated_at) AS last_order_at "
                 "FROM users u "
-                "INNER JOIN orders o ON o.user_id = u.user_id "
+                "INNER JOIN orders o ON o.user_id = u.user_id AND o.is_test = 0 "
                 "GROUP BY u.user_id "
                 "ORDER BY last_order_at DESC "
                 "LIMIT ? OFFSET ?",
@@ -483,7 +487,8 @@ class Database:
         base = (
             "SELECT u.user_id, u.username, u.first_name, u.last_name, "
             "u.created_at, u.is_banned, " + agg + " "
-            "FROM users u INNER JOIN orders o ON o.user_id = u.user_id "
+            "FROM users u "
+            "INNER JOIN orders o ON o.user_id = u.user_id AND o.is_test = 0 "
         )
 
         with self._cursor() as cur:
@@ -519,14 +524,13 @@ class Database:
                 "AS declined, "
                 "SUM(CASE WHEN o.status = 'failed' THEN 1 ELSE 0 END) "
                 "AS failed, "
-                "SUM(CASE WHEN o.is_test = 1 THEN 1 ELSE 0 END) AS test_orders, "
-                "SUM(CASE WHEN o.status = 'provisioned' AND o.is_test = 0 "
-                "THEN o.price ELSE 0 END) AS paid_revenue, "
+                "SUM(CASE WHEN o.status = 'provisioned' THEN o.price ELSE 0 END) "
+                "AS paid_revenue, "
                 "SUM(CASE WHEN o.status = 'provisioned' THEN o.price ELSE 0 END) "
                 "AS total_spent, "
                 "MIN(o.created_at) AS first_order_at, "
                 "MAX(o.updated_at) AS last_order_at "
-                "FROM orders o WHERE o.user_id = ?",
+                "FROM orders o WHERE o.user_id = ? AND o.is_test = 0",
                 (user_id,),
             )
             row = cur.fetchone()

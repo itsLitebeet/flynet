@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from html import escape
 
 from aiogram import F, Router
@@ -28,6 +29,7 @@ router = Router(name="admin_location_edit")
 
 _KEEP = "-"
 _SUB_CLEAR = frozenset({"0", "none", "clear", "off"})
+_SUBID_PLACEHOLDER_RE = re.compile(r"\{subId\}", re.IGNORECASE)
 
 
 class EditLocationFlow(StatesGroup):
@@ -41,6 +43,10 @@ class EditLocationFlow(StatesGroup):
 def _keep_or_replace(raw: str, current: str) -> str:
     s = (raw or "").strip()
     return current if s == _KEEP else s
+
+
+def _normalize_sub_template(raw: str) -> str:
+    return _SUBID_PLACEHOLDER_RE.sub("{subId}", raw.strip())
 
 
 def _parse_inbounds(raw: str, current: list[int]) -> list[int] | None:
@@ -61,9 +67,161 @@ def _parse_sub_url(raw: str, current: str | None) -> str | None | str:
         return current
     if s.lower() in _SUB_CLEAR:
         return None
-    if "{subId}" not in s:
+    if not _SUBID_PLACEHOLDER_RE.search(s):
         return "bad"
-    return s
+    return _normalize_sub_template(s)
+
+
+def _split_pipe_fields(raw: str) -> list[str]:
+    return [p.strip() for p in raw.split("|")]
+
+
+def _parse_editlocation_args(
+    raw: str,
+    *,
+    default_loc_id: int | None = None,
+) -> tuple[int | None, list[str] | None, str | None]:
+    """Returns (loc_id, field_parts, error_key). field_parts are 4 or 5 items."""
+    parts = _split_pipe_fields(raw.strip())
+    if not parts or not any(parts):
+        return None, None, "usage"
+
+    first = parts[0]
+    if first.lstrip("-").isdigit():
+        try:
+            loc_id = int(first)
+        except ValueError:
+            return None, None, "usage"
+        field_parts = parts[1:]
+        if len(field_parts) not in (4, 5):
+            return None, None, "usage"
+        if not all(field_parts[:4]):
+            return None, None, "usage"
+        return loc_id, field_parts, None
+
+    if len(parts) in (4, 5):
+        if default_loc_id is None:
+            return None, None, "missing_id"
+        if not all(parts[:4]):
+            return None, None, "usage"
+        return default_loc_id, parts, None
+
+    return None, None, "usage"
+
+
+def _extract_edit_raw(message: Message, command: CommandObject | None = None) -> str:
+    if command is not None:
+        return (command.args or "").strip()
+    text = (message.text or "").strip()
+    if text.lower().startswith("/editlocation"):
+        rest = text.split(maxsplit=1)
+        return rest[1].strip() if len(rest) > 1 else ""
+    return text
+
+
+def _apply_edit_from_parts(
+    db: Database,
+    loc_id: int,
+    parts: list[str],
+) -> tuple[bool, str | None]:
+    """Parse pipe-separated fields (name..inbounds, optional sub). Returns (ok, error_key)."""
+    loc = db.get_location(loc_id)
+    if loc is None:
+        return False, "not_found"
+
+    if len(parts) not in (4, 5):
+        return False, "usage"
+
+    name, base_url, api_token, inbound_str = parts[:4]
+    sub_raw = parts[4].strip() if len(parts) == 5 and parts[4].strip() else None
+
+    name = _keep_or_replace(name, loc.name)
+    base_url = normalize_panel_url(_keep_or_replace(base_url, loc.base_url))
+    api_token = _keep_or_replace(api_token, loc.api_token)
+
+    inbound_ids = _parse_inbounds(inbound_str, loc.inbound_ids)
+    if inbound_ids is None:
+        return False, "usage"
+
+    if sub_raw is None:
+        sub_url_template = loc.sub_url_template
+    else:
+        sub_parsed = _parse_sub_url(sub_raw, loc.sub_url_template)
+        if sub_parsed == "bad":
+            return False, "sub_bad"
+        sub_url_template = sub_parsed
+
+    if not db.update_location(
+        loc_id,
+        name=name,
+        base_url=base_url,
+        api_token=api_token,
+        inbound_ids=inbound_ids,
+        sub_url_template=sub_url_template,
+    ):
+        return False, "not_found"
+    return True, None
+
+
+async def _reply_edit_errors(message: Message, err: str, loc_id: int | None) -> None:
+    if err == "not_found" and loc_id is not None:
+        await message.answer(texts.EDIT_LOC_NOT_FOUND.format(id=loc_id))
+    elif err == "missing_id":
+        await message.answer(texts.EDIT_LOC_MISSING_ID)
+    elif err == "sub_bad":
+        await message.answer(texts.SET_SUBURL_BAD)
+    else:
+        await message.answer(texts.EDIT_LOC_USAGE)
+
+
+async def _reply_edit_success(message: Message, db: Database, loc_id: int) -> None:
+    loc = db.get_location(loc_id)
+    if loc is None:
+        return
+    inbounds = ",".join(str(i) for i in loc.inbound_ids) or "—"
+    await message.answer(
+        texts.EDIT_LOC_OK.format(
+            id=loc_id,
+            name=escape(loc.name),
+            base_url=escape(loc.base_url),
+            inbounds=inbounds,
+        )
+    )
+
+
+async def _run_editlocation(
+    message: Message,
+    state: FSMContext,
+    db: Database,
+    raw: str,
+    *,
+    default_loc_id: int | None = None,
+) -> bool:
+    """Parse one-shot edit; clear wizard state on success. Returns True if handled."""
+    if not raw.strip():
+        await message.answer(texts.EDIT_LOC_USAGE)
+        return True
+
+    loc_id, field_parts, err = _parse_editlocation_args(
+        raw, default_loc_id=default_loc_id
+    )
+    if err or loc_id is None or field_parts is None:
+        if err:
+            await _reply_edit_errors(message, err, loc_id)
+        return err is not None
+
+    ok, apply_err = _apply_edit_from_parts(db, loc_id, field_parts)
+    if apply_err:
+        await _reply_edit_errors(message, apply_err, loc_id)
+        return True
+    if not ok:
+        await message.answer(texts.EDIT_LOC_USAGE)
+        return True
+
+    await state.clear()
+    await _reply_edit_success(message, db, loc_id)
+    await send_location_detail(message, db, loc_id)
+    return True
 
 
 async def _save_location(
@@ -152,48 +310,21 @@ async def start_edit_location_wizard(
     )
 
 
-def _apply_edit_from_parts(
+async def _try_bulk_edit_in_wizard(
+    message: Message,
+    state: FSMContext,
     db: Database,
-    loc_id: int,
-    parts: list[str],
-) -> tuple[bool, str | None]:
-    """Parse pipe-separated fields after location id. Returns (ok, error_key)."""
-    loc = db.get_location(loc_id)
-    if loc is None:
-        return False, "not_found"
-
-    if len(parts) not in (4, 5):
-        return False, "usage"
-
-    name, base_url, api_token, inbound_str = parts[:4]
-    sub_raw = parts[4].strip() if len(parts) == 5 and parts[4].strip() else None
-
-    name = _keep_or_replace(name, loc.name)
-    base_url = normalize_panel_url(_keep_or_replace(base_url, loc.base_url))
-    api_token = _keep_or_replace(api_token, loc.api_token)
-
-    inbound_ids = _parse_inbounds(inbound_str, loc.inbound_ids)
-    if inbound_ids is None:
-        return False, "usage"
-
-    if sub_raw is None:
-        sub_url_template = loc.sub_url_template
-    else:
-        sub_parsed = _parse_sub_url(sub_raw, loc.sub_url_template)
-        if sub_parsed == "bad":
-            return False, "sub_bad"
-        sub_url_template = sub_parsed
-
-    if not db.update_location(
-        loc_id,
-        name=name,
-        base_url=base_url,
-        api_token=api_token,
-        inbound_ids=inbound_ids,
-        sub_url_template=sub_url_template,
-    ):
-        return False, "not_found"
-    return True, None
+) -> bool:
+    raw = _extract_edit_raw(message)
+    if "|" not in raw:
+        return False
+    data = await state.get_data()
+    default_loc_id = data.get("loc_id")
+    if default_loc_id is not None:
+        default_loc_id = int(default_loc_id)
+    return await _run_editlocation(
+        message, state, db, raw, default_loc_id=default_loc_id
+    )
 
 
 @router.callback_query(F.data.startswith(keyboards.CB_ADM_LOC_EDIT_PREFIX))
@@ -220,58 +351,25 @@ async def cb_admin_loc_edit_start(
     await callback.answer()
 
 
-@router.message(Command("editlocation"), StateFilter(None))
+@router.message(Command("editlocation"))
 async def cmd_editlocation(
     message: Message,
     command: CommandObject,
+    state: FSMContext,
     settings: Settings,
     db: Database,
 ) -> None:
     if not await guard_admin_message(message, settings, db, LOCATIONS):
         return
 
-    raw = (command.args or "").strip()
-    parts = [p.strip() for p in raw.split("|")]
-    if len(parts) not in (5, 6) or not parts[0]:
-        await message.answer(texts.EDIT_LOC_USAGE)
-        return
+    data = await state.get_data()
+    default_loc_id = data.get("loc_id")
+    if default_loc_id is not None:
+        default_loc_id = int(default_loc_id)
 
-    try:
-        loc_id = int(parts[0])
-    except ValueError:
-        await message.answer(texts.EDIT_LOC_USAGE)
-        return
-
-    field_parts = parts[1:]
-    if not all(field_parts[:4]):
-        await message.answer(texts.EDIT_LOC_USAGE)
-        return
-
-    ok, err = _apply_edit_from_parts(db, loc_id, field_parts)
-    if err == "not_found":
-        await message.answer(texts.EDIT_LOC_NOT_FOUND.format(id=loc_id))
-        return
-    if err == "usage":
-        await message.answer(texts.EDIT_LOC_USAGE)
-        return
-    if err == "sub_bad":
-        await message.answer(texts.SET_SUBURL_BAD)
-        return
-    if not ok:
-        await message.answer(texts.EDIT_LOC_USAGE)
-        return
-
-    loc = db.get_location(loc_id)
-    if loc is None:
-        return
-    inbounds = ",".join(str(i) for i in loc.inbound_ids) or "—"
-    await message.answer(
-        texts.EDIT_LOC_OK.format(
-            id=loc_id,
-            name=escape(loc.name),
-            base_url=escape(loc.base_url),
-            inbounds=inbounds,
-        )
+    raw = _extract_edit_raw(message, command)
+    await _run_editlocation(
+        message, state, db, raw, default_loc_id=default_loc_id
     )
 
 
@@ -322,6 +420,8 @@ async def edit_loc_name(
     if not await guard_admin_message(message, settings, db, LOCATIONS):
         await state.clear()
         return
+    if await _try_bulk_edit_in_wizard(message, state, db):
+        return
 
     data = await state.get_data()
     loc_id = int(data["loc_id"])
@@ -345,6 +445,8 @@ async def edit_loc_base_url(
     if not await guard_admin_message(message, settings, db, LOCATIONS):
         await state.clear()
         return
+    if await _try_bulk_edit_in_wizard(message, state, db):
+        return
 
     data = await state.get_data()
     loc_id = int(data["loc_id"])
@@ -365,6 +467,8 @@ async def edit_loc_token(
 ) -> None:
     if not await guard_admin_message(message, settings, db, LOCATIONS):
         await state.clear()
+        return
+    if await _try_bulk_edit_in_wizard(message, state, db):
         return
 
     data = await state.get_data()
@@ -387,6 +491,8 @@ async def edit_loc_inbounds(
 ) -> None:
     if not await guard_admin_message(message, settings, db, LOCATIONS):
         await state.clear()
+        return
+    if await _try_bulk_edit_in_wizard(message, state, db):
         return
 
     data = await state.get_data()
@@ -417,6 +523,8 @@ async def edit_loc_sub(
 ) -> None:
     if not await guard_admin_message(message, settings, db, LOCATIONS):
         await state.clear()
+        return
+    if await _try_bulk_edit_in_wizard(message, state, db):
         return
 
     data = await state.get_data()

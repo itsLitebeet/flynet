@@ -123,7 +123,7 @@ async def format_customers_page(
     orders_by_user: dict[int, list] = {}
     for c in customers:
         uid = int(c["user_id"])
-        orders = db.list_user_orders_admin(uid, limit=20)
+        orders = db.list_user_orders_admin(uid, limit=20, exclude_test=True)
         orders_by_user[uid] = orders
         all_orders.extend(orders)
 
@@ -184,7 +184,7 @@ async def format_customer_detail(db: Database, user_id: int) -> str | None:
 
     username = _username_label(row)
     ban_state = "مسدود 🚫" if bool(row["is_banned"]) else "فعال ✅"
-    orders = db.list_user_orders_admin(user_id, limit=50)
+    orders = db.list_user_orders_admin(user_id, limit=50, exclude_test=True)
     usage_map = await load_panel_usage_for_orders(db, orders)
 
     if orders:
@@ -206,7 +206,6 @@ async def format_customer_detail(db: Database, user_id: int) -> str | None:
         created_at=escape(str(row["created_at"])),
         ban_state=ban_state,
         total_orders=int(stats["total_orders"]),
-        test_orders=int(stats["test_orders"]),
         declined=int(stats["declined"]),
         awaiting_review=int(stats["awaiting_review"]),
         provisioned=int(stats["provisioned"]),

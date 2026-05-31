@@ -690,7 +690,7 @@ ADMIN_USER_NO_ORDERS = "<i>هیچ سفارشی ثبت نشده.</i>"
 ADMIN_CUSTOMERS_HEADER = (
     "🛒 <b>مشتریان (خریداران)</b>\n"
     "صفحه <b>{page}</b> از <b>{pages}</b> — جمع: <b>{total}</b> مشتری\n\n"
-    "فقط کاربرانی که حداقل یک سفارش دارند.\n"
+    "فقط خریداران واقعی (سفارش‌های پولی؛ اشتراک تست نمایش داده نمی‌شود).\n"
     "روی هر نام بزنید برای جزئیات خرید و پنل.\n"
     "<i>وضعیت سرویس‌های فعال از پنل خوانده می‌شود.</i>"
 )
@@ -722,9 +722,9 @@ ADMIN_CUSTOMER_DETAIL = (
     "🚫 وضعیت حساب: <b>{ban_state}</b>\n\n"
     "<b>خلاصه خرید:</b>\n"
     "📦 کل سفارش‌ها: <b>{total_orders}</b> "
-    "(🧪 تست: {test_orders} · ❌ رد: {declined} · ⏳ بررسی: {awaiting_review})\n"
+    "(❌ رد: {declined} · ⏳ بررسی: {awaiting_review})\n"
     "🟢 فعال‌شده: <b>{provisioned}</b> · 💳 در انتظار پرداخت: {awaiting_payment}\n"
-    "💰 درآمد (غیرتست): <b>{paid_revenue}</b> · جمع فعال‌شده: {total_spent}\n"
+    "💰 درآمد: <b>{paid_revenue}</b> · جمع فعال‌شده: {total_spent}\n"
     "🕐 اولین سفارش: {first_order} · آخرین: {last_order}\n\n"
     "<b>سفارش‌ها ({order_count}):</b>\n"
     "{orders_block}"
@@ -1102,11 +1102,18 @@ EDIT_LOC_PROMPT_SUB = (
     "<code>-</code> بدون تغییر، یا <code>0</code> برای حذف."
 )
 EDIT_LOC_USAGE = (
-    "❗ استفاده:\n"
-    "<code>/editlocation 3 | Germany 🇩🇪 | https://panel.example.com | "
-    "MY_API_TOKEN | 3,5</code>\n\n"
-    "فیلد ششم اختیاری — لینک اشتراک:\n"
-    "<code>/editlocation 3 | ... | 3,5 | https://host:2096/sub/{subId}</code>"
+    "❗ استفاده — <b>اول شناسه لوکیشن</b>، بعد فیلدها با <code>|</code>:\n"
+    "<code>/editlocation 5 | Sweden 🇸🇪 | https://panel.example.com/TOKEN | "
+    "API_TOKEN | 1,2,3</code>\n\n"
+    "فیلد ششم اختیاری — لینک اشتراک (حروف <code>subId</code> مهم نیست):\n"
+    "<code>/editlocation 5 | ... | 1,2 | https://host:2096/sub/{subId}</code>\n\n"
+    "اگر از دکمه «ویرایش» آمده‌اید، می‌توانید فقط ۵ فیلد را بچسبانید "
+    "(بدون شمارهٔ اول) — همان لوکیون باز ویرایش می‌شود."
+)
+EDIT_LOC_MISSING_ID = (
+    "❗ اول <b>شناسه لوکیشن</b> را بگذارید:\n"
+    "<code>/editlocation 5 | نام | آدرس پنل | توکن | 1,2</code>\n\n"
+    "یا از 📍 لوکیشن‌ها → ویرایش شروع کنید و فقط فیلدها را بچسبانید."
 )
 EDIT_LOC_OK = (
     "✅ لوکیشن <code>#{id}</code> «{name}» به‌روزرسانی شد.\n"
