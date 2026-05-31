@@ -864,6 +864,13 @@ def admin_locations_list(locs: list[Location]) -> InlineKeyboardMarkup:
             )
         ])
     rows.append(admin_locations_list_footer())
+    rows.append([
+        InlineKeyboardButton(
+            text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_LOCATIONS_LIST
+        ),
+        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def admin_location_detail(
