@@ -640,14 +640,17 @@ ADMIN_TOOLS_MENU = (
     "همگام‌سازی پنل، پاکسازی و همگانی از دکمه‌های زیر."
 )
 ADMIN_BTN_ADD_CLIENT = "➕ ساخت کلاینت دستی"
+ADMIN_BTN_ADD_CLIENT_SKIP_USER = "⏭ بدون کاربر (فقط لینک)"
 ADMIN_ADD_CLIENT_USER_PROMPT = (
     "➕ <b>ساخت کلاینت دستی</b>\n\n"
-    "🆔 <b>شناسه عددی کاربر تلگرام</b> را بفرستید\n"
-    "(سرویس در «سرویس‌های من» همان کاربر ثبت می‌شود).\n\n"
-    "انصراف: دکمه زیر یا <code>/cancel</code>"
+    "🆔 <b>شناسه کاربر تلگرام (اختیاری)</b>\n"
+    "عدد بفرستید تا در «سرویس‌های من» همان کاربر ثبت شود،\n"
+    "یا دکمه «بدون کاربر» — فقط لینک به شما.\n\n"
+    "انصراف: <code>/cancel</code>"
 )
 ADMIN_ADD_CLIENT_USER_INVALID = (
-    "❗ شناسه کاربر باید یک <b>عدد</b> مثبت باشد (مثل <code>123456789</code>)."
+    "❗ شناسه نامعتبر. عدد مثبت بفرستید (مثل <code>123456789</code>) "
+    "یا دکمه «بدون کاربر» را بزنید."
 )
 ADMIN_ADD_CLIENT_VOLUME_PROMPT = (
     "💾 <b>حجم سرویس</b> را به <b>گیگابایت</b> بفرستید\n"
@@ -680,8 +683,15 @@ ADMIN_ADD_CLIENT_OK = (
     "📧 پنل: <code>{panel_email}</code>\n\n"
     "{configs_block}"
 )
+ADMIN_ADD_CLIENT_OK_PANEL_ONLY = (
+    "✅ <b>کلاینت روی پنل ساخته شد</b> (بدون ثبت برای کاربر)\n\n"
+    "📍 لوکیشن: <b>{location}</b>\n"
+    "💾 {volume} گیگ · 📅 {days} روز\n"
+    "📧 پنل: <code>{panel_email}</code>\n\n"
+    "{configs_block}"
+)
 ADMIN_ADD_CLIENT_FAILED = (
-    "⚠️ ساخت کلاینت ناموفق بود (سفارش <code>#{order_id}</code>):\n"
+    "⚠️ ساخت کلاینت ناموفق بود{order_hint}:\n"
     "<code>{error}</code>"
 )
 ADMIN_ADD_CLIENT_USER_NOTIFY = (

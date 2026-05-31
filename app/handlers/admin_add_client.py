@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from html import escape
 
 from aiogram import Bot, F, Router
@@ -25,6 +26,7 @@ log = logging.getLogger(__name__)
 
 _DAYS_MIN = 1
 _DAYS_MAX = 3650
+_SKIP_USER_TEXT = frozenset({"-", "—", "skip", "none"})
 
 
 class AdminAddClientFlow(StatesGroup):
@@ -50,6 +52,19 @@ def _parse_positive_int(raw: str) -> int | None:
     return value if value > 0 else None
 
 
+async def _prompt_volume(message: Message, state: FSMContext) -> None:
+    await state.set_state(AdminAddClientFlow.waiting_volume)
+    await message.answer(
+        texts.ADMIN_ADD_CLIENT_VOLUME_PROMPT.format(
+            min_gb=texts.CUSTOM_VOLUME_MIN_GB,
+            max_gb=texts.CUSTOM_VOLUME_MAX_GB,
+        ),
+        reply_markup=keyboards.admin_flow_cancel_inline(
+            back_data=keyboards.CB_ADM_HOME
+        ),
+    )
+
+
 async def _start_add_client(
     message: Message, state: FSMContext, db: Database
 ) -> None:
@@ -57,9 +72,7 @@ async def _start_add_client(
     await state.set_state(AdminAddClientFlow.waiting_user_id)
     await message.answer(
         texts.ADMIN_ADD_CLIENT_USER_PROMPT,
-        reply_markup=keyboards.admin_flow_cancel_inline(
-            back_data=keyboards.CB_ADM_TOOLS
-        ),
+        reply_markup=keyboards.admin_add_client_user_keyboard(),
     )
 
 
@@ -90,6 +103,23 @@ async def add_client_flow_cancel(
         await event.answer(texts.CANCELLED)
 
 
+@router.callback_query(
+    F.data == keyboards.CB_ADM_ADD_CLIENT_SKIP_USER,
+    StateFilter(AdminAddClientFlow.waiting_user_id),
+)
+async def add_client_skip_user(
+    callback: CallbackQuery, state: FSMContext, settings: Settings, db: Database
+) -> None:
+    if not await guard_admin_callback(callback, settings, db, ORDERS_MANAGE):
+        return
+    if not isinstance(callback.message, Message):
+        await callback.answer()
+        return
+    await state.update_data(target_user_id=None)
+    await _prompt_volume(callback.message, state)
+    await callback.answer()
+
+
 @router.message(StateFilter(AdminAddClientFlow.waiting_user_id))
 async def add_client_user_id(
     message: Message, state: FSMContext, settings: Settings, db: Database
@@ -98,23 +128,20 @@ async def add_client_user_id(
         await state.clear()
         return
 
-    user_id = _parse_positive_int(message.text or "")
+    raw = (message.text or "").strip()
+    if raw.lower() in _SKIP_USER_TEXT:
+        await state.update_data(target_user_id=None)
+        await _prompt_volume(message, state)
+        return
+
+    user_id = _parse_positive_int(raw)
     if user_id is None:
         await message.answer(texts.ADMIN_ADD_CLIENT_USER_INVALID)
         return
 
     db.upsert_user(user_id=user_id, username=None, first_name=None, last_name=None)
     await state.update_data(target_user_id=user_id)
-    await state.set_state(AdminAddClientFlow.waiting_volume)
-    await message.answer(
-        texts.ADMIN_ADD_CLIENT_VOLUME_PROMPT.format(
-            min_gb=texts.CUSTOM_VOLUME_MIN_GB,
-            max_gb=texts.CUSTOM_VOLUME_MAX_GB,
-        ),
-        reply_markup=keyboards.admin_flow_cancel_inline(
-            back_data=keyboards.CB_ADM_TOOLS
-        ),
-    )
+    await _prompt_volume(message, state)
 
 
 @router.message(StateFilter(AdminAddClientFlow.waiting_volume))
@@ -142,7 +169,7 @@ async def add_client_volume(
     await message.answer(
         texts.ADMIN_ADD_CLIENT_DAYS_PROMPT,
         reply_markup=keyboards.admin_flow_cancel_inline(
-            back_data=keyboards.CB_ADM_TOOLS
+            back_data=keyboards.CB_ADM_HOME
         ),
     )
 
@@ -211,13 +238,19 @@ async def add_client_pick_location(
 
     data = await state.get_data()
     try:
-        target_user_id = int(data["target_user_id"])
         volume_gb = int(data["volume_gb"])
         duration_days = int(data["duration_days"])
     except (KeyError, TypeError, ValueError):
         await state.clear()
         await callback.answer("اطلاعات ناقص است. دوباره شروع کنید.", show_alert=True)
         return
+
+    target_user_id = data.get("target_user_id")
+    if target_user_id is not None:
+        try:
+            target_user_id = int(target_user_id)
+        except (TypeError, ValueError):
+            target_user_id = None
 
     if not loc.inbound_ids:
         await callback.answer("inbound برای این لوکیشن تنظیم نشده.", show_alert=True)
@@ -230,54 +263,77 @@ async def add_client_pick_location(
         edit_in_place=True,
     )
 
-    price = _calc_order_price(db, volume_gb, duration_days, loc.id)
-    order_id = db.create_order(
-        user_id=target_user_id,
-        location_id=loc.id,
-        location_name=loc.name,
-        volume_gb=volume_gb,
-        duration_days=duration_days,
-        price=price,
-    )
-    email = build_client_email(order_id, is_test=False)
+    admin_id = callback.from_user.id
+    order_id: int | None = None
+    if target_user_id is not None:
+        price = _calc_order_price(db, volume_gb, duration_days, loc.id)
+        order_id = db.create_order(
+            user_id=target_user_id,
+            location_id=loc.id,
+            location_name=loc.name,
+            volume_gb=volume_gb,
+            duration_days=duration_days,
+            price=price,
+        )
+        panel_email = build_client_email(order_id, is_test=False)
+        tg_user_id = target_user_id
+    else:
+        panel_email = f"adm-{admin_id}-{int(time.time())}"
+        tg_user_id = admin_id
 
     try:
         async with XuiClient(loc.base_url, loc.api_token) as xui:
             result = await xui.provision(
-                email=email,
+                email=panel_email,
                 volume_gb=volume_gb,
                 duration_days=duration_days,
                 inbound_ids=loc.inbound_ids,
-                tg_user_id=target_user_id,
+                tg_user_id=tg_user_id,
             )
     except XuiError as exc:
-        log.warning("Admin manual provision failed order %s: %s", order_id, exc)
-        db.set_order_status(order_id, "failed", admin_id=callback.from_user.id)
+        log.warning(
+            "Admin manual provision failed%s: %s",
+            f" order {order_id}" if order_id else "",
+            exc,
+        )
+        if order_id is not None:
+            db.set_order_status(order_id, "failed", admin_id=admin_id)
         await state.clear()
+        order_hint = (
+            f" (سفارش <code>#{order_id}</code>)" if order_id is not None else ""
+        )
         await callback.message.answer(
             texts.ADMIN_ADD_CLIENT_FAILED.format(
-                order_id=order_id, error=escape(str(exc))
+                order_hint=order_hint, error=escape(str(exc))
             )
         )
         return
     except Exception as exc:  # noqa: BLE001
-        log.exception("Unexpected admin manual provision order %s", order_id)
-        db.set_order_status(order_id, "failed", admin_id=callback.from_user.id)
+        log.exception(
+            "Unexpected admin manual provision%s",
+            f" order {order_id}" if order_id else "",
+        )
+        if order_id is not None:
+            db.set_order_status(order_id, "failed", admin_id=admin_id)
         await state.clear()
+        order_hint = (
+            f" (سفارش <code>#{order_id}</code>)" if order_id is not None else ""
+        )
         await callback.message.answer(
             texts.ADMIN_ADD_CLIENT_FAILED.format(
-                order_id=order_id, error=escape(str(exc))
+                order_hint=order_hint, error=escape(str(exc))
             )
         )
         return
 
-    db.set_order_provisioned(
-        order_id=order_id,
-        email=result.email,
-        sub_id=result.sub_id,
-        client_uuid=result.client_uuid,
-        sub_links=result.sub_links,
-    )
+    if order_id is not None:
+        db.set_order_provisioned(
+            order_id=order_id,
+            email=result.email,
+            sub_id=result.sub_id,
+            client_uuid=result.client_uuid,
+            sub_links=result.sub_links,
+        )
     await state.clear()
 
     sub_url = loc.render_sub_url(result.sub_id)
@@ -286,35 +342,48 @@ async def add_client_pick_location(
         sub_links=[escape(x) for x in result.sub_links],
     )
 
-    await callback.message.answer(
-        texts.ADMIN_ADD_CLIENT_OK.format(
-            order_id=order_id,
-            user_id=target_user_id,
-            location=escape(loc.name),
-            volume=volume_gb,
-            days=duration_days,
-            panel_email=escape(result.email),
-            configs_block=configs_block,
-        ),
-        reply_markup=keyboards.admin_add_client_done_keyboard(),
-    )
-
-    try:
-        await bot.send_message(
-            target_user_id,
-            texts.ADMIN_ADD_CLIENT_USER_NOTIFY.format(
+    if order_id is not None and target_user_id is not None:
+        await callback.message.answer(
+            texts.ADMIN_ADD_CLIENT_OK.format(
                 order_id=order_id,
+                user_id=target_user_id,
                 location=escape(loc.name),
                 volume=volume_gb,
                 days=duration_days,
+                panel_email=escape(result.email),
                 configs_block=configs_block,
             ),
+            reply_markup=keyboards.admin_add_client_done_keyboard(),
         )
-    except Exception:  # noqa: BLE001
-        log.debug("Could not notify user %s about manual provision", target_user_id)
+        try:
+            await bot.send_message(
+                target_user_id,
+                texts.ADMIN_ADD_CLIENT_USER_NOTIFY.format(
+                    order_id=order_id,
+                    location=escape(loc.name),
+                    volume=volume_gb,
+                    days=duration_days,
+                    configs_block=configs_block,
+                ),
+            )
+        except Exception:  # noqa: BLE001
+            log.debug(
+                "Could not notify user %s about manual provision", target_user_id
+            )
+    else:
+        await callback.message.answer(
+            texts.ADMIN_ADD_CLIENT_OK_PANEL_ONLY.format(
+                location=escape(loc.name),
+                volume=volume_gb,
+                days=duration_days,
+                panel_email=escape(result.email),
+                configs_block=configs_block,
+            ),
+            reply_markup=keyboards.admin_add_client_done_keyboard(),
+        )
 
     admin = Actor.from_user(callback.from_user)
-    if admin is not None:
+    if admin is not None and order_id is not None:
         await make_logger(bot, db).log_admin_order_action(
             order_id=order_id,
             admin=admin,

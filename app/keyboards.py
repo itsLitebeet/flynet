@@ -109,6 +109,7 @@ CB_ADM_LOC_PURCHASE_PREFIX = "adm:lp:"  # adm:lp:<location_id>
 CB_ADM_TOOL_SYNC         = "adm:tsync"
 CB_ADM_TOOL_CLEAR        = "adm:tclr"
 CB_ADM_ADD_CLIENT        = "adm:addcl"
+CB_ADM_ADD_CLIENT_SKIP_USER = "adm:acsk"
 CB_ADM_ADD_CLIENT_LOC_PREFIX = "adm:acl:"  # adm:acl:<location_id>
 CB_ADM_BROADCAST         = "adm:bcast"
 CB_BROADCAST_CONFIRM     = "adm:bcast:ok"
@@ -547,6 +548,13 @@ def admin_home_inline(user_id: int, settings, db) -> InlineKeyboardMarkup:
         )
     if r2:
         rows.append(r2)
+
+    if _admin_perm(user_id, ORDERS_MANAGE, settings, db):
+        rows.append([
+            InlineKeyboardButton(
+                text=texts.ADMIN_BTN_ADD_CLIENT, callback_data=CB_ADM_ADD_CLIENT
+            ),
+        ])
 
     if _admin_perm(user_id, USERS, settings, db):
         rows.append([
@@ -1261,12 +1269,6 @@ def admin_tools_inline(
                 text=texts.ADMIN_BTN_TOGGLE_TEST, callback_data=CB_ADM_TOGGLE_TEST
             ),
         ])
-    if _admin_perm(user_id, ORDERS_MANAGE, settings, db):
-        rows.append([
-            InlineKeyboardButton(
-                text=texts.ADMIN_BTN_ADD_CLIENT, callback_data=CB_ADM_ADD_CLIENT
-            ),
-        ])
     if _admin_perm(user_id, TOOLS_SYNC, settings, db):
         rows.append([
             InlineKeyboardButton(
@@ -1306,6 +1308,24 @@ def admin_pending_list(orders: list[dict]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def admin_add_client_user_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.ADMIN_BTN_ADD_CLIENT_SKIP_USER,
+                    callback_data=CB_ADM_ADD_CLIENT_SKIP_USER,
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.BTN_CANCEL, callback_data=CB_ADM_FLOW_CANCEL
+                ),
+            ],
+        ]
+    )
+
+
 def admin_add_client_locations(locs: list[Location]) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for loc in locs:
@@ -1334,7 +1354,7 @@ def admin_add_client_done_keyboard() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_TOOLS, callback_data=CB_ADM_TOOLS
+                    text=texts.ADMIN_BTN_PANEL, callback_data=CB_ADM_HOME
                 ),
             ],
         ]
