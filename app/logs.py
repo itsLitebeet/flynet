@@ -5,12 +5,12 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from html import escape
-from typing import Any
-
 from aiogram import Bot
 from aiogram.enums import ChatType
-from aiogram.types import User
+from aiogram.types import Message, MessageOriginChannel, User
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
+
+_CAPTION_MAX = 1024
 
 from app.db import Database
 
@@ -101,12 +101,22 @@ class NetFlyLogger:
             log.exception("Log channel send failed (%s)", chat_id)
             return False
 
+    @staticmethod
+    def _fit_caption(caption: str) -> str:
+        if len(caption) <= _CAPTION_MAX:
+            return caption
+        return caption[: _CAPTION_MAX - 1] + "…"
+
     async def _send_photo(self, photo_file_id: str, caption: str) -> bool:
         chat_id = self.channel_id()
         if chat_id is None:
             return False
         try:
-            await self._bot.send_photo(chat_id, photo=photo_file_id, caption=caption)
+            await self._bot.send_photo(
+                chat_id,
+                photo=photo_file_id,
+                caption=self._fit_caption(caption),
+            )
             return True
         except (TelegramForbiddenError, TelegramBadRequest) as exc:
             log.warning("Log channel photo failed (%s): %s", chat_id, exc)
@@ -174,6 +184,7 @@ class NetFlyLogger:
         duration_days: int,
         price: int,
         panel_email: str,
+        is_test: bool = False,
     ) -> None:
         body = _order_detail_block(
             order_id=order_id,
@@ -181,6 +192,7 @@ class NetFlyLogger:
             volume_gb=volume_gb,
             duration_days=duration_days,
             price=price,
+            is_test=is_test,
             status="provisioned",
         )
         await self._send_text(
@@ -201,6 +213,7 @@ class NetFlyLogger:
         duration_days: int,
         price: int,
         error: str,
+        is_test: bool = False,
     ) -> None:
         body = _order_detail_block(
             order_id=order_id,
@@ -208,6 +221,7 @@ class NetFlyLogger:
             volume_gb=volume_gb,
             duration_days=duration_days,
             price=price,
+            is_test=is_test,
             status="failed",
         )
         await self._send_text(
@@ -228,6 +242,7 @@ class NetFlyLogger:
         duration_days: int,
         price: int,
         reason: str,
+        is_test: bool = False,
     ) -> None:
         body = _order_detail_block(
             order_id=order_id,
@@ -235,6 +250,7 @@ class NetFlyLogger:
             volume_gb=volume_gb,
             duration_days=duration_days,
             price=price,
+            is_test=is_test,
             status="declined",
         )
         await self._send_text(
@@ -339,11 +355,15 @@ async def try_bind_log_channel(bot: Bot, db: Database, chat_id: int) -> tuple[bo
     return True, texts.LOG_CHANNEL_OK.format(chat_id=chat_id)
 
 
-def resolve_forwarded_channel_id(message: Any) -> int | None:
-    """Extract channel/supergroup id from a forwarded message."""
-    fwd = getattr(message, "forward_from_chat", None)
-    if fwd is None:
-        return None
-    if fwd.type not in (ChatType.CHANNEL, ChatType.SUPERGROUP):
-        return None
-    return int(fwd.id)
+def resolve_forwarded_channel_id(message: Message) -> int | None:
+    """Extract channel/supergroup id from a forwarded message (legacy + Bot API 7+)."""
+    fwd = message.forward_from_chat
+    if fwd is not None and fwd.type in (ChatType.CHANNEL, ChatType.SUPERGROUP):
+        return int(fwd.id)
+
+    origin = message.forward_origin
+    if isinstance(origin, MessageOriginChannel):
+        chat = origin.chat
+        if chat.type in (ChatType.CHANNEL, ChatType.SUPERGROUP):
+            return int(chat.id)
+    return None

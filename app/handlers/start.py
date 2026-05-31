@@ -62,7 +62,7 @@ async def cmd_help(
     await message.answer(texts.HELP, reply_markup=_main_kb(message, settings, db))
 
 
-@router.message(Command("cancel"))
+@router.message(Command("cancel"), StateFilter(None))
 async def cmd_cancel(
     message: Message, state: FSMContext, settings: Settings, db: Database
 ) -> None:

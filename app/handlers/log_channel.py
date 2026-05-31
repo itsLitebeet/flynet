@@ -71,6 +71,8 @@ async def on_logchannel_input(
     bot: Bot,
 ) -> None:
     if not admin_from_message(message, settings):
+        await state.clear()
+        await message.answer(texts.NOT_ADMIN)
         return
 
     chat_id = resolve_forwarded_channel_id(message)

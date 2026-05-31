@@ -23,7 +23,7 @@ from aiogram.types import CallbackQuery, Message
 
 from app import keyboards, texts
 from app.config import Settings
-from app.db import Database
+from app.db import TEST_VOLUME_BYTES, Database
 from app.handlers.review_notify import clear_admin_receipt_buttons
 from app.logs import Actor, make_logger
 from app.xui import XuiClient, XuiError, build_client_email
@@ -89,6 +89,7 @@ async def cb_accept_order(
     order = db.get_order(order_id)
     assert order is not None
     admin_id = callback.from_user.id
+    is_test = bool(order["is_test"]) if "is_test" in order.keys() else False
 
     if not db.claim_order_review(order_id, "approved", admin_id):
         order = db.get_order(order_id)
@@ -123,12 +124,13 @@ async def cb_accept_order(
                 duration_days=int(order["duration_days"]),
                 price=int(order["price"]),
                 error=err,
+                is_test=is_test,
             )
         await bot.send_message(callback.from_user.id, texts.REVIEW_PROVISION_ERR.format(error=err))
         await bot.send_message(int(order["user_id"]), texts.ORDER_PROVISION_FAILED_USER)
         return
 
-    email = build_client_email(order_id)
+    email = build_client_email(order_id, is_test=is_test)
 
     try:
         async with XuiClient(location.base_url, location.api_token) as xui:
@@ -138,6 +140,7 @@ async def cb_accept_order(
                 duration_days=int(order["duration_days"]),
                 inbound_ids=location.inbound_ids,
                 tg_user_id=int(order["user_id"]),
+                total_bytes=TEST_VOLUME_BYTES if is_test else None,
             )
     except XuiError as exc:
         log.warning("Provisioning failed for order %s: %s", order_id, exc)
@@ -153,6 +156,7 @@ async def cb_accept_order(
                 duration_days=int(order["duration_days"]),
                 price=int(order["price"]),
                 error=str(exc),
+                is_test=is_test,
             )
         await bot.send_message(
             callback.from_user.id,
@@ -174,6 +178,7 @@ async def cb_accept_order(
                 duration_days=int(order["duration_days"]),
                 price=int(order["price"]),
                 error=str(exc),
+                is_test=is_test,
             )
         await bot.send_message(
             callback.from_user.id,
@@ -222,6 +227,7 @@ async def cb_accept_order(
             duration_days=int(order["duration_days"]),
             price=int(order["price"]),
             panel_email=result.email,
+            is_test=is_test,
         )
 
     await bot.send_message(callback.from_user.id, texts.REVIEW_PROVISION_OK)
@@ -315,6 +321,7 @@ async def on_decline_reason(
         acting_admin_id=admin_id,
         action="رد شد",
     )
+    is_test = bool(order["is_test"]) if "is_test" in order.keys() else False
     admin = Actor.from_user(message.from_user)
     if admin is not None:
         await make_logger(bot, db).log_order_declined(
@@ -326,6 +333,7 @@ async def on_decline_reason(
             duration_days=int(order["duration_days"]),
             price=int(order["price"]),
             reason=reason,
+            is_test=is_test,
         )
     await message.answer(texts.REVIEW_DECLINE_SENT)
 
