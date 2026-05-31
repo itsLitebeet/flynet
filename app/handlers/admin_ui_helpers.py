@@ -28,9 +28,8 @@ async def admin_edit_or_answer(
                 parse_mode=ParseMode.HTML,
             )
             return
-        except TelegramBadRequest as exc:
-            if "message is not modified" not in (exc.message or "").lower():
-                pass
+        except TelegramBadRequest:
+            pass
     await message.answer(
         text,
         reply_markup=reply_markup,

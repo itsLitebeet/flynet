@@ -98,12 +98,17 @@ async def send_admin_home(
     settings: Settings,
     db: Database,
     *,
+    admin_user_id: int | None = None,
     edit_in_place: bool = False,
 ) -> None:
-    user = message.from_user
-    if user is None or not admin_panel_access(user.id, settings, db):
+    uid = admin_user_id
+    if uid is None:
+        user = message.from_user
+        if user is None or not admin_panel_access(user.id, settings, db):
+            return
+        uid = user.id
+    elif not admin_panel_access(uid, settings, db):
         return
-    uid = user.id
     if edit_in_place:
         await admin_edit_or_answer(
             message,
@@ -515,18 +520,32 @@ async def admin_menu_buttons(
 
 # ---------- inline navigation ----------
 @router.callback_query(F.data == keyboards.CB_ADM_HOME)
-async def cb_admin_home(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+async def cb_admin_home(
+    callback: CallbackQuery, state: FSMContext, settings: Settings, db: Database
+) -> None:
     if await _guard_cb(callback, settings, db, PANEL) is None:
         return
-    if isinstance(callback.message, Message):
-        await send_admin_home(callback.message, settings, db, edit_in_place=True)
+    await state.clear()
+    if callback.from_user is None or not isinstance(callback.message, Message):
+        await callback.answer()
+        return
+    await send_admin_home(
+        callback.message,
+        settings,
+        db,
+        admin_user_id=callback.from_user.id,
+        edit_in_place=True,
+    )
     await callback.answer()
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_DASH)
-async def cb_admin_dash(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+async def cb_admin_dash(
+    callback: CallbackQuery, state: FSMContext, settings: Settings, db: Database
+) -> None:
     if await _guard_cb(callback, settings, db, DASHBOARD) is None:
         return
+    await state.clear()
     if isinstance(callback.message, Message):
         await send_dashboard(callback.message, settings, db, callback.from_user.id, edit_in_place=True)
     await callback.answer()
@@ -552,9 +571,21 @@ async def cb_admin_pending(callback: CallbackQuery, settings: Settings, db: Data
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_SETTINGS)
-async def cb_admin_settings(callback: CallbackQuery, settings: Settings, db: Database) -> None:
-    if await _guard_cb(callback, settings, db, SETTINGS) is None:
+async def cb_admin_settings(
+    callback: CallbackQuery, state: FSMContext, settings: Settings, db: Database
+) -> None:
+    if callback.from_user is None:
+        await callback.answer()
         return
+    uid = callback.from_user.id
+    if not (
+        admin_can(uid, SETTINGS, settings, db)
+        or admin_can(uid, SERVICES, settings, db)
+        or admin_can(uid, OFFER, settings, db)
+    ):
+        await callback.answer(texts.NOT_PERMITTED, show_alert=True)
+        return
+    await state.clear()
     if isinstance(callback.message, Message):
         await send_settings(callback.message, settings, db, callback.from_user.id, edit_in_place=True)
     await callback.answer()

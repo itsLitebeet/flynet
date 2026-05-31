@@ -109,7 +109,13 @@ async def cb_home(
             callback.from_user
             and admin_panel_access(callback.from_user.id, settings, db)
         ):
-            await send_admin_home(callback.message, settings, db)
+            await send_admin_home(
+                callback.message,
+                settings,
+                db,
+                admin_user_id=callback.from_user.id,
+                edit_in_place=True,
+            )
         else:
             show_test = (
                 callback.from_user is not None
