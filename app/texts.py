@@ -1137,6 +1137,10 @@ REVIEW_DECLINE_PROMPT = (
     "<i>/cancel برای انصراف</i>"
 )
 REVIEW_DECLINE_SENT  = "✅ سفارش رد شد و کاربر مطلع شد."
+REVIEW_DECLINE_DONE = (
+    "✅ سفارش <code>#{order_id}</code> رد شد و به کاربر اطلاع داده شد."
+)
+REVIEW_DECLINE_CANCELLED = "❌ انتخاب دلیل رد لغو شد."
 
 # (id, button label, full message sent to buyer)
 DECLINE_PRESETS: tuple[tuple[str, str, str], ...] = (

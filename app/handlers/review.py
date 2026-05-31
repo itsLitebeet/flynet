@@ -15,6 +15,8 @@ import logging
 from html import escape
 
 from aiogram import Bot, F, Router
+from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -40,6 +42,25 @@ class DeclineFlow(StatesGroup):
 
 def _status_label(status: str) -> str:
     return texts.STATUS_BADGE.get(status, status)
+
+
+async def _edit_decline_prompt(
+    bot: Bot,
+    *,
+    chat_id: int,
+    message_id: int,
+    text: str,
+) -> None:
+    try:
+        await bot.edit_message_text(
+            text,
+            chat_id=chat_id,
+            message_id=message_id,
+            reply_markup=None,
+            parse_mode=ParseMode.HTML,
+        )
+    except TelegramBadRequest:
+        pass
 
 
 async def _reject_if_not_reviewable(
@@ -237,17 +258,21 @@ async def _apply_decline(
     admin_user: User,
     bot: Bot,
     db: Database,
-    reply_to: Message,
+    prompt_chat_id: int | None = None,
+    prompt_message_id: int | None = None,
+    error_reply: Message | None = None,
 ) -> bool:
     """Decline order and notify buyer. Returns True on success."""
     order = db.get_order(order_id)
     if order is None:
-        await reply_to.answer("سفارش پیدا نشد.")
+        if error_reply is not None:
+            await error_reply.answer("سفارش پیدا نشد.")
         return False
     if order["status"] != "awaiting_review":
-        await reply_to.answer(
-            texts.REVIEW_ALREADY.format(status=_status_label(order["status"]))
-        )
+        if error_reply is not None:
+            await error_reply.answer(
+                texts.REVIEW_ALREADY.format(status=_status_label(order["status"]))
+            )
         return False
 
     user_id = int(order["user_id"])
@@ -257,9 +282,10 @@ async def _apply_decline(
     ):
         order = db.get_order(order_id)
         st = order["status"] if order else "—"
-        await reply_to.answer(
-            texts.REVIEW_ALREADY.format(status=_status_label(str(st)))
-        )
+        if error_reply is not None:
+            await error_reply.answer(
+                texts.REVIEW_ALREADY.format(status=_status_label(str(st)))
+            )
         return False
 
     await clear_admin_receipt_buttons(
@@ -283,7 +309,16 @@ async def _apply_decline(
             reason=reason,
             is_test=is_test,
         )
-    await reply_to.answer(texts.REVIEW_DECLINE_SENT)
+
+    if prompt_chat_id is not None and prompt_message_id is not None:
+        await _edit_decline_prompt(
+            bot,
+            chat_id=prompt_chat_id,
+            message_id=prompt_message_id,
+            text=texts.REVIEW_DECLINE_DONE.format(order_id=order_id),
+        )
+    elif error_reply is not None:
+        await error_reply.answer(texts.REVIEW_DECLINE_SENT)
 
     try:
         await bot.send_message(
@@ -330,12 +365,19 @@ async def cb_decline_order(
     assert order is not None
 
     await state.set_state(DeclineFlow.waiting_reason)
-    await state.update_data(decline_order_id=order_id)
     if isinstance(callback.message, Message):
-        await callback.message.answer(
+        prompt = await callback.message.answer(
             texts.REVIEW_DECLINE_PROMPT,
             reply_markup=keyboards.decline_reason_keyboard(order_id),
+            parse_mode=ParseMode.HTML,
         )
+        await state.update_data(
+            decline_order_id=order_id,
+            decline_prompt_chat_id=prompt.chat.id,
+            decline_prompt_message_id=prompt.message_id,
+        )
+    else:
+        await state.update_data(decline_order_id=order_id)
     await callback.answer()
 
 
@@ -375,10 +417,16 @@ async def cb_decline_preset(
         await state.clear()
         return
 
+    data = await state.get_data()
     await state.clear()
     if not isinstance(callback.message, Message):
         await callback.answer()
         return
+
+    prompt_chat_id = int(data.get("decline_prompt_chat_id", 0)) or callback.message.chat.id
+    prompt_message_id = (
+        int(data.get("decline_prompt_message_id", 0)) or callback.message.message_id
+    )
 
     await _apply_decline(
         order_id=order_id,
@@ -386,7 +434,9 @@ async def cb_decline_preset(
         admin_user=callback.from_user,
         bot=bot,
         db=db,
-        reply_to=callback.message,
+        prompt_chat_id=prompt_chat_id,
+        prompt_message_id=prompt_message_id,
+        error_reply=callback.message,
     )
     await callback.answer()
 
@@ -397,20 +447,42 @@ async def cb_decline_cancel(
     state: FSMContext,
     settings: Settings,
     db: Database,
+    bot: Bot,
 ) -> None:
     if not await guard_admin_callback(callback, settings, db, ORDERS_REVIEW):
         return
     await state.clear()
+    if isinstance(callback.message, Message):
+        await _edit_decline_prompt(
+            bot,
+            chat_id=callback.message.chat.id,
+            message_id=callback.message.message_id,
+            text=texts.REVIEW_DECLINE_CANCELLED,
+        )
     await callback.answer(texts.CANCELLED)
 
 
 @router.message(StateFilter(DeclineFlow.waiting_reason), Command("cancel"))
 async def cmd_cancel_decline(
-    message: Message, state: FSMContext, settings: Settings, db: Database
+    message: Message,
+    state: FSMContext,
+    settings: Settings,
+    db: Database,
+    bot: Bot,
 ) -> None:
     if not await guard_admin_message(message, settings, db, ORDERS_REVIEW):
         return
+    data = await state.get_data()
     await state.clear()
+    chat_id = int(data.get("decline_prompt_chat_id", 0))
+    msg_id = int(data.get("decline_prompt_message_id", 0))
+    if chat_id and msg_id:
+        await _edit_decline_prompt(
+            bot,
+            chat_id=chat_id,
+            message_id=msg_id,
+            text=texts.REVIEW_DECLINE_CANCELLED,
+        )
     await message.answer(texts.CANCELLED)
 
 
@@ -430,7 +502,14 @@ async def on_decline_reason(
 
     data = await state.get_data()
     order_id = int(data.get("decline_order_id", 0))
-    reason = (message.text or "").strip() or texts.ORDER_DECLINED_DEFAULT_REASON
+    prompt_chat_id = int(data.get("decline_prompt_chat_id", 0))
+    prompt_message_id = int(data.get("decline_prompt_message_id", 0))
+    reason = (message.text or "").strip()
+    if not reason:
+        await message.answer(
+            "لطفاً دلیل رد را بنویسید یا از دکمه‌های بالا انتخاب کنید."
+        )
+        return
     await state.clear()
 
     if not order_id:
@@ -442,5 +521,7 @@ async def on_decline_reason(
         admin_user=message.from_user,
         bot=bot,
         db=db,
-        reply_to=message,
+        prompt_chat_id=prompt_chat_id or None,
+        prompt_message_id=prompt_message_id or None,
+        error_reply=message,
     )
