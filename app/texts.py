@@ -81,6 +81,12 @@ BTN_CUSTOM     = "✏️ مقدار دلخواه"
 BTN_ACCEPT     = "✅ تأیید پرداخت"
 BTN_DECLINE    = "❌ رد پرداخت"
 BTN_VIEW_USER  = "👤 پروفایل کاربر"
+BTN_USER_INFO   = "👤 شناسه کاربر"
+ADMIN_USER_INFO_ALERT = (
+    "شناسه: {user_id}\n"
+    "نام: {full_name}\n"
+    "یوزرنیم: {username}"
+)
 
 # My services
 BTN_VIEW_CONFIGS  = "📋 دریافت کانفیگ‌ها"

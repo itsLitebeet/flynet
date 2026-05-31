@@ -28,13 +28,31 @@ async def admin_edit_or_answer(
                 parse_mode=ParseMode.HTML,
             )
             return
-        except TelegramBadRequest:
-            pass
-    await message.answer(
-        text,
-        reply_markup=reply_markup,
-        parse_mode=ParseMode.HTML,
-    )
+        except TelegramBadRequest as exc:
+            err = (exc.message or "").lower()
+            if "message is not modified" in err:
+                return
+            if "privacy_restricted" in err or "user_privacy" in err:
+                reply_markup = None
+            try:
+                await message.edit_text(
+                    text,
+                    reply_markup=reply_markup,
+                    parse_mode=ParseMode.HTML,
+                )
+                return
+            except TelegramBadRequest:
+                pass
+    try:
+        await message.answer(
+            text,
+            reply_markup=reply_markup,
+            parse_mode=ParseMode.HTML,
+        )
+    except TelegramBadRequest as exc:
+        err = (exc.message or "").lower()
+        if "privacy_restricted" in err or "user_privacy" in err:
+            await message.answer(text, parse_mode=ParseMode.HTML)
 
 
 def format_services_list_text(db: Database, *, loc_filter: int | None = None) -> str:

@@ -928,6 +928,38 @@ async def cb_admin_users_page(callback: CallbackQuery, settings: Settings, db: D
     await callback.answer()
 
 
+@router.callback_query(F.data.startswith(keyboards.CB_ADM_USER_INFO_PREFIX))
+async def cb_admin_user_info(
+    callback: CallbackQuery, settings: Settings, db: Database
+) -> None:
+    if await _guard_cb_any(
+        callback, settings, db, CUSTOMERS, USERS, ORDERS_REVIEW
+    ) is None:
+        return
+    raw = (callback.data or "").removeprefix(keyboards.CB_ADM_USER_INFO_PREFIX)
+    try:
+        user_id = int(raw)
+    except ValueError:
+        await callback.answer()
+        return
+    row = db.get_user(user_id)
+    if row is None:
+        await callback.answer("کاربر یافت نشد.", show_alert=True)
+        return
+    full_name = " ".join(
+        p for p in [row["first_name"], row["last_name"]] if p
+    ) or "—"
+    username = f"@{row['username']}" if row["username"] else "—"
+    await callback.answer(
+        texts.ADMIN_USER_INFO_ALERT.format(
+            user_id=user_id,
+            full_name=full_name,
+            username=username,
+        ),
+        show_alert=True,
+    )
+
+
 @router.callback_query(F.data.startswith(keyboards.CB_ADM_USER_DETAIL_PREFIX))
 async def cb_admin_user_detail(callback: CallbackQuery, settings: Settings, db: Database) -> None:
     if await _guard_cb(callback, settings, db, USERS) is None:

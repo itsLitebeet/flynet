@@ -55,6 +55,7 @@ CB_ADM_TOOLS             = "adm:tools"
 CB_ADM_USERS                 = "adm:usr"
 CB_ADM_USERS_PAGE_PREFIX     = "adm:usrp:"   # adm:usrp:<page>
 CB_ADM_USER_DETAIL_PREFIX    = "adm:u:"      # adm:u:<user_id>
+CB_ADM_USER_INFO_PREFIX      = "adm:uinf:"   # adm:uinf:<user_id> — alert, no tg:// link
 CB_ADM_CUSTOMERS             = "adm:cust"
 CB_ADM_CUSTOMERS_PAGE_PREFIX = "adm:custp:"  # adm:custp:<page>
 CB_ADM_CUST_DETAIL_PREFIX    = "adm:custd:"  # adm:custd:<user_id>
@@ -972,8 +973,8 @@ def admin_user_detail_keyboard(
     rows: list[list[InlineKeyboardButton]] = [
         [
             InlineKeyboardButton(
-                text=texts.BTN_VIEW_USER,
-                url=f"tg://user?id={user_id}",
+                text=texts.BTN_USER_INFO,
+                callback_data=f"{CB_ADM_USER_INFO_PREFIX}{user_id}",
             ),
         ],
     ]
@@ -1118,8 +1119,8 @@ def admin_customer_detail_keyboard(
     rows: list[list[InlineKeyboardButton]] = [
         [
             InlineKeyboardButton(
-                text=texts.BTN_VIEW_USER,
-                url=f"tg://user?id={user_id}",
+                text=texts.BTN_USER_INFO,
+                callback_data=f"{CB_ADM_USER_INFO_PREFIX}{user_id}",
             ),
         ],
         row2,
@@ -1407,11 +1408,10 @@ def admin_review(order_id: int, user_id: int) -> InlineKeyboardMarkup:
                     text=f"{texts.ADMIN_BTN_ORDER_MANAGE} #{order_id}",
                     callback_data=f"{CB_ADM_ORDER_MANAGE_PREFIX}{order_id}",
                 ),
-            ],
-            [
                 InlineKeyboardButton(
-                    text=texts.BTN_VIEW_USER, url=f"tg://user?id={user_id}"
-                )
+                    text=texts.BTN_USER_INFO,
+                    callback_data=f"{CB_ADM_USER_INFO_PREFIX}{user_id}",
+                ),
             ],
         ]
     )
