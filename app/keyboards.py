@@ -80,8 +80,17 @@ CB_ADM_FLOW_CANCEL       = "adm:fcancel"
 CB_ADM_SETCARD_HELP      = "adm:hcard"
 CB_ADM_SETPRICE_HELP     = "adm:hprice"
 CB_ADM_ADDLOC_HELP       = "adm:hloc"
-CB_ADM_ADDSVC_HELP       = "adm:hsvc"
+CB_ADM_ADD_SVC           = "adm:addsvc"
+CB_ADM_ADDSVC_HELP       = "adm:hsvc"  # legacy hint callback
 CB_ADM_EDITSVC_HELP      = "adm:hesvc"
+CB_ADM_ADD_SVC_LOC_PREFIX  = "adm:asvcl:"   # adm:asvcl:<location_id>
+CB_ADM_ADD_SVC_VOL_PREFIX  = "adm:asvcv:"   # adm:asvcv:<gb>
+CB_ADM_ADD_SVC_DUR_PREFIX  = "adm:asvcd:"   # adm:asvcd:<days>
+CB_ADM_ADD_SVC_VOL_CUSTOM  = "adm:asvcvc"
+CB_ADM_ADD_SVC_DUR_CUSTOM  = "adm:asvcdc"
+CB_ADM_ADD_SVC_BACK_LOC    = "adm:asvcb0"
+CB_ADM_ADD_SVC_BACK_VOL    = "adm:asvcb1"
+CB_ADM_ADD_SVC_BACK_DUR    = "adm:asvcb2"
 CB_ADM_SETTINGS_REFRESH  = "adm:setrf"
 CB_ADM_PLAN_ADD_HINT     = "adm:phint"
 CB_ADM_OFFER             = "adm:offer"
@@ -862,7 +871,7 @@ def admin_services_inline(*, manual_enabled: bool) -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_ADD_SVC_HELP, callback_data=CB_ADM_ADDSVC_HELP
+                    text=texts.ADMIN_BTN_ADD_SVC_HELP, callback_data=CB_ADM_ADD_SVC
                 ),
                 InlineKeyboardButton(
                     text=texts.ADMIN_BTN_EDIT_SVC_HELP, callback_data=CB_ADM_EDITSVC_HELP
@@ -1354,6 +1363,83 @@ def admin_add_client_user_keyboard() -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(
                     text=texts.BTN_CANCEL, callback_data=CB_ADM_FLOW_CANCEL
+                ),
+            ],
+        ]
+    )
+
+
+def admin_add_service_locations(locs: list[Location]) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    for loc in locs:
+        emoji = _location_list_emoji(loc)
+        rows.append([
+            InlineKeyboardButton(
+                text=f"{emoji} #{loc.id} {loc.name}",
+                callback_data=f"{CB_ADM_ADD_SVC_LOC_PREFIX}{loc.id}",
+            )
+        ])
+    rows.append([
+        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_SERVICES),
+        InlineKeyboardButton(text=texts.BTN_CANCEL, callback_data=CB_ADM_FLOW_CANCEL),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_add_service_volumes(volume_presets_gb: list[int]) -> InlineKeyboardMarkup:
+    preset_btns = [
+        InlineKeyboardButton(
+            text=f"{gb} GB",
+            callback_data=f"{CB_ADM_ADD_SVC_VOL_PREFIX}{gb}",
+        )
+        for gb in volume_presets_gb
+    ]
+    rows = _chunk_buttons(preset_btns, per_row=3)
+    rows.append([
+        InlineKeyboardButton(
+            text=texts.BTN_CUSTOM, callback_data=CB_ADM_ADD_SVC_VOL_CUSTOM
+        ),
+    ])
+    rows.append([
+        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_ADD_SVC_BACK_LOC),
+        InlineKeyboardButton(text=texts.BTN_CANCEL, callback_data=CB_ADM_FLOW_CANCEL),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_add_service_durations(duration_presets_days: list[int]) -> InlineKeyboardMarkup:
+    preset_btns = [
+        InlineKeyboardButton(
+            text=f"{d} روز",
+            callback_data=f"{CB_ADM_ADD_SVC_DUR_PREFIX}{d}",
+        )
+        for d in duration_presets_days
+    ]
+    rows = _chunk_buttons(preset_btns, per_row=3)
+    rows.append([
+        InlineKeyboardButton(
+            text=texts.BTN_CUSTOM, callback_data=CB_ADM_ADD_SVC_DUR_CUSTOM
+        ),
+    ])
+    rows.append([
+        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_ADD_SVC_BACK_VOL),
+        InlineKeyboardButton(text=texts.BTN_CANCEL, callback_data=CB_ADM_FLOW_CANCEL),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_add_service_done_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.ADMIN_BTN_ADD_SVC_HELP,
+                    callback_data=CB_ADM_ADD_SVC,
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.ADMIN_BTN_SERVICES, callback_data=CB_ADM_SERVICES
                 ),
             ],
         ]

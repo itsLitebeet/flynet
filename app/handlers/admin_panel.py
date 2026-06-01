@@ -864,7 +864,6 @@ _HINT_CALLBACKS = frozenset({
     keyboards.CB_ADM_SETCARD_HELP,
     keyboards.CB_ADM_SETPRICE_HELP,
     keyboards.CB_ADM_ADDLOC_HELP,
-    keyboards.CB_ADM_ADDSVC_HELP,
     keyboards.CB_ADM_EDITSVC_HELP,
     keyboards.CB_ADM_PLAN_ADD_HINT,
 })
@@ -878,7 +877,6 @@ async def cb_admin_hint(callback: CallbackQuery, settings: Settings, db: Databas
         keyboards.CB_ADM_SETCARD_HELP: texts.SET_CARD_USAGE,
         keyboards.CB_ADM_SETPRICE_HELP: texts.SET_PRICE_USAGE,
         keyboards.CB_ADM_ADDLOC_HELP: texts.ADD_LOC_USAGE,
-        keyboards.CB_ADM_ADDSVC_HELP: texts.ADD_SERVICE_USAGE,
         keyboards.CB_ADM_EDITSVC_HELP: texts.EDIT_SERVICE_USAGE,
         keyboards.CB_ADM_PLAN_ADD_HINT: texts.ADMIN_PLAN_USAGE,
     }

@@ -1019,9 +1019,51 @@ SET_PRICE_USAGE    = "❗ استفاده:\n<code>/setprice 20000 8000 1500</code
 SHOW_SETTINGS      = ADMIN_SETTINGS_VIEW  # alias for /showsettings command
 
 ADD_SERVICE_USAGE = (
-    "❗ استفاده:\n"
+    "➕ <b>افزودن پلن فروش</b>\n\n"
+    "از دکمه <b>➕ افزودن پلن</b> در منوی پلن‌ها استفاده کنید،\n"
+    "یا دستور:\n"
     "<code>/addservice 2 5 3 20000</code>\n"
     "یعنی: لوکیشن ۲ — ۵ گیگ — ۳ روز — ۲۰٬۰۰۰ تومان"
+)
+ADD_SERVICE_WIZARD_LOCATION = (
+    "➕ <b>افزودن پلن</b> — مرحله ۱ از ۴\n\n"
+    "📍 <b>لوکیشن</b> را انتخاب کنید:"
+)
+ADD_SERVICE_WIZARD_VOLUME = (
+    "➕ <b>افزودن پلن</b> — مرحله ۲ از ۴\n\n"
+    "📍 لوکیشن: <b>{location}</b>\n\n"
+    "💾 <b>حجم (گیگابایت)</b> را انتخاب کنید:"
+)
+ADD_SERVICE_WIZARD_VOLUME_CUSTOM = (
+    "➕ <b>افزودن پلن</b> — مرحله ۲ از ۴\n\n"
+    "📍 لوکیشن: <b>{location}</b>\n\n"
+    "عدد حجم را به <b>گیگابایت</b> بفرستید "
+    "(بین {min_gb} تا {max_gb}):"
+)
+ADD_SERVICE_WIZARD_VOLUME_INVALID = (
+    "❗ حجم نامعتبر. عددی بین {min_gb} و {max_gb} گیگ بفرستید."
+)
+ADD_SERVICE_WIZARD_DURATION = (
+    "➕ <b>افزودن پلن</b> — مرحله ۳ از ۴\n\n"
+    "📍 {location} · 💾 <b>{volume} گیگ</b>\n\n"
+    "📅 <b>مدت (روز)</b> را انتخاب کنید:"
+)
+ADD_SERVICE_WIZARD_DURATION_CUSTOM = (
+    "➕ <b>افزودن پلن</b> — مرحله ۳ از ۴\n\n"
+    "📍 {location} · 💾 <b>{volume} گیگ</b>\n\n"
+    "تعداد <b>روز</b> را بفرستید (حداقل ۱):"
+)
+ADD_SERVICE_WIZARD_DURATION_INVALID = "❗ مدت نامعتبر. عدد روز باید بزرگ‌تر از ۰ باشد."
+ADD_SERVICE_WIZARD_PRICE = (
+    "➕ <b>افزودن پلن</b> — مرحله ۴ از ۴\n\n"
+    "📍 {location}\n"
+    "💾 {volume} گیگ · 📅 {days} روز\n\n"
+    "💰 <b>قیمت (تومان)</b> را بفرستید (عدد ≥ ۰):"
+)
+ADD_SERVICE_WIZARD_PRICE_INVALID = "❗ قیمت نامعتبر. عدد صحیح ≥ ۰ بفرستید."
+ADD_SERVICE_WIZARD_NO_LOCATIONS = (
+    "⛔ هیچ لوکیشن فعال (غیرتست) برای تعریف پلن وجود ندارد.\n"
+    "ابتدا لوکیشن اضافه و فعال کنید."
 )
 ADD_SERVICE_OK = (
     "✅ پلن اضافه شد — شناسه <code>#{id}</code>\n"
@@ -1040,7 +1082,7 @@ DEL_SERVICE_USAGE    = "❗ استفاده: <code>/delservice &lt;package_id&gt;
 DEL_SERVICE_OK       = "✅ پلن <code>#{id}</code> حذف شد."
 DEL_SERVICE_NOTFOUND = "❗ پلن یافت نشد."
 
-LIST_SERVICES_EMPTY = "ℹ️ هیچ پلنی ثبت نشده. از <code>/addservice</code> استفاده کنید."
+LIST_SERVICES_EMPTY = "ℹ️ هیچ پلنی ثبت نشده. دکمه <b>➕ افزودن پلن</b> را بزنید."
 LIST_SERVICES_HEADER = "📋 <b>پلن‌های فروش</b>{filter_line}\n\n"
 LIST_SERVICES_LINE = (
     "• <code>#{id}</code> — لوکیشن <code>#{loc_id}</code> ({loc_name})\n"

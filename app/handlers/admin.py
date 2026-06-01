@@ -5,6 +5,7 @@ from html import escape
 
 from aiogram import Bot, F, Router
 from aiogram.filters import Command, CommandObject, StateFilter
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from app import keyboards, texts
@@ -119,14 +120,20 @@ async def cmd_users(message: Message, settings: Settings, db: Database) -> None:
 # ---------- predefined service packages (manual purchase) ----------
 @router.message(Command("addservice"))
 async def cmd_addservice(
-    message: Message, command: CommandObject, settings: Settings, db: Database
+    message: Message,
+    command: CommandObject,
+    state: FSMContext,
+    settings: Settings,
+    db: Database,
 ) -> None:
     if not await guard_admin_message(message, settings, db, SERVICES):
         return
 
     parts = (command.args or "").split()
     if len(parts) != 4:
-        await message.answer(texts.ADD_SERVICE_USAGE)
+        from app.handlers.admin_add_service import start_add_service_wizard
+
+        await start_add_service_wizard(message, state, db)
         return
     try:
         loc_id, volume_gb, duration_days, price = (
