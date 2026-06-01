@@ -458,8 +458,6 @@ def admin_reply_keyboard(user_id: int, settings, db) -> ReplyKeyboardMarkup:
         review_row.append(KeyboardButton(text=texts.ADMIN_BTN_PENDING))
     if _admin_perm(user_id, CUSTOMERS, settings, db):
         review_row.append(KeyboardButton(text=texts.ADMIN_BTN_CUSTOMERS))
-    if _admin_perm(user_id, USERS, settings, db):
-        review_row.append(KeyboardButton(text=texts.ADMIN_BTN_USERS))
     if review_row:
         rows.append(review_row)
 
@@ -471,6 +469,8 @@ def admin_reply_keyboard(user_id: int, settings, db) -> ReplyKeyboardMarkup:
     ) or _admin_perm(user_id, TOOLS_MISC, settings, db
     ):
         operations_row.append(KeyboardButton(text=texts.ADMIN_BTN_TOOLS))
+    if _admin_perm(user_id, USERS, settings, db):
+        operations_row.append(KeyboardButton(text=texts.ADMIN_BTN_USERS))
     if operations_row:
         rows.append(operations_row)
 
