@@ -182,12 +182,18 @@ async def _log_edit(
     order_id: int,
     from_user,
     action: str,
+    order=None,
+    notes: str | None = None,
 ) -> None:
     admin = Actor.from_user(from_user)
     if admin is None:
         return
     await make_logger(bot, db).log_admin_order_action(
-        order_id=order_id, admin=admin, action=action
+        order_id=order_id,
+        admin=admin,
+        action=action,
+        order=order,
+        notes=notes,
     )
 
 
@@ -363,6 +369,19 @@ async def cb_order_delete_ok(
             panel_err = str(exc)
             log.warning("Panel delete failed for order %s: %s", order_id, exc)
 
+    admin = Actor.from_user(callback.from_user)
+    if admin is not None:
+        delete_notes = (
+            f"خطای حذف از پنل: {panel_err}" if panel_err else None
+        )
+        await make_logger(bot, db).log_admin_order_action(
+            order_id=order_id,
+            admin=admin,
+            action="حذف از پنل و ربات",
+            order=order,
+            notes=delete_notes,
+        )
+
     if not db.delete_order(order_id):
         if isinstance(callback.message, Message):
             await callback.message.edit_text(
@@ -384,14 +403,6 @@ async def cb_order_delete_ok(
                 texts.ADMIN_ORDER_DELETED_OK.format(order_id=order_id),
                 reply_markup=None,
             )
-
-    admin = Actor.from_user(callback.from_user)
-    if admin is not None:
-        await make_logger(bot, db).log_admin_order_action(
-            order_id=order_id,
-            admin=admin,
-            action="حذف از پنل و ربات",
-        )
 
 
 @router.callback_query(F.data.startswith(keyboards.CB_ADM_ORDER_DELETE_ASK_PREFIX))
@@ -550,6 +561,7 @@ async def cb_order_add_gb(
         order_id=order_id,
         from_user=callback.from_user,
         action=f"+{add_gb} GB پنل",
+        notes=f"حجم کل پنل پس از تغییر: {total_gb} GB",
     )
 
 
@@ -611,6 +623,7 @@ async def cb_order_add_days(
         order_id=order_id,
         from_user=callback.from_user,
         action=f"+{add_days} روز پنل",
+        notes=f"انقضای جدید: {_format_expiry_ms(new_expiry)}",
     )
 
 
@@ -740,6 +753,7 @@ async def msg_order_set_gb(
         order_id=order_id,
         from_user=message.from_user,
         action=f"تنظیم حجم {total_gb} GB",
+        notes=f"حجم کل پنل: {total_gb} GB",
     )
 
 
@@ -795,6 +809,7 @@ async def msg_order_add_days_custom(
         order_id=order_id,
         from_user=message.from_user,
         action=f"+{add_days} روز (دستی)",
+        notes=f"انقضای جدید: {_format_expiry_ms(new_expiry)}",
     )
 
 
