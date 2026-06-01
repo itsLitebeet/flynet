@@ -12,6 +12,7 @@ import logging
 from html import escape
 
 from aiogram import Bot, F, Router
+from aiogram.enums import ParseMode
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -46,12 +47,20 @@ PURCHASE_MODE_LEGACY = "legacy"
 async def _edit_or_answer(callback: CallbackQuery, text: str, reply_markup=None) -> None:
     if isinstance(callback.message, Message):
         try:
-            await callback.message.edit_text(text, reply_markup=reply_markup)
+            await callback.message.edit_text(
+                text,
+                reply_markup=reply_markup,
+                parse_mode=ParseMode.HTML,
+            )
             return
         except Exception:  # noqa: BLE001 — message may be uneditable (e.g. has a photo)
             pass
     if callback.message is not None:
-        await callback.message.answer(text, reply_markup=reply_markup)
+        await callback.message.answer(
+            text,
+            reply_markup=reply_markup,
+            parse_mode=ParseMode.HTML,
+        )
 
 
 def _calc_base_price_for(
@@ -271,6 +280,7 @@ async def _begin_buy_message(message: Message, state: FSMContext, db: Database) 
         message,
         texts.ORDER_PICK_LOCATION,
         keyboards.locations(locs),
+        parse_mode=ParseMode.HTML,
     )
 
 
