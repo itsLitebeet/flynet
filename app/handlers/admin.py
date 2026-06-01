@@ -11,8 +11,8 @@ from app import keyboards, texts
 from app.config import Settings
 from app.db import Database
 from app.admin_perms import (
-    DASHBOARD,
     LOCATIONS,
+    PANEL,
     ORDERS_MANAGE,
     ORDERS_REVIEW,
     SERVICES,
@@ -23,13 +23,19 @@ from app.admin_perms import (
 )
 from app.handlers.admin_helpers import (
     guard_admin_message,
+    format_stats_text,
     format_settings_text,
     location_pricing_label,
     normalize_panel_url,
     run_clear_declined,
     run_sync_panel,
 )
-from app.handlers.admin_panel import send_base_plans, send_dashboard, send_pending_list, send_users
+from app.handlers.admin_panel import (
+    send_admin_home,
+    send_base_plans,
+    send_pending_list,
+    send_users,
+)
 
 
 router = Router(name="admin")
@@ -39,11 +45,11 @@ log = logging.getLogger(__name__)
 # ---------- generic ----------
 @router.message(Command("stats"))
 async def cmd_stats(message: Message, settings: Settings, db: Database) -> None:
-    if not await guard_admin_message(message, settings, db, DASHBOARD):
+    if not await guard_admin_message(message, settings, db, PANEL):
         return
     if message.from_user is None:
         return
-    await send_dashboard(message, settings, db, message.from_user.id)
+    await message.answer(format_stats_text(db))
 
 
 @router.message(Command("users"))

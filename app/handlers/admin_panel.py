@@ -16,7 +16,6 @@ from app.config import Settings
 from app.db import Database
 from app.admin_perms import (
     CUSTOMERS,
-    DASHBOARD,
     LOCATIONS,
     OFFER,
     ORDERS_MANAGE,
@@ -127,39 +126,6 @@ async def send_admin_home(
     )
 
 
-async def send_dashboard(
-    message: Message,
-    settings: Settings,
-    db: Database,
-    user_id: int,
-    *,
-    edit_in_place: bool = False,
-) -> None:
-    body = texts.ADMIN_DASHBOARD_HEADER.format(stats=format_stats_text(db))
-    await admin_edit_or_answer(
-        message,
-        body,
-        keyboards.admin_dashboard_inline(user_id, settings, db),
-        edit_in_place=edit_in_place,
-    )
-
-
-async def send_orders_hub(
-    message: Message,
-    settings: Settings,
-    db: Database,
-    user_id: int,
-    *,
-    edit_in_place: bool = False,
-) -> None:
-    await admin_edit_or_answer(
-        message,
-        texts.ADMIN_ORDERS_MENU,
-        keyboards.admin_orders_inline(user_id, settings, db),
-        edit_in_place=edit_in_place,
-    )
-
-
 async def send_pending_list(
     message: Message,
     settings: Settings,
@@ -169,11 +135,12 @@ async def send_pending_list(
     edit_in_place: bool = False,
 ) -> None:
     rows = db.pending_orders(limit=20)
+    footer = keyboards.admin_pending_footer(user_id, settings, db)
     if not rows:
         await admin_edit_or_answer(
             message,
             texts.ADMIN_PENDING_EMPTY,
-            keyboards.admin_orders_inline(user_id, settings, db),
+            footer,
             edit_in_place=edit_in_place,
         )
         return
@@ -191,7 +158,7 @@ async def send_pending_list(
     await admin_edit_or_answer(
         message,
         texts.ADMIN_PENDING_HEADER.format(count=len(rows)),
-        keyboards.admin_pending_list(buttons),
+        keyboards.admin_pending_list(buttons, user_id, settings, db),
         edit_in_place=edit_in_place,
     )
 
@@ -276,7 +243,7 @@ async def send_locations(
         await admin_edit_or_answer(
             message,
             texts.ADMIN_LOC_EMPTY,
-            keyboards.admin_orders_inline(user_id, settings, db),
+            keyboards.admin_home_inline(user_id, settings, db),
             edit_in_place=edit_in_place,
         )
         return
@@ -466,7 +433,7 @@ async def cmd_admin_panel(message: Message, settings: Settings, db: Database) ->
 # ---------- reply keyboard ----------
 @router.message(F.text.in_(keyboards.ADMIN_MENU_BUTTONS), StateFilter(None))
 async def admin_menu_buttons(
-    message: Message, settings: Settings, db: Database
+    message: Message, state: FSMContext, settings: Settings, db: Database
 ) -> None:
     if not admin_from_message(message, settings):
         return
@@ -482,23 +449,16 @@ async def admin_menu_buttons(
             return
         await send_admin_home(message, settings, db)
     elif text == texts.ADMIN_BTN_DASHBOARD:
-        if not admin_can(uid, DASHBOARD, settings, db):
+        if not admin_panel_access(uid, settings, db):
             await message.answer(texts.NOT_PERMITTED)
             return
-        await send_dashboard(message, settings, db, uid)
+        await state.clear()
+        await send_admin_home(message, settings, db, admin_user_id=uid)
     elif text == texts.ADMIN_BTN_PENDING:
         if not admin_can(uid, ORDERS_REVIEW, settings, db):
             await message.answer(texts.NOT_PERMITTED)
             return
         await send_pending_list(message, settings, db, uid)
-    elif text == texts.ADMIN_BTN_ORDERS:
-        if not (
-            admin_can(uid, ORDERS_REVIEW, settings, db)
-            or admin_can(uid, ORDERS_MANAGE, settings, db)
-        ):
-            await message.answer(texts.NOT_PERMITTED)
-            return
-        await send_orders_hub(message, settings, db, uid)
     elif text == texts.ADMIN_BTN_SETTINGS:
         if not (
             admin_can(uid, SETTINGS, settings, db)
@@ -554,30 +514,65 @@ async def cb_admin_home(
 async def cb_admin_dash(
     callback: CallbackQuery, state: FSMContext, settings: Settings, db: Database
 ) -> None:
-    if await _guard_cb(callback, settings, db, DASHBOARD) is None:
+    """Legacy callback — same as refreshing admin home."""
+    if await _guard_cb(callback, settings, db, PANEL) is None:
         return
     await state.clear()
-    if isinstance(callback.message, Message):
-        await send_dashboard(callback.message, settings, db, callback.from_user.id, edit_in_place=True)
+    if callback.from_user is None or not isinstance(callback.message, Message):
+        await callback.answer()
+        return
+    await send_admin_home(
+        callback.message,
+        settings,
+        db,
+        admin_user_id=callback.from_user.id,
+        edit_in_place=True,
+    )
     await callback.answer()
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_ORDERS)
-async def cb_admin_orders(callback: CallbackQuery, state: FSMContext, settings: Settings, db: Database) -> None:
+async def cb_admin_orders(
+    callback: CallbackQuery, state: FSMContext, settings: Settings, db: Database
+) -> None:
+    """Legacy callback — open pending review (or order lookup)."""
     if await _guard_cb_any(callback, settings, db, ORDERS_REVIEW, ORDERS_MANAGE) is None:
         return
     await state.clear()
-    if isinstance(callback.message, Message):
-        await send_orders_hub(callback.message, settings, db, callback.from_user.id, edit_in_place=True)
+    if not isinstance(callback.message, Message) or callback.from_user is None:
+        await callback.answer()
+        return
+    uid = callback.from_user.id
+    if admin_can(uid, ORDERS_REVIEW, settings, db):
+        await send_pending_list(
+            callback.message, settings, db, uid, edit_in_place=True
+        )
+    else:
+        await admin_edit_or_answer(
+            callback.message,
+            texts.ADMIN_ORDER_LOOKUP_PROMPT,
+            keyboards.admin_flow_cancel_inline(back_data=keyboards.CB_ADM_HOME),
+            edit_in_place=True,
+        )
+        await state.set_state(AdminPanelFlow.waiting_order_id)
     await callback.answer()
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_PENDING_LIST)
-async def cb_admin_pending(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+async def cb_admin_pending(
+    callback: CallbackQuery, state: FSMContext, settings: Settings, db: Database
+) -> None:
     if await _guard_cb(callback, settings, db, ORDERS_REVIEW) is None:
         return
-    if isinstance(callback.message, Message):
-        await send_pending_list(callback.message, settings, db, callback.from_user.id, edit_in_place=True)
+    await state.clear()
+    if isinstance(callback.message, Message) and callback.from_user is not None:
+        await send_pending_list(
+            callback.message,
+            settings,
+            db,
+            callback.from_user.id,
+            edit_in_place=True,
+        )
     await callback.answer()
 
 
@@ -745,7 +740,7 @@ async def cb_admin_order_lookup_start(callback: CallbackQuery, state: FSMContext
     await admin_edit_or_answer(
         callback.message,
         texts.ADMIN_ORDER_LOOKUP_PROMPT,
-        keyboards.admin_flow_cancel_inline(back_data=keyboards.CB_ADM_ORDERS),
+        keyboards.admin_flow_cancel_inline(back_data=keyboards.CB_ADM_PENDING_LIST),
         edit_in_place=True,
     )
     await callback.answer()
@@ -777,7 +772,18 @@ async def admin_panel_flow_cancel(
     await state.clear()
     if isinstance(event, CallbackQuery):
         if isinstance(event.message, Message):
-            await send_orders_hub(event.message, settings, db, user_id, edit_in_place=True)
+            if admin_can(user_id, ORDERS_REVIEW, settings, db):
+                await send_pending_list(
+                    event.message, settings, db, user_id, edit_in_place=True
+                )
+            else:
+                await send_admin_home(
+                    event.message,
+                    settings,
+                    db,
+                    admin_user_id=user_id,
+                    edit_in_place=True,
+                )
         await event.answer(texts.CANCELLED)
     else:
         await event.answer(texts.CANCELLED)
@@ -804,7 +810,7 @@ async def admin_panel_order_id_input(
         await message.answer(
             texts.ADMIN_ORDER_LOOKUP_NOTFOUND.format(order_id=escape(raw or "—")),
             reply_markup=keyboards.admin_flow_cancel_inline(
-                back_data=keyboards.CB_ADM_ORDERS
+                back_data=keyboards.CB_ADM_PENDING_LIST
             ),
         )
         return
@@ -815,7 +821,7 @@ async def admin_panel_order_id_input(
     ):
         await message.answer(
             texts.ADMIN_ORDER_LOOKUP_NOTFOUND.format(order_id=order_id),
-            reply_markup=keyboards.admin_orders_inline(user.id, settings, db),
+            reply_markup=keyboards.admin_pending_footer(user.id, settings, db),
         )
 
 

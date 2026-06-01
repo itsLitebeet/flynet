@@ -487,9 +487,9 @@ USER_BANNED = "⛔ دسترسی شما به ربات مسدود شده است."
 
 
 # ---------- admin panel (buttons) ----------
-ADMIN_BTN_DASHBOARD = "📊 داشبورد"
+ADMIN_BTN_DASHBOARD = "🔄 داشبورد"
 ADMIN_BTN_PENDING   = "🔍 بررسی پرداخت‌ها"
-ADMIN_BTN_ORDERS    = "📦 سفارش‌ها"
+ADMIN_BTN_ORDERS    = "📦 سفارش‌ها"  # legacy label; UI uses PENDING only
 ADMIN_BTN_SETTINGS  = "⚙️ تنظیمات"
 ADMIN_BTN_LOCATIONS = "📍 لوکیشن‌ها"
 ADMIN_BTN_TOOLS     = "🛠 ابزارها"
@@ -514,15 +514,15 @@ ADMIN_BTN_ORDER_MANAGE = "⚙️ سفارش"
 ADMIN_PANEL_HOME = (
     "🛠 <b>پنل مدیریت NetFly</b>\n\n"
     "از <b>دکمه‌های پایین صفحه</b> یا منوی زیر استفاده کنید.\n"
-    "بیشتر کارها بدون تایپ دستور انجام می‌شود."
+    "دکمه <b>داشبورد</b> پنل را از نو باز می‌کند.\n"
+    "بررسی رسیدها: <b>بررسی پرداخت‌ها</b>."
 )
 
 ADMIN_HOME_STATS = "{stats}"
 
 ADMIN_DASHBOARD_HEADER = (
     "📊 <b>داشبورد</b>\n\n"
-    "{stats}\n\n"
-    "👇 برای بررسی رسیدها، دکمه «بررسی پرداخت‌ها» را بزنید."
+    "{stats}"
 )
 
 ADMIN_SETTINGS_VIEW = (
@@ -586,9 +586,9 @@ ADMIN_SETTINGS_MENU = (
 )
 
 ADMIN_ORDERS_MENU = (
-    "📦 <b>سفارش‌ها</b>\n\n"
-    "• <b>بررسی پرداخت‌ها</b> — رسیدهای در انتظار تأیید\n"
-    "• <b>جستجوی سفارش</b> — جزئیات و مدیریت پنل (<code>/order</code>)\n"
+    "🔍 <b>بررسی پرداخت‌ها</b>\n\n"
+    "روی هر سفارش بزنید تا رسید را ببینید و تأیید یا رد کنید.\n"
+    "برای جستجوی سفارش با شناسه از دکمه «جستجوی سفارش» استفاده کنید."
 )
 
 ADMIN_SERVICES_MENU = (

@@ -180,7 +180,6 @@ MAIN_MENU_BUTTONS = frozenset({
 ADMIN_MENU_BUTTONS = frozenset({
     texts.ADMIN_BTN_DASHBOARD,
     texts.ADMIN_BTN_PENDING,
-    texts.ADMIN_BTN_ORDERS,
     texts.ADMIN_BTN_SETTINGS,
     texts.ADMIN_BTN_LOCATIONS,
     texts.ADMIN_BTN_TOOLS,
@@ -437,8 +436,8 @@ def _admin_perm(user_id: int, perm: str, settings, db) -> bool:
 def admin_reply_keyboard(user_id: int, settings, db) -> ReplyKeyboardMarkup:
     from app.admin_perms import (
         CUSTOMERS,
-        DASHBOARD,
         LOCATIONS,
+        PANEL,
         OFFER,
         ORDERS_MANAGE,
         ORDERS_REVIEW,
@@ -452,22 +451,15 @@ def admin_reply_keyboard(user_id: int, settings, db) -> ReplyKeyboardMarkup:
 
     rows: list[list[KeyboardButton]] = []
     row1: list[KeyboardButton] = []
-    if _admin_perm(user_id, DASHBOARD, settings, db):
+    if _admin_perm(user_id, PANEL, settings, db):
         row1.append(KeyboardButton(text=texts.ADMIN_BTN_DASHBOARD))
     if _admin_perm(user_id, ORDERS_REVIEW, settings, db):
         row1.append(KeyboardButton(text=texts.ADMIN_BTN_PENDING))
     if row1:
         rows.append(row1)
 
-    row2: list[KeyboardButton] = []
-    if _admin_perm(user_id, ORDERS_REVIEW, settings, db) or _admin_perm(
-        user_id, ORDERS_MANAGE, settings, db
-    ):
-        row2.append(KeyboardButton(text=texts.ADMIN_BTN_ORDERS))
     if _admin_perm(user_id, CUSTOMERS, settings, db):
-        row2.append(KeyboardButton(text=texts.ADMIN_BTN_CUSTOMERS))
-    if row2:
-        rows.append(row2)
+        rows.append([KeyboardButton(text=texts.ADMIN_BTN_CUSTOMERS)])
 
     if _admin_perm(user_id, USERS, settings, db):
         rows.append([KeyboardButton(text=texts.ADMIN_BTN_USERS)])
@@ -500,11 +492,11 @@ def admin_reply_keyboard(user_id: int, settings, db) -> ReplyKeyboardMarkup:
 def admin_home_inline(user_id: int, settings, db) -> InlineKeyboardMarkup:
     from app.admin_perms import (
         CUSTOMERS,
-        DASHBOARD,
         LOCATIONS,
         OFFER,
         ORDERS_MANAGE,
         ORDERS_REVIEW,
+        PANEL,
         SERVICES,
         SETTINGS,
         TOOLS_BROADCAST,
@@ -515,39 +507,29 @@ def admin_home_inline(user_id: int, settings, db) -> InlineKeyboardMarkup:
 
     rows: list[list[InlineKeyboardButton]] = []
 
-    r1: list[InlineKeyboardButton] = []
-    if _admin_perm(user_id, DASHBOARD, settings, db):
-        r1.append(
-            InlineKeyboardButton(
-                text=texts.ADMIN_BTN_DASHBOARD, callback_data=CB_ADM_DASH
-            )
-        )
+    order_row: list[InlineKeyboardButton] = []
     if _admin_perm(user_id, ORDERS_REVIEW, settings, db):
-        r1.append(
+        order_row.append(
             InlineKeyboardButton(
                 text=texts.ADMIN_BTN_PENDING, callback_data=CB_ADM_PENDING_LIST
             )
         )
-    if r1:
-        rows.append(r1)
-
-    r2: list[InlineKeyboardButton] = []
-    if _admin_perm(user_id, ORDERS_REVIEW, settings, db) or _admin_perm(
-        user_id, ORDERS_MANAGE, settings, db
-    ):
-        r2.append(
+    elif _admin_perm(user_id, ORDERS_MANAGE, settings, db):
+        order_row.append(
             InlineKeyboardButton(
-                text=texts.ADMIN_BTN_ORDERS, callback_data=CB_ADM_ORDERS
+                text=texts.ADMIN_BTN_ORDER_LOOKUP,
+                callback_data=CB_ADM_ORDER_LOOKUP,
             )
         )
+    if order_row:
+        rows.append(order_row)
+
     if _admin_perm(user_id, CUSTOMERS, settings, db):
-        r2.append(
+        rows.append([
             InlineKeyboardButton(
                 text=texts.ADMIN_BTN_CUSTOMERS, callback_data=CB_ADM_CUSTOMERS
-            )
-        )
-    if r2:
-        rows.append(r2)
+            ),
+        ])
 
     if _admin_perm(user_id, ORDERS_MANAGE, settings, db):
         rows.append([
@@ -609,23 +591,27 @@ def admin_home_inline(user_id: int, settings, db) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def admin_orders_inline(user_id: int, settings, db) -> InlineKeyboardMarkup:
+def admin_pending_footer(user_id: int, settings, db) -> InlineKeyboardMarkup:
+    """Footer under pending list / empty queue (refresh, lookup, home)."""
     from app.admin_perms import ORDERS_MANAGE, ORDERS_REVIEW
 
     rows: list[list[InlineKeyboardButton]] = []
+    row: list[InlineKeyboardButton] = []
     if _admin_perm(user_id, ORDERS_REVIEW, settings, db):
-        rows.append([
+        row.append(
             InlineKeyboardButton(
-                text=texts.ADMIN_BTN_PENDING, callback_data=CB_ADM_PENDING_LIST
-            ),
-        ])
+                text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_PENDING_LIST
+            )
+        )
     if _admin_perm(user_id, ORDERS_MANAGE, settings, db):
-        rows.append([
+        row.append(
             InlineKeyboardButton(
                 text=texts.ADMIN_BTN_ORDER_LOOKUP,
                 callback_data=CB_ADM_ORDER_LOOKUP,
-            ),
-        ])
+            )
+        )
+    if row:
+        rows.append(row)
     rows.append([
         InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME),
     ])
@@ -643,39 +629,6 @@ def admin_flow_cancel_inline(*, back_data: str = CB_ADM_HOME) -> InlineKeyboardM
             ],
         ]
     )
-
-
-def admin_dashboard_inline(user_id: int, settings, db) -> InlineKeyboardMarkup:
-    from app.admin_perms import DASHBOARD, ORDERS_MANAGE, ORDERS_REVIEW
-
-    rows: list[list[InlineKeyboardButton]] = []
-    row1: list[InlineKeyboardButton] = []
-    if _admin_perm(user_id, ORDERS_REVIEW, settings, db):
-        row1.append(
-            InlineKeyboardButton(
-                text=texts.ADMIN_BTN_PENDING, callback_data=CB_ADM_PENDING_LIST
-            )
-        )
-    if _admin_perm(user_id, ORDERS_REVIEW, settings, db) or _admin_perm(
-        user_id, ORDERS_MANAGE, settings, db
-    ):
-        row1.append(
-            InlineKeyboardButton(
-                text=texts.ADMIN_BTN_ORDERS, callback_data=CB_ADM_ORDERS
-            )
-        )
-    if row1:
-        rows.append(row1)
-    if _admin_perm(user_id, DASHBOARD, settings, db):
-        rows.append([
-            InlineKeyboardButton(
-                text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_DASH
-            ),
-        ])
-    rows.append([
-        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME),
-    ])
-    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def admin_offer_inline(db) -> InlineKeyboardMarkup:
@@ -1164,7 +1117,7 @@ def admin_edit_order_keyboard(
     *,
     show_panel_actions: bool,
     show_db_delete: bool = True,
-    back_data: str | None = CB_ADM_ORDERS,
+    back_data: str | None = CB_ADM_PENDING_LIST,
 ) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     if show_panel_actions:
@@ -1292,7 +1245,9 @@ def admin_tools_inline(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def admin_pending_list(orders: list[dict]) -> InlineKeyboardMarkup:
+def admin_pending_list(
+    orders: list[dict], user_id: int, settings, db
+) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for o in orders:
         rows.append([
@@ -1301,10 +1256,8 @@ def admin_pending_list(orders: list[dict]) -> InlineKeyboardMarkup:
                 callback_data=f"{CB_ADM_ORDER_VIEW_PREFIX}{o['id']}",
             )
         ])
-    rows.append([
-        InlineKeyboardButton(text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_PENDING_LIST),
-        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_ORDERS),
-    ])
+    footer = admin_pending_footer(user_id, settings, db).inline_keyboard
+    rows.extend(footer)
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

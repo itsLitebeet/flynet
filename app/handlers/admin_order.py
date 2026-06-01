@@ -29,7 +29,7 @@ async def send_admin_order_view(
     *,
     edit_in_place: bool = False,
     manage_header: bool = False,
-    back_data: str | None = keyboards.CB_ADM_ORDERS,
+    back_data: str | None = keyboards.CB_ADM_PENDING_LIST,
 ) -> bool:
     """Show order detail + management keyboard; return False if not found."""
     from app.handlers.admin_ui_helpers import admin_edit_or_answer
