@@ -157,7 +157,7 @@ def main_reply_keyboard(*, show_test: bool = False) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=rows,
         resize_keyboard=True,
-        is_persistent=True,
+        one_time_keyboard=True,
     )
 
 
@@ -484,7 +484,7 @@ def admin_reply_keyboard(user_id: int, settings, db) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=rows or [[KeyboardButton(text=texts.ADMIN_BTN_PANEL)]],
         resize_keyboard=True,
-        is_persistent=True,
+        one_time_keyboard=True,
     )
 
 

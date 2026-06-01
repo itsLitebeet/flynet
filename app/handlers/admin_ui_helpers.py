@@ -18,8 +18,13 @@ async def admin_edit_or_answer(
     reply_markup: InlineKeyboardMarkup | None = None,
     *,
     edit_in_place: bool = False,
+    dismiss_reply: bool = False,
 ) -> None:
     """Prefer editing the current message; fall back to a new one."""
+    if dismiss_reply:
+        from app.ui_reply import hide_bottom_keyboard
+
+        await hide_bottom_keyboard(message)
     if edit_in_place:
         try:
             await message.edit_text(

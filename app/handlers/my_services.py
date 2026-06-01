@@ -269,6 +269,10 @@ async def _show_services_list(
     *,
     edit_in_place: bool = False,
 ) -> None:
+    if not edit_in_place:
+        from app.ui_reply import hide_bottom_keyboard
+
+        await hide_bottom_keyboard(message)
     rows = await filter_visible_orders(db, db.list_user_orders(user_id, limit=50))
     if not rows:
         text = texts.MY_SERVICES_EMPTY

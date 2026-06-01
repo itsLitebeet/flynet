@@ -46,6 +46,7 @@ from app.handlers.admin_ui_helpers import (
     format_services_list_text,
     format_tools_menu_text,
 )
+from app.ui_reply import show_bottom_keyboard
 from app.handlers.admin_users_ui import format_user_detail, format_users_page
 from app.handlers.log_channel import start_log_channel_wizard
 
@@ -108,6 +109,7 @@ async def send_admin_home(
         uid = user.id
     elif not admin_panel_access(uid, settings, db):
         return
+    markup = keyboards.admin_reply_keyboard(uid, settings, db)
     if edit_in_place:
         await admin_edit_or_answer(
             message,
@@ -115,10 +117,11 @@ async def send_admin_home(
             keyboards.admin_home_inline(uid, settings, db),
             edit_in_place=True,
         )
+        await show_bottom_keyboard(message, markup)
         return
     await message.answer(
         texts.ADMIN_PANEL_HOME,
-        reply_markup=keyboards.admin_reply_keyboard(uid, settings, db),
+        reply_markup=markup,
     )
     await message.answer(
         format_stats_text(db),
@@ -142,6 +145,7 @@ async def send_pending_list(
             texts.ADMIN_PENDING_EMPTY,
             footer,
             edit_in_place=edit_in_place,
+            dismiss_reply=True,
         )
         return
 
@@ -160,6 +164,7 @@ async def send_pending_list(
         texts.ADMIN_PENDING_HEADER.format(count=len(rows)),
         keyboards.admin_pending_list(buttons, user_id, settings, db),
         edit_in_place=edit_in_place,
+        dismiss_reply=True,
     )
 
 
@@ -179,6 +184,7 @@ async def send_settings(
         body,
         keyboards.admin_settings_inline(user_id, settings, db),
         edit_in_place=edit_in_place,
+        dismiss_reply=True,
     )
 
 
@@ -195,6 +201,7 @@ async def send_services(
             manual_enabled=db.is_manual_purchase_enabled()
         ),
         edit_in_place=edit_in_place,
+        dismiss_reply=True,
     )
 
 
@@ -209,6 +216,7 @@ async def send_base_plans(
             db.get_duration_presets(),
         ),
         edit_in_place=edit_in_place,
+        dismiss_reply=True,
     )
 
 
@@ -227,6 +235,7 @@ async def send_tools(
             user_id, settings, db, has_log_channel=bool(db.get_log_channel_id())
         ),
         edit_in_place=edit_in_place,
+        dismiss_reply=True,
     )
 
 
@@ -245,6 +254,7 @@ async def send_locations(
             texts.ADMIN_LOC_EMPTY,
             keyboards.admin_home_inline(user_id, settings, db),
             edit_in_place=edit_in_place,
+            dismiss_reply=True,
         )
         return
     await admin_edit_or_answer(
@@ -252,6 +262,7 @@ async def send_locations(
         texts.ADMIN_LOCATIONS_MENU.format(count=len(locs)),
         keyboards.admin_locations_list(locs),
         edit_in_place=edit_in_place,
+        dismiss_reply=True,
     )
 
 
@@ -315,6 +326,10 @@ async def send_users(
     user_id: int,
     edit_in_place: bool = False,
 ) -> None:
+    if not edit_in_place:
+        from app.ui_reply import hide_bottom_keyboard
+
+        await hide_bottom_keyboard(message)
     text, total_pages, users = await format_users_page(db, page)
     if not users:
         markup = keyboards.admin_home_inline(user_id, settings, db)
@@ -553,6 +568,7 @@ async def cb_admin_orders(
             texts.ADMIN_ORDER_LOOKUP_PROMPT,
             keyboards.admin_flow_cancel_inline(back_data=keyboards.CB_ADM_HOME),
             edit_in_place=True,
+            dismiss_reply=True,
         )
         await state.set_state(AdminPanelFlow.waiting_order_id)
     await callback.answer()
@@ -742,6 +758,7 @@ async def cb_admin_order_lookup_start(callback: CallbackQuery, state: FSMContext
         texts.ADMIN_ORDER_LOOKUP_PROMPT,
         keyboards.admin_flow_cancel_inline(back_data=keyboards.CB_ADM_PENDING_LIST),
         edit_in_place=True,
+        dismiss_reply=True,
     )
     await callback.answer()
 

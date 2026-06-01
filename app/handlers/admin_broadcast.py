@@ -65,7 +65,10 @@ def _caption_preview(message: Message, *, max_len: int = 120) -> str:
 
 
 async def _start_broadcast_wizard(message: Message, state: FSMContext) -> None:
+    from app.ui_reply import hide_bottom_keyboard
+
     await state.clear()
+    await hide_bottom_keyboard(message)
     await state.set_state(BroadcastFlow.waiting_content)
     await message.answer(
         texts.BROADCAST_PROMPT,

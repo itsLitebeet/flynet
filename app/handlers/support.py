@@ -28,7 +28,9 @@ class SupportFlow(StatesGroup):
 async def _open_support_message(message: Message, state: FSMContext) -> None:
     await state.clear()
     await state.set_state(SupportFlow.waiting_for_message)
-    await message.answer(".", reply_markup=keyboards.hide_reply_keyboard())
+    from app.ui_reply import hide_bottom_keyboard
+
+    await hide_bottom_keyboard(message)
     await message.answer(texts.SUPPORT_PROMPT, reply_markup=keyboards.cancel_support())
 
 

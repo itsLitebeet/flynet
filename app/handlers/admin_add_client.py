@@ -99,7 +99,10 @@ async def _prompt_volume(message: Message, state: FSMContext) -> None:
 async def _start_add_client(
     message: Message, state: FSMContext, db: Database
 ) -> None:
+    from app.ui_reply import hide_bottom_keyboard
+
     await state.clear()
+    await hide_bottom_keyboard(message)
     await state.set_state(AdminAddClientFlow.waiting_user_id)
     await _wizard_reply(
         message,
@@ -174,9 +177,29 @@ async def add_client_back_home(
     F.data == keyboards.CB_ADM_FLOW_CANCEL, StateFilter(AdminAddClientFlow)
 )
 async def add_client_flow_cancel(
-    event: Message | CallbackQuery, state: FSMContext, bot: Bot
+    event: Message | CallbackQuery,
+    state: FSMContext,
+    bot: Bot,
+    settings: Settings,
+    db: Database,
 ) -> None:
     await _cancel_wizard_and_cleanup(event, state, bot)
+
+    uid = event.from_user.id if event.from_user else None
+    if uid is not None:
+        msg = (
+            event.message
+            if isinstance(event, CallbackQuery) and isinstance(event.message, Message)
+            else event
+            if isinstance(event, Message)
+            else None
+        )
+        if isinstance(msg, Message):
+            from app.ui_reply import show_bottom_keyboard
+
+            await show_bottom_keyboard(
+                msg, keyboards.admin_reply_keyboard(uid, settings, db)
+            )
 
     if isinstance(event, CallbackQuery):
         await event.answer(texts.CANCELLED)

@@ -51,7 +51,10 @@ async def _start_test_flow(message: Message, state: FSMContext, db: Database) ->
 
     loc = db.get_test_location()
     assert loc is not None
+    from app.ui_reply import hide_bottom_keyboard
+
     await state.set_state(TestFlow.confirming)
+    await hide_bottom_keyboard(message)
     await message.answer(
         texts.TEST_SUB_CONFIRM.format(
             location=escape(loc.name),

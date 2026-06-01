@@ -39,6 +39,10 @@ async def send_customers(
     *,
     edit_in_place: bool = False,
 ) -> None:
+    if not edit_in_place:
+        from app.ui_reply import hide_bottom_keyboard
+
+        await hide_bottom_keyboard(message)
     text, total_pages, customers = await format_customers_page(db, page)
     markup = keyboards.admin_customers_keyboard(
         customers, page=page, total_pages=total_pages
