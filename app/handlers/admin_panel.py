@@ -51,8 +51,10 @@ from app.handlers.admin_ui_helpers import (
 )
 
 log = logging.getLogger(__name__)
+from app.channel_gate import is_gate_enabled
 from app.handlers.admin_users_ui import format_user_detail, format_users_page
 from app.handlers.log_channel import start_log_channel_wizard
+from app.handlers.required_channel import start_required_channel_wizard
 
 router = Router(name="admin_panel")
 
@@ -308,9 +310,13 @@ async def send_tools(
 ) -> None:
     await admin_edit_or_answer(
         message,
-        format_tools_menu_text(db),
+        format_tools_menu_text(db, settings),
         keyboards.admin_tools_inline(
-            user_id, settings, db, has_log_channel=bool(db.get_log_channel_id())
+            user_id,
+            settings,
+            db,
+            has_log_channel=bool(db.get_log_channel_id()),
+            has_req_channel=is_gate_enabled(db, settings),
         ),
         edit_in_place=edit_in_place,
     )
@@ -1115,6 +1121,33 @@ async def cb_admin_log_channel_off(callback: CallbackQuery, settings: Settings, 
     if isinstance(callback.message, Message):
         await send_tools(callback.message, settings, db, callback.from_user.id, edit_in_place=True)
     await callback.answer(texts.LOG_CHANNEL_CLEARED)
+
+
+@router.callback_query(F.data == keyboards.CB_ADM_REQ_CHANNEL)
+async def cb_admin_req_channel(
+    callback: CallbackQuery, state: FSMContext, settings: Settings, db: Database
+) -> None:
+    if await _guard_cb(callback, settings, db, TOOLS_MISC) is None:
+        return
+    if not isinstance(callback.message, Message):
+        await callback.answer()
+        return
+    await start_required_channel_wizard(callback.message, state)
+    await callback.answer()
+
+
+@router.callback_query(F.data == keyboards.CB_ADM_REQ_CHANNEL_OFF)
+async def cb_admin_req_channel_off(
+    callback: CallbackQuery, settings: Settings, db: Database
+) -> None:
+    if await _guard_cb(callback, settings, db, TOOLS_MISC) is None:
+        return
+    db.set_required_channel(None)
+    if isinstance(callback.message, Message):
+        await send_tools(
+            callback.message, settings, db, callback.from_user.id, edit_in_place=True
+        )
+    await callback.answer(texts.REQ_CHANNEL_CLEARED)
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_TOGGLE_TEST)

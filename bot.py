@@ -19,7 +19,7 @@ from aiogram.types import BotCommand
 from app.config import load_settings
 from app.db import Database
 from app.handlers import build_root_router
-from app.middlewares import UserMiddleware
+from app.middlewares import ChannelJoinMiddleware, UserMiddleware
 
 
 logging.basicConfig(
@@ -58,8 +58,11 @@ async def main() -> None:
     dp["settings"] = settings
 
     user_mw = UserMiddleware(db, settings)
+    join_mw = ChannelJoinMiddleware(db, settings)
     dp.message.middleware(user_mw)
     dp.callback_query.middleware(user_mw)
+    dp.message.middleware(join_mw)
+    dp.callback_query.middleware(join_mw)
 
     dp.include_router(build_root_router())
 

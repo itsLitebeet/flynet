@@ -169,15 +169,23 @@ def format_services_list_text(db: Database, *, loc_filter: int | None = None) ->
     )
 
 
-def format_tools_menu_text(db: Database) -> str:
+def format_tools_menu_text(db: Database, settings) -> str:
+    from app.channel_gate import channel_label, is_gate_enabled
+
     log_id = db.get_log_channel_id()
     log_line = (
         f"متصل: <code>{log_id}</code> ✅"
         if log_id
         else "غیرفعال ❌"
     )
+    req_line = (
+        f"{channel_label(db, settings)} ✅"
+        if is_gate_enabled(db, settings)
+        else "غیرفعال ❌"
+    )
     test_line = "روشن ✅" if db.is_test_feature_enabled() else "خاموش ❌"
     return texts.ADMIN_TOOLS_MENU.format(
         log_channel=log_line,
+        req_channel=req_line,
         test_sub=test_line,
     )

@@ -105,6 +105,10 @@ SETTING_DURATION_PRESETS = "duration_presets_days"
 SETTING_TEST_ENABLED = "test_feature_enabled"
 SETTING_MANUAL_PURCHASE = "manual_purchase_enabled"
 SETTING_LOG_CHANNEL = "log_channel_id"
+SETTING_REQUIRED_CHANNEL = "required_channel_id"
+SETTING_REQUIRED_CHANNEL_LINK = "required_channel_link"
+SETTING_REQUIRED_CHANNEL_TITLE = "required_channel_title"
+SETTING_REQUIRED_CHANNEL_OFF = "required_channel_off"
 SETTING_OFFER_ENABLED = "offer_enabled"
 SETTING_OFFER_KIND = "offer_kind"       # none | percent | amount | fixed
 SETTING_OFFER_VALUE = "offer_value"
@@ -287,6 +291,16 @@ class Database:
                 (SETTING_LOG_CHANNEL, "0"),
             )
             for k, v in (
+                (SETTING_REQUIRED_CHANNEL, "0"),
+                (SETTING_REQUIRED_CHANNEL_LINK, ""),
+                (SETTING_REQUIRED_CHANNEL_TITLE, ""),
+                (SETTING_REQUIRED_CHANNEL_OFF, "0"),
+            ):
+                cur.execute(
+                    "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+                    (k, v),
+                )
+            for k, v in (
                 (SETTING_OFFER_ENABLED, "0"),
                 (SETTING_OFFER_KIND, "none"),
                 (SETTING_OFFER_VALUE, "0"),
@@ -297,6 +311,20 @@ class Database:
                     "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
                     (k, v),
                 )
+        self._migrate_required_channel_settings()
+
+    def _migrate_required_channel_settings(self) -> None:
+        with self._cursor() as cur:
+            cur.execute(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+                (SETTING_REQUIRED_CHANNEL_OFF, "0"),
+            )
+        if self.get_required_channel_id() is not None:
+            return
+        if self.is_required_channel_turned_off():
+            return
+        if self.get_required_channel_title() or self.get_required_channel_link():
+            self.set_setting(SETTING_REQUIRED_CHANNEL_OFF, "1")
 
     def _load_admin_roles(self) -> dict[str, str]:
         raw = self.get_setting(SETTING_ADMIN_ROLES, "{}") or "{}"
@@ -355,6 +383,10 @@ class Database:
             SETTING_TEST_ENABLED: "0",
             SETTING_MANUAL_PURCHASE: "0",
             SETTING_LOG_CHANNEL: "0",
+            SETTING_REQUIRED_CHANNEL: "0",
+            SETTING_REQUIRED_CHANNEL_LINK: "",
+            SETTING_REQUIRED_CHANNEL_TITLE: "",
+            SETTING_REQUIRED_CHANNEL_OFF: "0",
             SETTING_OFFER_ENABLED: "0",
             SETTING_OFFER_KIND: "none",
             SETTING_OFFER_VALUE: "0",
@@ -700,6 +732,48 @@ class Database:
             self.set_setting(SETTING_LOG_CHANNEL, "0")
         else:
             self.set_setting(SETTING_LOG_CHANNEL, str(chat_id))
+
+    def is_required_channel_turned_off(self) -> bool:
+        return (self.get_setting(SETTING_REQUIRED_CHANNEL_OFF) or "0") == "1"
+
+    def get_required_channel_id(self) -> int | None:
+        raw = self.get_setting(SETTING_REQUIRED_CHANNEL)
+        if not raw or raw in ("0", "-"):
+            return None
+        try:
+            return int(raw)
+        except ValueError:
+            return None
+
+    def get_required_channel_link(self) -> str | None:
+        raw = (self.get_setting(SETTING_REQUIRED_CHANNEL_LINK) or "").strip()
+        return raw or None
+
+    def get_required_channel_title(self) -> str | None:
+        raw = (self.get_setting(SETTING_REQUIRED_CHANNEL_TITLE) or "").strip()
+        return raw or None
+
+    def set_required_channel_link(self, link: str | None) -> None:
+        self.set_setting(SETTING_REQUIRED_CHANNEL_LINK, (link or "").strip())
+
+    def set_required_channel(
+        self,
+        chat_id: int | None,
+        *,
+        title: str | None = None,
+        link: str | None = None,
+    ) -> None:
+        if chat_id is None:
+            self.set_setting(SETTING_REQUIRED_CHANNEL, "0")
+            self.set_setting(SETTING_REQUIRED_CHANNEL_LINK, "")
+            self.set_setting(SETTING_REQUIRED_CHANNEL_TITLE, "")
+            self.set_setting(SETTING_REQUIRED_CHANNEL_OFF, "1")
+            return
+        self.set_setting(SETTING_REQUIRED_CHANNEL_OFF, "0")
+        self.set_setting(SETTING_REQUIRED_CHANNEL, str(chat_id))
+        self.set_setting(SETTING_REQUIRED_CHANNEL_LINK, (link or "").strip())
+        if title is not None:
+            self.set_setting(SETTING_REQUIRED_CHANNEL_TITLE, title)
 
     def add_service_package(
         self,

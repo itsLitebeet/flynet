@@ -668,6 +668,7 @@ ADMIN_PLAN_USAGE        = (
 ADMIN_TOOLS_MENU = (
     "🛠 <b>ابزارها</b>\n\n"
     "📋 کانال لاگ: <b>{log_channel}</b>\n"
+    "📢 عضویت اجباری: <b>{req_channel}</b>\n"
     "🧪 دکمه اشتراک تست: <b>{test_sub}</b>\n\n"
     "همگام‌سازی پنل، پاکسازی و همگانی از دکمه‌های زیر."
 )
@@ -880,7 +881,10 @@ ADMIN_HELP = (
     "/delservice &lt;package_id&gt;\n\n"
     "<b>لاگ:</b>\n"
     "/logchannel — اتصال کانال لاگ (سفارش، رسید، تأیید/رد، تست، تیکت)\n"
-    "/logchannel off — خاموش\n\n"
+    "/logchannel off — خاموش\n"
+    "/reqchannel — کانال عضویت اجباری برای کاربران\n"
+    "/reqchannel off — خاموش\n"
+    "/reqchannellink — لینک دعوت کانال خصوصی\n\n"
     "<b>سفارش و کاربر:</b>\n"
     "/order &lt;id&gt; — جزئیات سفارش\n"
     "/editorder &lt;id&gt; — حجم/زمان پنل، فعال/غیرفعال، حذف\n"
@@ -1128,6 +1132,81 @@ LOG_CHANNEL_FORBIDDEN = (
 )
 LOG_CHANNEL_BAD = "❗ خطا: <code>{error}</code>"
 LOG_CHANNEL_CLEARED = "✅ کانال لاگ غیرفعال شد."
+
+JOIN_CHANNEL_REQUIRED = (
+    "📢 <b>عضویت در کانال الزامی است</b>\n\n"
+    "برای استفاده از ربات، ابتدا در کانال زیر عضو شوید:\n"
+    "<b>{channel}</b>\n\n"
+    "بعد از عضویت، دکمه «بررسی عضویت» را بزنید."
+)
+JOIN_CHANNEL_REQUIRED_SHORT = "ابتدا در کانال عضو شوید، سپس «بررسی عضویت» را بزنید."
+JOIN_CHANNEL_NO_LINK_HINT = (
+    "\n\n<i>لینک کانال از طرف ادمین تنظیم نشده — از ادمین لینک دعوت بگیرید.</i>"
+)
+BTN_JOIN_CHANNEL = "📢 ورود به کانال"
+BTN_CHECK_JOIN = "✅ بررسی عضویت"
+JOIN_VERIFIED_OK = "✅ عضویت تأیید شد. خوش آمدید!"
+JOIN_NOT_YET = "هنوز در کانال عضو نشده‌اید. پس از عضویت دوباره بررسی کنید."
+JOIN_GATE_UNAVAILABLE = (
+    "⚠️ ربات الان نمی‌تواند عضویت کانال را بررسی کند.\n"
+    "لطفاً کمی بعد دوباره تلاش کنید."
+)
+JOIN_GATE_UNAVAILABLE_SHORT = "بررسی عضویت موقتاً ممکن نیست."
+JOIN_GATE_ADMIN_ALERT = (
+    "⚠️ <b>عضویت اجباری کانال کار نمی‌کند</b>\n\n"
+    "ربات در کانال <code>{channel_id}</code> ادمین نیست "
+    "یا شناسه کانال اشتباه است.\n"
+    "ربات را ادمین کانال کنید یا از "
+    "<code>/reqchannel off</code> خاموش کنید."
+)
+
+REQ_CHANNEL_USAGE = (
+    "❗ استفاده:\n"
+    "<code>/reqchannel</code> — تنظیم کانال عضویت اجباری\n"
+    "<code>/reqchannel -1001234567890</code> — شناسه مستقیم\n"
+    "<code>/reqchannel off</code> — غیرفعال\n"
+    "<code>/reqchannellink https://t.me/+…</code> — لینک دعوت (کانال خصوصی)"
+)
+REQ_CHANNEL_PROMPT = (
+    "📢 <b>کانال عضویت اجباری</b>\n\n"
+    "۱) ربات را در کانال <b>ادمین</b> کنید.\n"
+    "۲) یک پیام از همان کانال را <b>فوروارد</b> کنید\n"
+    "   یا شناسه کانال را بفرستید (مثل <code>-1001234567890</code>).\n\n"
+    "انصراف: <code>/cancel</code>"
+)
+REQ_CHANNEL_NEED_FORWARD = (
+    "❗ یک پیام <b>فوروارد‌شده</b> از کانال بفرستید "
+    "یا شناسه عددی کانال (مثل <code>-100…</code>)."
+)
+REQ_CHANNEL_OK = (
+    "✅ کانال عضویت اجباری ثبت شد.\n"
+    "شناسه: <code>{chat_id}</code>\n"
+    "نام: <b>{title}</b>{link_line}"
+)
+REQ_CHANNEL_OK_NEED_LINK = (
+    "✅ کانال ثبت شد (<code>{chat_id}</code> — <b>{title}</b>).\n\n"
+    "لینک دعوت خودکار پیدا نشد.\n"
+    "یک لینک <code>t.me/…</code> بفرستید "
+    "یا <code>/reqchannellink</code> را بزنید."
+)
+REQ_CHANNEL_LINK_PROMPT = (
+    "🔗 <b>لینک دعوت کانال</b>\n\n"
+    "لینک عضویت را بفرستید (مثل <code>https://t.me/+AbCd…</code> "
+    "یا <code>https://t.me/channelname</code>).\n\n"
+    "انصراف: <code>/cancel</code>"
+)
+REQ_CHANNEL_LINK_INVALID = (
+    "❗ لینک نامعتبر. فقط آدرس <code>t.me/…</code> بپذیریم."
+)
+REQ_CHANNEL_LINK_NO_CHANNEL = "❗ ابتدا کانال را با <code>/reqchannel</code> تنظیم کنید."
+REQ_CHANNEL_LINK_SAVED = "✅ لینک دعوت ذخیره شد:\n{link}"
+REQ_CHANNEL_BOT_NOT_ADMIN = (
+    "❗ ربات در این کانال ادمین نیست.\n"
+    "ربات را ادمین کانال کنید و دوباره تلاش کنید."
+)
+REQ_CHANNEL_BAD = "❗ خطا: <code>{error}</code>"
+REQ_CHANNEL_CLEARED = "✅ عضویت اجباری در کانال غیرفعال شد."
+ADMIN_BTN_REQ_CHANNEL = "📢 کانال عضویت اجباری"
 
 ADMIN_ORDER_USAGE = "❗ استفاده: <code>/order &lt;order_id&gt;</code>"
 ADMIN_ORDER_NOTFOUND = "❗ سفارشی با این شناسه یافت نشد."

@@ -22,6 +22,7 @@ CB_MAIN_HELP          = "main:help"
 CB_MAIN_ABOUT         = "main:about"
 CB_MAIN_TEST          = "main:test"
 CB_MAIN_HOME          = "main:home"
+CB_MAIN_CHECK_JOIN    = "main:joinchk"
 
 # Order flow
 CB_LOC_PREFIX     = "loc:"          # loc:<location_id>
@@ -74,6 +75,8 @@ CB_ADM_TOGGLE_MANUAL     = "adm:tman"
 CB_ADM_SERVICES_REFRESH  = "adm:lsvc"
 CB_ADM_LOG_CHANNEL       = "adm:logch"
 CB_ADM_LOG_CHANNEL_OFF   = "adm:logoff"
+CB_ADM_REQ_CHANNEL       = "adm:reqch"
+CB_ADM_REQ_CHANNEL_OFF   = "adm:reqoff"
 CB_ADM_TOGGLE_TEST       = "adm:ttest"
 CB_ADM_TOGGLE_TEST_LOC_PREFIX = "adm:ttloc:"  # adm:ttloc:<location_id>
 CB_ADM_FLOW_CANCEL       = "adm:fcancel"
@@ -227,6 +230,20 @@ def main_menu(*, show_test: bool = False) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text=texts.BTN_HELP,  callback_data=CB_MAIN_HELP),
             InlineKeyboardButton(text=texts.BTN_ABOUT, callback_data=CB_MAIN_ABOUT),
         ],
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def join_channel_keyboard(join_url: str | None) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    if join_url:
+        rows.append([
+            InlineKeyboardButton(text=texts.BTN_JOIN_CHANNEL, url=join_url),
+        ])
+    rows.append([
+        InlineKeyboardButton(
+            text=texts.BTN_CHECK_JOIN, callback_data=CB_MAIN_CHECK_JOIN
+        ),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -1285,7 +1302,12 @@ def broadcast_cancel_keyboard() -> InlineKeyboardMarkup:
 
 
 def admin_tools_inline(
-    user_id: int, settings, db, *, has_log_channel: bool
+    user_id: int,
+    settings,
+    db,
+    *,
+    has_log_channel: bool,
+    has_req_channel: bool,
 ) -> InlineKeyboardMarkup:
     from app.admin_perms import ORDERS_MANAGE, TOOLS_BROADCAST, TOOLS_MISC, TOOLS_SYNC
 
@@ -1309,6 +1331,19 @@ def admin_tools_inline(
                 )
             )
         rows.append(log_row)
+        req_row: list[InlineKeyboardButton] = [
+            InlineKeyboardButton(
+                text=texts.ADMIN_BTN_REQ_CHANNEL, callback_data=CB_ADM_REQ_CHANNEL
+            ),
+        ]
+        if has_req_channel:
+            req_row.append(
+                InlineKeyboardButton(
+                    text="❌ قطع عضویت اجباری",
+                    callback_data=CB_ADM_REQ_CHANNEL_OFF,
+                )
+            )
+        rows.append(req_row)
         rows.append([
             InlineKeyboardButton(
                 text=texts.ADMIN_BTN_TOGGLE_TEST, callback_data=CB_ADM_TOGGLE_TEST

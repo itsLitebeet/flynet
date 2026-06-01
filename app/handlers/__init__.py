@@ -12,6 +12,7 @@ from app.handlers import (
     admin_roles,
     admin_permission_management,
     log_channel,
+    required_channel,
     admin_panel,
     my_services,
     order,
@@ -39,6 +40,7 @@ def build_root_router() -> Router:
     root.include_router(admin_broadcast.router)
     root.include_router(admin_order.router)
     root.include_router(log_channel.router)
+    root.include_router(required_channel.router)
     root.include_router(admin_customers.router)
     root.include_router(admin_offer.router)
     root.include_router(admin_location_edit.router)
