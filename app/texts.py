@@ -487,7 +487,7 @@ USER_BANNED = "⛔ دسترسی شما به ربات مسدود شده است."
 
 
 # ---------- admin panel (buttons) ----------
-ADMIN_BTN_DASHBOARD = "🔄 داشبورد"
+ADMIN_BTN_DASHBOARD = "📊 داشبورد"
 ADMIN_BTN_PENDING   = "🔍 بررسی پرداخت‌ها"
 ADMIN_BTN_ORDERS    = "📦 سفارش‌ها"  # legacy label; UI uses PENDING only
 ADMIN_BTN_SETTINGS  = "⚙️ تنظیمات"

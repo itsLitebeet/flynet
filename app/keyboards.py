@@ -449,35 +449,41 @@ def admin_reply_keyboard(user_id: int, settings, db) -> ReplyKeyboardMarkup:
         USERS,
     )
 
-    buttons: list[KeyboardButton] = []
+    rows: list[list[KeyboardButton]] = []
     if _admin_perm(user_id, PANEL, settings, db):
-        buttons.append(KeyboardButton(text=texts.ADMIN_BTN_DASHBOARD))
+        rows.append([KeyboardButton(text=texts.ADMIN_BTN_DASHBOARD)])
+
+    review_row: list[KeyboardButton] = []
     if _admin_perm(user_id, ORDERS_REVIEW, settings, db):
-        buttons.append(KeyboardButton(text=texts.ADMIN_BTN_PENDING))
-
+        review_row.append(KeyboardButton(text=texts.ADMIN_BTN_PENDING))
     if _admin_perm(user_id, CUSTOMERS, settings, db):
-        buttons.append(KeyboardButton(text=texts.ADMIN_BTN_CUSTOMERS))
-
+        review_row.append(KeyboardButton(text=texts.ADMIN_BTN_CUSTOMERS))
     if _admin_perm(user_id, USERS, settings, db):
-        buttons.append(KeyboardButton(text=texts.ADMIN_BTN_USERS))
+        review_row.append(KeyboardButton(text=texts.ADMIN_BTN_USERS))
+    if review_row:
+        rows.append(review_row)
 
-    if _admin_perm(user_id, SETTINGS, settings, db) or _admin_perm(
-        user_id, SERVICES, settings, db
-    ) or _admin_perm(user_id, OFFER, settings, db):
-        buttons.append(KeyboardButton(text=texts.ADMIN_BTN_SETTINGS))
+    operations_row: list[KeyboardButton] = []
     if _admin_perm(user_id, LOCATIONS, settings, db):
-        buttons.append(KeyboardButton(text=texts.ADMIN_BTN_LOCATIONS))
-
+        operations_row.append(KeyboardButton(text=texts.ADMIN_BTN_LOCATIONS))
     if _admin_perm(user_id, TOOLS_BROADCAST, settings, db) or _admin_perm(
         user_id, TOOLS_SYNC, settings, db
     ) or _admin_perm(user_id, TOOLS_MISC, settings, db
     ):
-        buttons.append(KeyboardButton(text=texts.ADMIN_BTN_TOOLS))
+        operations_row.append(KeyboardButton(text=texts.ADMIN_BTN_TOOLS))
+    if operations_row:
+        rows.append(operations_row)
 
-    buttons.append(KeyboardButton(text=texts.ADMIN_BTN_PANEL))
-    rows = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
+    settings_row: list[KeyboardButton] = []
+    if _admin_perm(user_id, SETTINGS, settings, db) or _admin_perm(
+        user_id, SERVICES, settings, db
+    ) or _admin_perm(user_id, OFFER, settings, db):
+        settings_row.append(KeyboardButton(text=texts.ADMIN_BTN_SETTINGS))
+    if settings_row:
+        rows.append(settings_row)
+
     return ReplyKeyboardMarkup(
-        keyboard=rows or [[KeyboardButton(text=texts.ADMIN_BTN_PANEL)]],
+        keyboard=rows or [[KeyboardButton(text=texts.ADMIN_BTN_DASHBOARD)]],
         resize_keyboard=True,
         one_time_keyboard=True,
     )
