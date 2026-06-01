@@ -265,12 +265,11 @@ async def _begin_buy_message(message: Message, state: FSMContext, db: Database) 
         )
         return
     await state.set_state(OrderFlow.picking_location)
-    from app.ui_reply import hide_bottom_keyboard
-
-    await hide_bottom_keyboard(message)
-    await message.answer(
-        texts.ORDER_PICK_LOCATION, reply_markup=keyboards.locations(locs)
+    sent = await message.answer(
+        texts.ORDER_PICK_LOCATION,
+        reply_markup=keyboards.hide_reply_keyboard(),
     )
+    await sent.edit_reply_markup(reply_markup=keyboards.locations(locs))
 
 
 # ---------- entry ----------

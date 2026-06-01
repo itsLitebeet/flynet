@@ -168,8 +168,8 @@ def main_reply_keyboard(*, show_test: bool = False) -> ReplyKeyboardMarkup:
     )
 
 
-# Shown with ReplyKeyboardRemove so the chat is not left empty.
-HIDE_KEYBOARD_REPLY_TEXT = " "
+# Telegram rejects whitespace-only text; braille blank is non-empty and nearly invisible.
+HIDE_KEYBOARD_REPLY_TEXT = "\u2800"
 
 def hide_reply_keyboard() -> ReplyKeyboardRemove:
     """Hide bottom buttons during wizards (order, support, rename)."""
