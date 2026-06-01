@@ -819,32 +819,28 @@ ADMIN_CUSTOMER_LIST_LINE = (
     " · 🕐 {last_order}"
 )
 ADMIN_CUSTOMER_DETAIL = (
-    "🛒 <b>مشتری</b>\n\n"
-    "🆔 شناسه: <code>{user_id}</code>\n"
-    "👤 نام: <b>{full_name}</b>\n"
-    "📎 یوزرنیم: {username}\n"
-    "📅 عضو از: {created_at}\n"
-    "🚫 وضعیت حساب: <b>{ban_state}</b>\n\n"
-    "<b>خلاصه خرید:</b>\n"
-    "📦 کل سفارش‌ها: <b>{total_orders}</b> "
-    "(❌ رد: {declined} · ⏳ بررسی: {awaiting_review})\n"
-    "🟢 فعال‌شده: <b>{provisioned}</b> · 💳 در انتظار پرداخت: {awaiting_payment}\n"
-    "💰 درآمد: <b>{paid_revenue}</b> · جمع فعال‌شده: {total_spent}\n"
-    "🕐 اولین سفارش: {first_order} · آخرین: {last_order}\n\n"
-    "<b>سفارش‌ها ({order_count}):</b>\n"
+    "🛒 <b>مشتری</b>\n"
+    "<b>{full_name}</b> · {username}\n"
+    "شناسه <code>{user_id}</code> · عضو {created_at} · <b>{ban_state}</b>\n\n"
+    "<b>خلاصه</b> — {total_orders} سفارش · جمع {total_spent}\n"
+    "فعال {provisioned} · رد {declined} · بررسی {awaiting_review}"
+    " · پرداخت {awaiting_payment}\n"
+    "درآمد {paid_revenue} · {first_order} تا {last_order}\n\n"
+    "<b>سفارش‌ها ({order_count})</b>\n"
     "{orders_block}"
 )
-ADMIN_CUSTOMER_ORDER_LINE = (
-    "• <b>#{order_id}</b> {test_mark} — {status}\n"
-    "  📍 {location} · {volume} · {duration} · {price}\n"
-    "  🏷 نام: {nickname} · 🕐 {created_at}\n"
-    "  {panel_line}"
-    "{extra_lines}"
+ADMIN_CUSTOMER_ORDER_BLOCK = (
+    "<blockquote>"
+    "<b>#{order_id}</b>{test_mark} · {status}\n"
+    "{location} · {plan_detail}\n"
+    "<i>{created_at}</i>\n"
+    "{footer}"
+    "</blockquote>"
 )
-ADMIN_CUSTOMER_ORDER_SUB = "  🔔 subId: <code>{sub_id}</code>\n"
-ADMIN_CUSTOMER_ORDER_REVIEWER = "  👮 بررسی: {reviewer}\n"
-ADMIN_CUSTOMER_ORDER_DECLINE = "  📝 رد: {decline}\n"
-ADMIN_CUSTOMER_ORDER_RECEIPT = "  📷 رسید: ✅\n"
+ADMIN_CUSTOMER_ORDER_SUB = "sub <code>{sub_id}</code>"
+ADMIN_CUSTOMER_ORDER_REVIEWER = "بررسی {reviewer}"
+ADMIN_CUSTOMER_ORDER_DECLINE = "رد: {decline}"
+ADMIN_CUSTOMER_ORDER_RECEIPT = "رسید ✓"
 ADMIN_CUSTOMER_NO_ORDERS = "<i>بدون سفارش.</i>"
 
 ADMIN_TOOL_SYNC_DONE = "✅ همگام‌سازی پنل انجام شد (همان نتیجه <code>/syncpanel</code>)."
@@ -883,7 +879,7 @@ ADMIN_HELP = (
     "/logchannel off — خاموش\n\n"
     "<b>سفارش و کاربر:</b>\n"
     "/order &lt;id&gt; — جزئیات سفارش\n"
-    "/editorder &lt;id&gt; — فعال/غیرفعال/حذف پنل+ربات\n"
+    "/editorder &lt;id&gt; — حجم/زمان پنل، فعال/غیرفعال، حذف\n"
     "/ban &lt;user_id&gt; | /unban &lt;user_id&gt;\n"
     "/editservice &lt;pkg_id&gt; &lt;gb&gt; &lt;days&gt; &lt;toman&gt;\n\n"
     "<b>لوکیشن‌ها:</b>\n"
@@ -1113,6 +1109,37 @@ ADMIN_EDIT_ORDER_NO_PANEL = "این سفارش روی پنل فعال نیست (
 ADMIN_EDIT_ORDER_FAIL = "❗ خطای پنل: <code>{error}</code>"
 ADMIN_EDIT_ORDER_ENABLED = "✅ سرویس <code>#{order_id}</code> در پنل فعال شد."
 ADMIN_EDIT_ORDER_DISABLED = "⏸ سرویس <code>#{order_id}</code> در پنل غیرفعال شد."
+ADMIN_EDIT_ORDER_PLAN_MENU = (
+    "⚙️ <b>ویرایش حجم و زمان</b> — سفارش <code>#{order_id}</code>\n\n"
+    "{panel_live}\n"
+    "تغییرها روی پنل اعمال می‌شود. دکمه‌های <b>+</b> به مقدار فعلی اضافه می‌کنند."
+)
+ADMIN_EDIT_ORDER_PROMPT_GB = (
+    "حجم <b>کل</b> جدید را به گیگابایت بفرستید (مثلاً <code>20</code>).\n\n"
+    "<code>/cancel</code> — انصراف"
+)
+ADMIN_EDIT_ORDER_PROMPT_DAYS = (
+    "چند <b>روز</b> به اعتبار <b>اضافه</b> شود؟ (مثلاً <code>30</code>)\n\n"
+    "<code>/cancel</code> — انصراف"
+)
+ADMIN_EDIT_ORDER_INVALID_NUMBER = "❗ عدد صحیح بین <b>1</b> و <b>{max}</b> وارد کنید."
+ADMIN_EDIT_ORDER_GB_ADDED = (
+    "✅ <b>+{add_gb} GB</b> به سفارش <code>#{order_id}</code> اضافه شد.\n"
+    "حجم کل پنل: <b>{total_gb} GB</b>"
+)
+ADMIN_EDIT_ORDER_GB_SET = (
+    "✅ حجم سفارش <code>#{order_id}</code> روی <b>{total_gb} GB</b> تنظیم شد."
+)
+ADMIN_EDIT_ORDER_DAYS_ADDED = (
+    "✅ <b>+{add_days}</b> روز به سفارش <code>#{order_id}</code> اضافه شد.\n"
+    "انقضا: <code>{expiry}</code>"
+)
+ADMIN_EDIT_ORDER_PANEL_LIVE = (
+    "📊 مصرف: <b>{used}</b> / <b>{total}</b> · انقضا: <code>{expiry}</code>"
+)
+ADMIN_EDIT_ORDER_PANEL_LIVE_UNLIMITED = (
+    "📊 مصرف: <b>{used}</b> (نامحدود) · انقضا: <code>{expiry}</code>"
+)
 ADMIN_ORDER_DELETE_CONFIRM = (
     "⚠️ <b>حذف سفارش #{order_id}</b>\n\n"
     "کلاینت از پنل (در صورت وجود) و رکورد از ربات حذف می‌شود.\n"
@@ -1125,6 +1152,9 @@ ADMIN_ORDER_DELETED_PARTIAL = (
     "خطای حذف از پنل: <code>{error}</code>"
 )
 
+BTN_ORDER_EDIT_PLAN = "💾 حجم و زمان"
+BTN_ORDER_SET_GB = "✏️ تنظیم حجم"
+BTN_ORDER_ADD_DAYS = "✏️ افزودن روز"
 BTN_ORDER_ENABLE = "✅ فعال در پنل"
 BTN_ORDER_DISABLE = "⏸ غیرفعال در پنل"
 BTN_ORDER_DELETE = "🗑 حذف پنل + ربات"

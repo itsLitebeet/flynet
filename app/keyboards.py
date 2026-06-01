@@ -102,6 +102,11 @@ CB_ADM_ORDER_DISABLE_PREFIX  = "adm:odis:"  # adm:odis:<order_id>
 CB_ADM_ORDER_DELETE_ASK_PREFIX = "adm:odelask:"  # adm:odelask:<order_id>
 CB_ADM_ORDER_DELETE_OK_PREFIX  = "adm:odelok:"   # adm:odelok:<order_id>
 CB_ADM_ORDER_DELETE_CANCEL     = "adm:odelno"
+CB_ADM_ORDER_EDIT_PLAN_PREFIX  = "adm:oepl:"   # adm:oepl:<order_id>
+CB_ADM_ORDER_ADD_GB_PREFIX     = "adm:ogb:"    # adm:ogb:<order_id>:<gb>
+CB_ADM_ORDER_ADD_DAYS_PREFIX   = "adm:ody:"    # adm:ody:<order_id>:<days>
+CB_ADM_ORDER_SET_GB_ASK_PREFIX = "adm:ogbask:" # adm:ogbask:<order_id>
+CB_ADM_ORDER_ADD_DAYS_ASK_PREFIX = "adm:odyask:" # adm:odyask:<order_id>
 CB_ADM_USER_BAN_PREFIX       = "adm:ban:"   # adm:ban:<user_id>
 CB_ADM_USER_UNBAN_PREFIX     = "adm:unban:" # adm:unban:<user_id>
 CB_ADM_LOC_DETAIL_PREFIX = "adm:ld:"    # adm:ld:<location_id>
@@ -1132,6 +1137,57 @@ def admin_customer_detail_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def admin_order_plan_edit_keyboard(order_id: int) -> InlineKeyboardMarkup:
+    """Quick edits for panel traffic + expiry."""
+    oid = order_id
+    p = CB_ADM_ORDER_ADD_GB_PREFIX
+    d = CB_ADM_ORDER_ADD_DAYS_PREFIX
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="+1 GB", callback_data=f"{p}{oid}:1"
+                ),
+                InlineKeyboardButton(
+                    text="+5 GB", callback_data=f"{p}{oid}:5"
+                ),
+                InlineKeyboardButton(
+                    text="+10 GB", callback_data=f"{p}{oid}:10"
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.BTN_ORDER_SET_GB,
+                    callback_data=f"{CB_ADM_ORDER_SET_GB_ASK_PREFIX}{oid}",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="+7 روز", callback_data=f"{d}{oid}:7"
+                ),
+                InlineKeyboardButton(
+                    text="+30 روز", callback_data=f"{d}{oid}:30"
+                ),
+                InlineKeyboardButton(
+                    text="+90 روز", callback_data=f"{d}{oid}:90"
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.BTN_ORDER_ADD_DAYS,
+                    callback_data=f"{CB_ADM_ORDER_ADD_DAYS_ASK_PREFIX}{oid}",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.BTN_BACK,
+                    callback_data=f"{CB_ADM_ORDER_MANAGE_PREFIX}{oid}",
+                ),
+            ],
+        ]
+    )
+
+
 def admin_edit_order_keyboard(
     order_id: int,
     *,
@@ -1141,6 +1197,12 @@ def admin_edit_order_keyboard(
 ) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     if show_panel_actions:
+        rows.append([
+            InlineKeyboardButton(
+                text=texts.BTN_ORDER_EDIT_PLAN,
+                callback_data=f"{CB_ADM_ORDER_EDIT_PLAN_PREFIX}{order_id}",
+            ),
+        ])
         rows.append([
             InlineKeyboardButton(
                 text=texts.BTN_ORDER_ENABLE,

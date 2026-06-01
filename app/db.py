@@ -1223,6 +1223,33 @@ class Database:
             )
             return cur.rowcount > 0
 
+    def update_order_plan(
+        self,
+        order_id: int,
+        *,
+        volume_gb: int | None = None,
+        duration_days: int | None = None,
+    ) -> bool:
+        """Update stored plan fields after an admin panel edit."""
+        fields: list[str] = []
+        params: list[object] = []
+        if volume_gb is not None:
+            fields.append("volume_gb = ?")
+            params.append(volume_gb)
+        if duration_days is not None:
+            fields.append("duration_days = ?")
+            params.append(duration_days)
+        if not fields:
+            return False
+        fields.append("updated_at = datetime('now')")
+        params.append(order_id)
+        with self._cursor() as cur:
+            cur.execute(
+                f"UPDATE orders SET {', '.join(fields)} WHERE id = ?",
+                params,
+            )
+            return cur.rowcount > 0
+
     def update_order_xui(
         self,
         order_id: int,
