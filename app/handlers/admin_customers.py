@@ -23,7 +23,10 @@ from app.handlers.admin_helpers import (
     guard_admin_message,
     is_admin,
 )
-from app.handlers.admin_ui_helpers import admin_edit_or_answer
+from app.handlers.admin_ui_helpers import (
+    admin_edit_or_answer,
+    restore_admin_reply_keyboard,
+)
 
 router = Router(name="admin_customers")
 
@@ -34,20 +37,19 @@ class AdminCustomersFlow(StatesGroup):
 
 async def send_customers(
     message: Message,
+    settings: Settings,
     db: Database,
+    actor_id: int,
     page: int = 0,
     *,
     edit_in_place: bool = False,
 ) -> None:
-    if not edit_in_place:
-        from app.ui_reply import hide_bottom_keyboard
-
-        await hide_bottom_keyboard(message)
     text, total_pages, customers = await format_customers_page(db, page)
     markup = keyboards.admin_customers_keyboard(
         customers, page=page, total_pages=total_pages
     )
     await admin_edit_or_answer(message, text, markup, edit_in_place=edit_in_place)
+    await restore_admin_reply_keyboard(message, actor_id, settings, db)
 
 
 async def send_customer_detail(
@@ -78,6 +80,7 @@ async def send_customer_detail(
     await admin_edit_or_answer(
         message, text, markup, edit_in_place=edit_in_place
     )
+    await restore_admin_reply_keyboard(message, actor_id, settings, db)
     return True
 
 
@@ -87,7 +90,7 @@ async def msg_admin_customers(
 ) -> None:
     if not await guard_admin_message(message, settings, db, CUSTOMERS):
         return
-    await send_customers(message, db)
+    await send_customers(message, settings, db, message.from_user.id)
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_CUSTOMERS)
@@ -97,8 +100,14 @@ async def cb_admin_customers(
     if not await guard_admin_callback(callback, settings, db, CUSTOMERS):
         return
     await state.clear()
-    if isinstance(callback.message, Message):
-        await send_customers(callback.message, db, edit_in_place=True)
+    if isinstance(callback.message, Message) and callback.from_user is not None:
+        await send_customers(
+            callback.message,
+            settings,
+            db,
+            callback.from_user.id,
+            edit_in_place=True,
+        )
     await callback.answer()
 
 
@@ -116,8 +125,15 @@ async def cb_admin_customers_page(
     except ValueError:
         await callback.answer()
         return
-    if isinstance(callback.message, Message):
-        await send_customers(callback.message, db, page=page, edit_in_place=True)
+    if isinstance(callback.message, Message) and callback.from_user is not None:
+        await send_customers(
+            callback.message,
+            settings,
+            db,
+            callback.from_user.id,
+            page=page,
+            edit_in_place=True,
+        )
     await callback.answer()
 
 
@@ -162,7 +178,9 @@ async def customers_flow_cancel(
     await state.clear()
     if isinstance(event, CallbackQuery):
         if isinstance(event.message, Message):
-            await send_customers(event.message, db, edit_in_place=True)
+            await send_customers(
+                event.message, settings, db, user_id, edit_in_place=True
+            )
         await event.answer(texts.CANCELLED)
     else:
         await event.answer(texts.CANCELLED)

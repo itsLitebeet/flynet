@@ -11,6 +11,13 @@ from aiogram.types import Message, MessageOriginChannel, User
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 
 _CAPTION_MAX = 1024
+_MESSAGE_MAX = 4096
+
+
+def _fit_message(text: str) -> str:
+    if len(text) <= _MESSAGE_MAX:
+        return text
+    return text[: _MESSAGE_MAX - 20] + "\n\n<i>… (متن کوتاه شد)</i>"
 
 from app.db import Database
 
@@ -170,7 +177,7 @@ class NetFlyLogger:
         if chat_id is None:
             return False
         try:
-            await self._bot.send_message(chat_id, text)
+            await self._bot.send_message(chat_id, _fit_message(text))
             return True
         except (TelegramForbiddenError, TelegramBadRequest) as exc:
             log.warning("Log channel send failed (%s): %s", chat_id, exc)

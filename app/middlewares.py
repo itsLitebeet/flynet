@@ -6,6 +6,8 @@ from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, TelegramObject, User
 
 from app import texts
+from app.admin_perms import is_staff
+from app.config import Settings
 from app.db import Database
 
 
@@ -16,9 +18,10 @@ class UserMiddleware(BaseMiddleware):
     `db: Database` as a parameter.
     """
 
-    def __init__(self, db: Database) -> None:
+    def __init__(self, db: Database, settings: Settings) -> None:
         super().__init__()
         self.db = db
+        self.settings = settings
 
     async def __call__(
         self,
@@ -37,7 +40,9 @@ class UserMiddleware(BaseMiddleware):
                 lang_code=tg_user.language_code,
             )
 
-            if self.db.is_banned(tg_user.id):
+            if self.db.is_banned(tg_user.id) and not is_staff(
+                tg_user.id, self.settings
+            ):
                 if isinstance(event, Message):
                     await event.answer(texts.USER_BANNED)
                 elif isinstance(event, CallbackQuery):

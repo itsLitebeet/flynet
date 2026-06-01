@@ -456,7 +456,8 @@ async def cmd_showsettings(message: Message, settings: Settings, db: Database) -
 async def cmd_plans(message: Message, settings: Settings, db: Database) -> None:
     if not await guard_admin_message(message, settings, db, SERVICES):
         return
-    await send_base_plans(message, db)
+    uid = message.from_user.id if message.from_user else 0
+    await send_base_plans(message, db, settings, uid)
 
 
 @router.message(Command("addvolume"))

@@ -212,7 +212,7 @@ async def format_customer_detail(db: Database, user_id: int) -> str | None:
     else:
         orders_block = texts.ADMIN_CUSTOMER_NO_ORDERS
 
-    return texts.ADMIN_CUSTOMER_DETAIL.format(
+    text = texts.ADMIN_CUSTOMER_DETAIL.format(
         user_id=user_id,
         full_name=_user_display_name(row),
         username=username,
@@ -230,3 +230,28 @@ async def format_customer_detail(db: Database, user_id: int) -> str | None:
         order_count=len(orders),
         orders_block=orders_block,
     )
+    if len(text) > 4000:
+        shown = min(len(orders), 15)
+        order_lines = order_lines[:shown]
+        orders_block = "\n".join(order_lines)
+        if len(orders) > shown:
+            orders_block += f"\n\n<i>+{len(orders) - shown} سفارش دیگر…</i>"
+        text = texts.ADMIN_CUSTOMER_DETAIL.format(
+            user_id=user_id,
+            full_name=_user_display_name(row),
+            username=username,
+            created_at=escape(str(row["created_at"])),
+            ban_state=ban_state,
+            total_orders=int(stats["total_orders"]),
+            declined=int(stats["declined"]),
+            awaiting_review=int(stats["awaiting_review"]),
+            provisioned=int(stats["provisioned"]),
+            awaiting_payment=int(stats["awaiting_payment"]),
+            paid_revenue=texts.format_price(int(stats["paid_revenue"] or 0)),
+            total_spent=texts.format_price(int(stats["total_spent"] or 0)),
+            first_order=escape(str(stats["first_order_at"])),
+            last_order=escape(str(stats["last_order_at"])),
+            order_count=len(orders),
+            orders_block=orders_block,
+        )
+    return text

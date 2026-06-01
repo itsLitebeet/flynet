@@ -57,7 +57,7 @@ async def main() -> None:
     # Make the Settings instance available to handlers via DI.
     dp["settings"] = settings
 
-    user_mw = UserMiddleware(db)
+    user_mw = UserMiddleware(db, settings)
     dp.message.middleware(user_mw)
     dp.callback_query.middleware(user_mw)
 

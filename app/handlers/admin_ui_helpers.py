@@ -8,8 +8,21 @@ from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import InlineKeyboardMarkup, Message
 
-from app import texts
+from app import keyboards, texts
+from app.config import Settings
 from app.db import Database
+from app.handlers.admin_helpers import admin_panel_access
+from app.ui_reply import show_bottom_keyboard
+
+
+async def restore_admin_reply_keyboard(
+    message: Message, user_id: int, settings: Settings, db: Database
+) -> None:
+    """Keep the admin bottom menu visible alongside inline panels."""
+    if not admin_panel_access(user_id, settings, db):
+        return
+    markup = keyboards.admin_reply_keyboard(user_id, settings, db)
+    await show_bottom_keyboard(message, markup)
 
 
 async def admin_edit_or_answer(

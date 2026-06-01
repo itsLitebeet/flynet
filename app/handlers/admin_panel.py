@@ -45,6 +45,7 @@ from app.handlers.admin_ui_helpers import (
     admin_edit_or_answer,
     format_services_list_text,
     format_tools_menu_text,
+    restore_admin_reply_keyboard,
 )
 from app.ui_reply import show_bottom_keyboard
 from app.handlers.admin_users_ui import format_user_detail, format_users_page
@@ -145,8 +146,8 @@ async def send_pending_list(
             texts.ADMIN_PENDING_EMPTY,
             footer,
             edit_in_place=edit_in_place,
-            dismiss_reply=True,
         )
+        await restore_admin_reply_keyboard(message, user_id, settings, db)
         return
 
     buttons: list[dict] = []
@@ -164,8 +165,8 @@ async def send_pending_list(
         texts.ADMIN_PENDING_HEADER.format(count=len(rows)),
         keyboards.admin_pending_list(buttons, user_id, settings, db),
         edit_in_place=edit_in_place,
-        dismiss_reply=True,
     )
+    await restore_admin_reply_keyboard(message, user_id, settings, db)
 
 
 async def send_settings(
@@ -184,12 +185,17 @@ async def send_settings(
         body,
         keyboards.admin_settings_inline(user_id, settings, db),
         edit_in_place=edit_in_place,
-        dismiss_reply=True,
     )
+    await restore_admin_reply_keyboard(message, user_id, settings, db)
 
 
 async def send_services(
-    message: Message, db: Database, *, edit_in_place: bool = False
+    message: Message,
+    db: Database,
+    settings: Settings,
+    user_id: int,
+    *,
+    edit_in_place: bool = False,
 ) -> None:
     body = format_services_list_text(db)
     if len(body) > 4000:
@@ -201,12 +207,17 @@ async def send_services(
             manual_enabled=db.is_manual_purchase_enabled()
         ),
         edit_in_place=edit_in_place,
-        dismiss_reply=True,
     )
+    await restore_admin_reply_keyboard(message, user_id, settings, db)
 
 
 async def send_base_plans(
-    message: Message, db: Database, *, edit_in_place: bool = False
+    message: Message,
+    db: Database,
+    settings: Settings,
+    user_id: int,
+    *,
+    edit_in_place: bool = False,
 ) -> None:
     await admin_edit_or_answer(
         message,
@@ -216,8 +227,8 @@ async def send_base_plans(
             db.get_duration_presets(),
         ),
         edit_in_place=edit_in_place,
-        dismiss_reply=True,
     )
+    await restore_admin_reply_keyboard(message, user_id, settings, db)
 
 
 async def send_tools(
@@ -235,8 +246,8 @@ async def send_tools(
             user_id, settings, db, has_log_channel=bool(db.get_log_channel_id())
         ),
         edit_in_place=edit_in_place,
-        dismiss_reply=True,
     )
+    await restore_admin_reply_keyboard(message, user_id, settings, db)
 
 
 async def send_locations(
@@ -254,16 +265,16 @@ async def send_locations(
             texts.ADMIN_LOC_EMPTY,
             keyboards.admin_home_inline(user_id, settings, db),
             edit_in_place=edit_in_place,
-            dismiss_reply=True,
         )
+        await restore_admin_reply_keyboard(message, user_id, settings, db)
         return
     await admin_edit_or_answer(
         message,
         texts.ADMIN_LOCATIONS_MENU.format(count=len(locs)),
         keyboards.admin_locations_list(locs),
         edit_in_place=edit_in_place,
-        dismiss_reply=True,
     )
+    await restore_admin_reply_keyboard(message, user_id, settings, db)
 
 
 async def send_location_detail(
@@ -326,10 +337,6 @@ async def send_users(
     user_id: int,
     edit_in_place: bool = False,
 ) -> None:
-    if not edit_in_place:
-        from app.ui_reply import hide_bottom_keyboard
-
-        await hide_bottom_keyboard(message)
     text, total_pages, users = await format_users_page(db, page)
     if not users:
         markup = keyboards.admin_home_inline(user_id, settings, db)
@@ -346,6 +353,7 @@ async def send_users(
             await message.answer(
                 text, reply_markup=markup, parse_mode=ParseMode.HTML
             )
+        await restore_admin_reply_keyboard(message, user_id, settings, db)
         return
 
     markup = keyboards.admin_users_keyboard(
@@ -362,6 +370,7 @@ async def send_users(
             )
     else:
         await message.answer(text, reply_markup=markup, parse_mode=ParseMode.HTML)
+    await restore_admin_reply_keyboard(message, user_id, settings, db)
 
 
 async def send_user_detail(
@@ -568,7 +577,6 @@ async def cb_admin_orders(
             texts.ADMIN_ORDER_LOOKUP_PROMPT,
             keyboards.admin_flow_cancel_inline(back_data=keyboards.CB_ADM_HOME),
             edit_in_place=True,
-            dismiss_reply=True,
         )
         await state.set_state(AdminPanelFlow.waiting_order_id)
     await callback.answer()
@@ -627,8 +635,14 @@ async def cb_admin_settings_refresh(callback: CallbackQuery, settings: Settings,
 async def cb_admin_services(callback: CallbackQuery, settings: Settings, db: Database) -> None:
     if await _guard_cb(callback, settings, db, SERVICES) is None:
         return
-    if isinstance(callback.message, Message):
-        await send_services(callback.message, db, edit_in_place=True)
+    if isinstance(callback.message, Message) and callback.from_user is not None:
+        await send_services(
+            callback.message,
+            db,
+            settings,
+            callback.from_user.id,
+            edit_in_place=True,
+        )
     await callback.answer()
 
 
@@ -639,8 +653,14 @@ async def cb_admin_toggle_manual(callback: CallbackQuery, settings: Settings, db
     enabled = not db.is_manual_purchase_enabled()
     db.set_manual_purchase_enabled(enabled)
     mode = "پلن ازپیش‌تعریف ✅" if enabled else "فرمول قیمت ❌"
-    if isinstance(callback.message, Message):
-        await send_services(callback.message, db, edit_in_place=True)
+    if isinstance(callback.message, Message) and callback.from_user is not None:
+        await send_services(
+            callback.message,
+            db,
+            settings,
+            callback.from_user.id,
+            edit_in_place=True,
+        )
     await callback.answer(f"خرید دستی: {mode}")
 
 
@@ -648,8 +668,14 @@ async def cb_admin_toggle_manual(callback: CallbackQuery, settings: Settings, db
 async def cb_admin_plans(callback: CallbackQuery, settings: Settings, db: Database) -> None:
     if await _guard_cb(callback, settings, db, SERVICES) is None:
         return
-    if isinstance(callback.message, Message):
-        await send_base_plans(callback.message, db, edit_in_place=True)
+    if isinstance(callback.message, Message) and callback.from_user is not None:
+        await send_base_plans(
+            callback.message,
+            db,
+            settings,
+            callback.from_user.id,
+            edit_in_place=True,
+        )
     await callback.answer()
 
 
@@ -758,7 +784,6 @@ async def cb_admin_order_lookup_start(callback: CallbackQuery, state: FSMContext
         texts.ADMIN_ORDER_LOOKUP_PROMPT,
         keyboards.admin_flow_cancel_inline(back_data=keyboards.CB_ADM_PENDING_LIST),
         edit_in_place=True,
-        dismiss_reply=True,
     )
     await callback.answer()
 
@@ -804,6 +829,8 @@ async def admin_panel_flow_cancel(
         await event.answer(texts.CANCELLED)
     else:
         await event.answer(texts.CANCELLED)
+        if isinstance(event, Message):
+            await restore_admin_reply_keyboard(event, user_id, settings, db)
 
 
 @router.message(StateFilter(AdminPanelFlow.waiting_order_id))

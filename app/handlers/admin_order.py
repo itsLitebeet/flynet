@@ -19,7 +19,10 @@ from app.db import Database
 from app.admin_perms import ORDERS_MANAGE
 from app.handlers.admin_helpers import guard_admin_callback, guard_admin_message
 from app.handlers.admin_order_ui import format_admin_order_detail
-from app.handlers.admin_ui_helpers import admin_edit_or_answer
+from app.handlers.admin_ui_helpers import (
+    admin_edit_or_answer,
+    restore_admin_reply_keyboard,
+)
 from app.logs import Actor, make_logger
 from app.xui import DAY_IN_SECONDS, GIB_IN_BYTES, XuiClient, XuiError, _gb_to_bytes
 
@@ -43,6 +46,8 @@ async def send_admin_order_view(
     edit_in_place: bool = False,
     manage_header: bool = False,
     back_data: str | None = keyboards.CB_ADM_PENDING_LIST,
+    settings: Settings | None = None,
+    restore_reply_user_id: int | None = None,
 ) -> bool:
     """Show order detail + management keyboard; return False if not found."""
     text = format_admin_order_detail(db, order_id)
@@ -66,6 +71,10 @@ async def send_admin_order_view(
     await admin_edit_or_answer(
         message, text, markup, edit_in_place=edit_in_place
     )
+    if settings is not None and restore_reply_user_id is not None:
+        await restore_admin_reply_keyboard(
+            message, restore_reply_user_id, settings, db
+        )
     return True
 
 
@@ -456,12 +465,15 @@ async def cb_order_manage(
         await callback.answer()
         return
 
+    uid = callback.from_user.id if callback.from_user else None
     if not await send_admin_order_view(
         callback.message,
         db,
         order_id,
         edit_in_place=True,
         manage_header=True,
+        settings=settings,
+        restore_reply_user_id=uid,
     ):
         await callback.answer(texts.ADMIN_ORDER_NOTFOUND, show_alert=True)
         return
@@ -548,12 +560,15 @@ async def cb_order_add_gb(
                 order_id=order_id, add_gb=add_gb, total_gb=total_gb
             )
         )
+        uid = callback.from_user.id if callback.from_user else None
         await send_admin_order_view(
             callback.message,
             db,
             order_id,
             edit_in_place=True,
             manage_header=True,
+            settings=settings,
+            restore_reply_user_id=uid,
         )
     await _log_edit(
         bot,
@@ -610,12 +625,15 @@ async def cb_order_add_days(
                 expiry=escape(expiry_s),
             )
         )
+        uid = callback.from_user.id if callback.from_user else None
         await send_admin_order_view(
             callback.message,
             db,
             order_id,
             edit_in_place=True,
             manage_header=True,
+            settings=settings,
+            restore_reply_user_id=uid,
         )
     await _log_edit(
         bot,
@@ -746,7 +764,15 @@ async def msg_order_set_gb(
             order_id=order_id, total_gb=total_gb
         )
     )
-    await send_admin_order_view(message, db, order_id, manage_header=True)
+    uid = message.from_user.id if message.from_user else None
+    await send_admin_order_view(
+        message,
+        db,
+        order_id,
+        manage_header=True,
+        settings=settings,
+        restore_reply_user_id=uid,
+    )
     await _log_edit(
         bot,
         db,
@@ -802,7 +828,15 @@ async def msg_order_add_days_custom(
             expiry=escape(_format_expiry_ms(new_expiry)),
         )
     )
-    await send_admin_order_view(message, db, order_id, manage_header=True)
+    uid = message.from_user.id if message.from_user else None
+    await send_admin_order_view(
+        message,
+        db,
+        order_id,
+        manage_header=True,
+        settings=settings,
+        restore_reply_user_id=uid,
+    )
     await _log_edit(
         bot,
         db,
