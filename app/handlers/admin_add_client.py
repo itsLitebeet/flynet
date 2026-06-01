@@ -166,6 +166,7 @@ async def add_client_back_home(
         callback.message,
         settings,
         db,
+        admin_user_id=callback.from_user.id,
         edit_in_place=False,
     )
     await callback.answer()

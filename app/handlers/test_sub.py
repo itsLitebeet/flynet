@@ -36,16 +36,25 @@ def _test_unavailable_reason(db: Database, user_id: int) -> str | None:
     return None
 
 
-async def _start_test_flow(message: Message, state: FSMContext, db: Database) -> None:
-    user = message.from_user
-    if user is None:
-        return
+async def _start_test_flow(
+    message: Message,
+    state: FSMContext,
+    db: Database,
+    *,
+    user_id: int | None = None,
+) -> None:
+    uid = user_id
+    if uid is None:
+        user = message.from_user
+        if user is None or user.is_bot:
+            return
+        uid = user.id
     await state.clear()
-    reason = _test_unavailable_reason(db, user.id)
+    reason = _test_unavailable_reason(db, uid)
     if reason:
         await message.answer(
             reason,
-            reply_markup=buyer_reply_keyboard(message, db),
+            reply_markup=buyer_reply_keyboard(message, db, user_id=uid),
         )
         return
 
@@ -75,7 +84,12 @@ async def cb_test_sub(callback: CallbackQuery, state: FSMContext, db: Database) 
     if callback.message is None:
         await callback.answer()
         return
-    await _start_test_flow(callback.message, state, db)
+    if callback.from_user is None:
+        await callback.answer()
+        return
+    await _start_test_flow(
+        callback.message, state, db, user_id=callback.from_user.id
+    )
     await callback.answer()
 
 
@@ -93,7 +107,9 @@ async def cb_test_confirm(
         await state.clear()
         await callback.message.answer(
             reason,
-            reply_markup=buyer_reply_keyboard(callback.message, db),
+            reply_markup=buyer_reply_keyboard(
+                callback.message, db, user_id=user.id
+            ),
         )
         await callback.answer()
         return

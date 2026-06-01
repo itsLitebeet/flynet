@@ -18,7 +18,14 @@ def buyer_show_test_button(db: Database, user_id: int) -> bool:
     return True
 
 
-def buyer_reply_keyboard(message: Message, db: Database):
-    user = message.from_user
-    show_test = user is not None and buyer_show_test_button(db, user.id)
+def buyer_reply_keyboard(
+    message: Message, db: Database, *, user_id: int | None = None
+):
+    uid = user_id
+    if uid is None:
+        user = message.from_user
+        if user is None or user.is_bot:
+            return keyboards.main_reply_keyboard(show_test=False)
+        uid = user.id
+    show_test = buyer_show_test_button(db, uid)
     return keyboards.main_reply_keyboard(show_test=show_test)

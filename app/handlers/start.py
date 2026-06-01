@@ -16,11 +16,22 @@ from app.handlers.buyer_ui import buyer_reply_keyboard, buyer_show_test_button
 router = Router(name="start")
 
 
-def _main_kb(message: Message, settings: Settings, db: Database):
-    user = message.from_user
-    if user and admin_panel_access(user.id, settings, db):
-        return keyboards.admin_reply_keyboard(user.id, settings, db)
-    return buyer_reply_keyboard(message, db)
+def _main_kb(
+    message: Message,
+    settings: Settings,
+    db: Database,
+    *,
+    user_id: int | None = None,
+):
+    uid = user_id
+    if uid is None:
+        user = message.from_user
+        if user is None or user.is_bot:
+            return keyboards.main_reply_keyboard(show_test=False)
+        uid = user.id
+    if admin_panel_access(uid, settings, db):
+        return keyboards.admin_reply_keyboard(uid, settings, db)
+    return buyer_reply_keyboard(message, db, user_id=uid)
 
 
 async def _show_menu(message: Message, settings: Settings, db: Database) -> None:
@@ -28,16 +39,30 @@ async def _show_menu(message: Message, settings: Settings, db: Database) -> None
     await message.answer(texts.WELCOME, reply_markup=_main_kb(message, settings, db))
 
 
-def _account_text(message: Message, db: Database) -> str | None:
+def _account_text(
+    message: Message, db: Database, *, user_id: int | None = None
+) -> str | None:
+    uid = user_id
     user = message.from_user
-    if user is None:
-        return None
-    row = db.get_user(user.id)
+    if uid is None:
+        if user is None or user.is_bot:
+            return None
+        uid = user.id
+    row = db.get_user(uid)
+    if row:
+        full_name = " ".join(
+            p for p in [row["first_name"], row["last_name"]] if p
+        ) or "—"
+        username = f"@{row['username']}" if row["username"] else "—"
+    elif user is not None and not user.is_bot:
+        full_name = " ".join(p for p in [user.first_name, user.last_name] if p) or "—"
+        username = f"@{user.username}" if user.username else "—"
+    else:
+        full_name = "—"
+        username = "—"
     created_at = row["created_at"] if row else "—"
-    full_name = " ".join(p for p in [user.first_name, user.last_name] if p) or "—"
-    username = f"@{user.username}" if user.username else "—"
     return texts.ACCOUNT_INFO.format(
-        user_id=user.id,
+        user_id=uid,
         username=username,
         full_name=full_name,
         created_at=created_at,
@@ -113,6 +138,7 @@ async def cb_home(
                 callback.message,
                 settings,
                 db,
+                admin_user_id=callback.from_user.id,
                 edit_in_place=True,
             )
         else:
@@ -131,9 +157,11 @@ async def cb_home(
 async def cb_help(
     callback: CallbackQuery, state: FSMContext, settings: Settings, db: Database
 ) -> None:
-    if isinstance(callback.message, Message):
+    if isinstance(callback.message, Message) and callback.from_user is not None:
+        uid = callback.from_user.id
         await callback.message.answer(
-            texts.HELP, reply_markup=_main_kb(callback.message, settings, db)
+            texts.HELP,
+            reply_markup=_main_kb(callback.message, settings, db, user_id=uid),
         )
     await callback.answer()
 
@@ -142,9 +170,11 @@ async def cb_help(
 async def cb_about(
     callback: CallbackQuery, state: FSMContext, settings: Settings, db: Database
 ) -> None:
-    if isinstance(callback.message, Message):
+    if isinstance(callback.message, Message) and callback.from_user is not None:
+        uid = callback.from_user.id
         await callback.message.answer(
-            texts.ABOUT, reply_markup=_main_kb(callback.message, settings, db)
+            texts.ABOUT,
+            reply_markup=_main_kb(callback.message, settings, db, user_id=uid),
         )
     await callback.answer()
 
@@ -153,12 +183,14 @@ async def cb_about(
 async def cb_account(
     callback: CallbackQuery, db: Database, state: FSMContext, settings: Settings
 ) -> None:
-    if not isinstance(callback.message, Message):
+    if not isinstance(callback.message, Message) or callback.from_user is None:
         await callback.answer()
         return
-    text = _account_text(callback.message, db)
+    uid = callback.from_user.id
+    text = _account_text(callback.message, db, user_id=uid)
     if text:
         await callback.message.answer(
-            text, reply_markup=_main_kb(callback.message, settings, db)
+            text,
+            reply_markup=_main_kb(callback.message, settings, db, user_id=uid),
         )
     await callback.answer()

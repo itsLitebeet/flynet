@@ -103,7 +103,10 @@ async def send_admin_home(
     uid = admin_user_id
     if uid is None:
         user = message.from_user
-        if user is None or not admin_panel_access(user.id, settings, db):
+        # callback.message is from the bot — caller must pass admin_user_id
+        if user is None or user.is_bot:
+            return
+        if not admin_panel_access(user.id, settings, db):
             return
         uid = user.id
     elif not admin_panel_access(uid, settings, db):
@@ -515,6 +518,7 @@ async def cb_admin_home(
         callback.message,
         settings,
         db,
+        admin_user_id=callback.from_user.id,
         edit_in_place=True,
     )
     await callback.answer()
@@ -535,6 +539,7 @@ async def cb_admin_dash(
         callback.message,
         settings,
         db,
+        admin_user_id=callback.from_user.id,
         edit_in_place=True,
     )
     await callback.answer()
@@ -809,6 +814,7 @@ async def admin_panel_flow_cancel(
                     event.message,
                     settings,
                     db,
+                    admin_user_id=user_id,
                     edit_in_place=True,
                 )
         await event.answer(texts.CANCELLED)
