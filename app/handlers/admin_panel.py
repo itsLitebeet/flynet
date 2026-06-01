@@ -621,13 +621,35 @@ async def cb_admin_settings_refresh(callback: CallbackQuery, settings: Settings,
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_SERVICES)
-@router.callback_query(F.data == keyboards.CB_ADM_SERVICES_REFRESH)
 async def cb_admin_services(
     callback: CallbackQuery,
     state: FSMContext,
     settings: Settings,
     db: Database,
 ) -> None:
+    """Open sales plans — replace the current inline message (e.g. from تنظیمات)."""
+    if await _guard_cb(callback, settings, db, SERVICES) is None:
+        return
+    await state.clear()
+    if isinstance(callback.message, Message) and callback.from_user is not None:
+        await send_services(
+            callback.message,
+            db,
+            settings,
+            callback.from_user.id,
+            edit_in_place=True,
+        )
+    await callback.answer()
+
+
+@router.callback_query(F.data == keyboards.CB_ADM_SERVICES_REFRESH)
+async def cb_admin_services_refresh(
+    callback: CallbackQuery,
+    state: FSMContext,
+    settings: Settings,
+    db: Database,
+) -> None:
+    """Refresh list — always post a new message so updates are visible."""
     if await _guard_cb(callback, settings, db, SERVICES) is None:
         return
     await state.clear()
@@ -639,7 +661,7 @@ async def cb_admin_services(
             callback.from_user.id,
             edit_in_place=False,
         )
-    await callback.answer()
+    await callback.answer(texts.ADMIN_BTN_REFRESH)
 
 
 @router.message(F.text == texts.ADMIN_BTN_SERVICES)

@@ -36,6 +36,7 @@ async def admin_edit_or_answer(
                         return
                     except TelegramBadRequest:
                         pass
+                # Same text but markup may differ, or caller needs a visible refresh.
                 await message.answer(
                     text,
                     reply_markup=reply_markup,
