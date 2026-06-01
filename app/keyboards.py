@@ -449,38 +449,33 @@ def admin_reply_keyboard(user_id: int, settings, db) -> ReplyKeyboardMarkup:
         USERS,
     )
 
-    rows: list[list[KeyboardButton]] = []
-    row1: list[KeyboardButton] = []
+    buttons: list[KeyboardButton] = []
     if _admin_perm(user_id, PANEL, settings, db):
-        row1.append(KeyboardButton(text=texts.ADMIN_BTN_DASHBOARD))
+        buttons.append(KeyboardButton(text=texts.ADMIN_BTN_DASHBOARD))
     if _admin_perm(user_id, ORDERS_REVIEW, settings, db):
-        row1.append(KeyboardButton(text=texts.ADMIN_BTN_PENDING))
-    if row1:
-        rows.append(row1)
+        buttons.append(KeyboardButton(text=texts.ADMIN_BTN_PENDING))
 
     if _admin_perm(user_id, CUSTOMERS, settings, db):
-        rows.append([KeyboardButton(text=texts.ADMIN_BTN_CUSTOMERS)])
+        buttons.append(KeyboardButton(text=texts.ADMIN_BTN_CUSTOMERS))
 
     if _admin_perm(user_id, USERS, settings, db):
-        rows.append([KeyboardButton(text=texts.ADMIN_BTN_USERS)])
+        buttons.append(KeyboardButton(text=texts.ADMIN_BTN_USERS))
 
-    row3: list[KeyboardButton] = []
     if _admin_perm(user_id, SETTINGS, settings, db) or _admin_perm(
         user_id, SERVICES, settings, db
     ) or _admin_perm(user_id, OFFER, settings, db):
-        row3.append(KeyboardButton(text=texts.ADMIN_BTN_SETTINGS))
+        buttons.append(KeyboardButton(text=texts.ADMIN_BTN_SETTINGS))
     if _admin_perm(user_id, LOCATIONS, settings, db):
-        row3.append(KeyboardButton(text=texts.ADMIN_BTN_LOCATIONS))
-    if row3:
-        rows.append(row3)
+        buttons.append(KeyboardButton(text=texts.ADMIN_BTN_LOCATIONS))
 
     if _admin_perm(user_id, TOOLS_BROADCAST, settings, db) or _admin_perm(
         user_id, TOOLS_SYNC, settings, db
     ) or _admin_perm(user_id, TOOLS_MISC, settings, db
     ):
-        rows.append([KeyboardButton(text=texts.ADMIN_BTN_TOOLS)])
+        buttons.append(KeyboardButton(text=texts.ADMIN_BTN_TOOLS))
 
-    rows.append([KeyboardButton(text=texts.ADMIN_BTN_PANEL)])
+    buttons.append(KeyboardButton(text=texts.ADMIN_BTN_PANEL))
+    rows = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
     return ReplyKeyboardMarkup(
         keyboard=rows or [[KeyboardButton(text=texts.ADMIN_BTN_PANEL)]],
         resize_keyboard=True,
