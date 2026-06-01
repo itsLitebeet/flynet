@@ -6,23 +6,19 @@ from aiogram.types import Message, ReplyKeyboardMarkup
 
 from app import keyboards
 
+# Invisible character — keeps the bubble minimal when re-showing the keyboard.
+_KEYBOARD_HINT = "\u200b"
 
-KEYBOARD_UPDATE_PLACEHOLDER = "."
 
+async def show_bottom_keyboard(message: Message, markup: ReplyKeyboardMarkup) -> None:
+    """Show or restore reply keyboard.
 
-async def _send_keyboard_update(message: Message, reply_markup) -> None:
-    sent = await message.answer(KEYBOARD_UPDATE_PLACEHOLDER, reply_markup=reply_markup)
-    try:
-        await sent.delete()
-    except Exception:  # noqa: BLE001 - deleting can fail for old clients/permissions.
-        pass
+    Important: do NOT delete this message afterward. Telegram removes the custom
+    keyboard when the message that attached it is deleted.
+    """
+    await message.answer(_KEYBOARD_HINT, reply_markup=markup)
 
 
 async def hide_bottom_keyboard(message: Message) -> None:
     """Remove custom reply keyboard buttons in this chat."""
-    await _send_keyboard_update(message, keyboards.hide_reply_keyboard())
-
-
-async def show_bottom_keyboard(message: Message, markup: ReplyKeyboardMarkup) -> None:
-    """Show (or restore) custom reply keyboard buttons."""
-    await _send_keyboard_update(message, markup)
+    await message.answer(_KEYBOARD_HINT, reply_markup=keyboards.hide_reply_keyboard())

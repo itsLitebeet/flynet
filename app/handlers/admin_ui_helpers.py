@@ -31,13 +31,11 @@ async def admin_edit_or_answer(
     reply_markup: InlineKeyboardMarkup | None = None,
     *,
     edit_in_place: bool = False,
-    dismiss_reply: bool = False,
+    admin_user_id: int | None = None,
+    settings: Settings | None = None,
+    db: Database | None = None,
 ) -> None:
     """Prefer editing the current message; fall back to a new one."""
-    if dismiss_reply:
-        from app.ui_reply import hide_bottom_keyboard
-
-        await hide_bottom_keyboard(message)
     if edit_in_place:
         try:
             await message.edit_text(
@@ -45,10 +43,18 @@ async def admin_edit_or_answer(
                 reply_markup=reply_markup,
                 parse_mode=ParseMode.HTML,
             )
+            if admin_user_id is not None and settings is not None and db is not None:
+                await restore_admin_reply_keyboard(
+                    message, admin_user_id, settings, db
+                )
             return
         except TelegramBadRequest as exc:
             err = (exc.message or "").lower()
             if "message is not modified" in err:
+                if admin_user_id is not None and settings is not None and db is not None:
+                    await restore_admin_reply_keyboard(
+                        message, admin_user_id, settings, db
+                    )
                 return
             if "privacy_restricted" in err or "user_privacy" in err:
                 reply_markup = None
@@ -58,6 +64,10 @@ async def admin_edit_or_answer(
                     reply_markup=reply_markup,
                     parse_mode=ParseMode.HTML,
                 )
+                if admin_user_id is not None and settings is not None and db is not None:
+                    await restore_admin_reply_keyboard(
+                        message, admin_user_id, settings, db
+                    )
                 return
             except TelegramBadRequest:
                 pass
@@ -71,6 +81,9 @@ async def admin_edit_or_answer(
         err = (exc.message or "").lower()
         if "privacy_restricted" in err or "user_privacy" in err:
             await message.answer(text, parse_mode=ParseMode.HTML)
+
+    if admin_user_id is not None and settings is not None and db is not None:
+        await restore_admin_reply_keyboard(message, admin_user_id, settings, db)
 
 
 def format_services_list_text(db: Database, *, loc_filter: int | None = None) -> str:

@@ -23,10 +23,7 @@ from app.handlers.admin_helpers import (
     guard_admin_message,
     is_admin,
 )
-from app.handlers.admin_ui_helpers import (
-    admin_edit_or_answer,
-    restore_admin_reply_keyboard,
-)
+from app.handlers.admin_ui_helpers import admin_edit_or_answer
 
 router = Router(name="admin_customers")
 
@@ -48,8 +45,15 @@ async def send_customers(
     markup = keyboards.admin_customers_keyboard(
         customers, page=page, total_pages=total_pages
     )
-    await admin_edit_or_answer(message, text, markup, edit_in_place=edit_in_place)
-    await restore_admin_reply_keyboard(message, actor_id, settings, db)
+    await admin_edit_or_answer(
+        message,
+        text,
+        markup,
+        edit_in_place=edit_in_place,
+        admin_user_id=actor_id,
+        settings=settings,
+        db=db,
+    )
 
 
 async def send_customer_detail(
@@ -78,9 +82,14 @@ async def send_customer_detail(
         order_ids=order_ids,
     )
     await admin_edit_or_answer(
-        message, text, markup, edit_in_place=edit_in_place
+        message,
+        text,
+        markup,
+        edit_in_place=edit_in_place,
+        admin_user_id=actor_id,
+        settings=settings,
+        db=db,
     )
-    await restore_admin_reply_keyboard(message, actor_id, settings, db)
     return True
 
 
@@ -147,11 +156,15 @@ async def cb_admin_customers_search_start(
         await callback.answer()
         return
     await state.set_state(AdminCustomersFlow.waiting_search)
+    uid = callback.from_user.id if callback.from_user else None
     await admin_edit_or_answer(
         callback.message,
         texts.ADMIN_CUSTOMERS_SEARCH_PROMPT,
         keyboards.admin_flow_cancel_inline(back_data=keyboards.CB_ADM_CUSTOMERS),
         edit_in_place=True,
+        admin_user_id=uid,
+        settings=settings,
+        db=db,
     )
     await callback.answer()
 

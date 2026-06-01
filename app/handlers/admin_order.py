@@ -511,11 +511,15 @@ async def cb_order_edit_plan_menu(
         order_id=order_id,
         panel_live=panel_live,
     )
+    uid = callback.from_user.id if callback.from_user else None
     await admin_edit_or_answer(
         callback.message,
         text,
         keyboards.admin_order_plan_edit_keyboard(order_id),
         edit_in_place=True,
+        admin_user_id=uid,
+        settings=settings,
+        db=db,
     )
     await callback.answer()
 
