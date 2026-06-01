@@ -42,70 +42,81 @@ def _format_customer_list_line(row) -> str:
     )
 
 
+def _format_usage_compact(usage: ClientUsage) -> str:
+    if usage.is_unlimited_traffic:
+        return f"مصرف {texts.format_bytes(usage.used_bytes)}"
+    return (
+        f"مصرف {texts.format_bytes(usage.used_bytes)}"
+        f"/{texts.format_bytes(usage.total_bytes)}"
+        f" · باقی {texts.format_bytes(usage.remaining_bytes)}"
+    )
+
+
 def _format_customer_order_line(
     order, *, usage: ClientUsage | None = None
 ) -> str:
     status = panel_live_badge(usage, db_status=str(order["status"]))
     is_test = _is_test_order(order)
-    test_mark = "🧪" if is_test else ""
+    test_mark = " 🧪" if is_test else ""
     vol = texts.format_order_volume(int(order["volume_gb"]), is_test=is_test)
-    nick = escape(str(order["nickname"])) if order["nickname"] else "—"
+    duration = texts.format_order_duration(
+        int(order["duration_days"]), is_test=is_test
+    )
+    price = texts.format_price(int(order["price"]))
+    created_at = escape(str(order["created_at"]))
 
+    plan_parts = [vol, duration, price]
+    if order["nickname"]:
+        plan_parts.insert(0, escape(str(order["nickname"])))
+    plan_detail = " · ".join(plan_parts)
+
+    footer_lines: list[str] = []
     if order["xui_email"]:
-        panel_line = texts.ADMIN_USER_ORDER_PANEL.format(
-            email=escape(str(order["xui_email"]))
-        )
-    else:
-        panel_line = texts.ADMIN_USER_ORDER_NO_PANEL
+        footer_lines.append(f"پنل <code>{escape(str(order['xui_email']))}</code>")
+    elif str(order["status"]) != "declined":
+        footer_lines.append("<i>پنل: هنوز ساخته نشده</i>")
 
-    extra_parts: list[str] = []
+    if usage is not None and str(order["status"]) == "provisioned":
+        footer_lines.append(_format_usage_compact(usage))
+
     if order["xui_sub_id"]:
-        extra_parts.append(
+        footer_lines.append(
             texts.ADMIN_CUSTOMER_ORDER_SUB.format(
                 sub_id=escape(str(order["xui_sub_id"]))
             )
         )
+
+    review_bits: list[str] = []
     if order["admin_id"]:
-        extra_parts.append(
+        review_bits.append(
             texts.ADMIN_CUSTOMER_ORDER_REVIEWER.format(
                 reviewer=f"<code>{int(order['admin_id'])}</code>"
             )
         )
+    if order["screenshot_file_id"]:
+        review_bits.append(texts.ADMIN_CUSTOMER_ORDER_RECEIPT)
+    if review_bits:
+        footer_lines.append(" · ".join(review_bits))
+
     if order["decline_reason"]:
-        extra_parts.append(
+        footer_lines.append(
             texts.ADMIN_CUSTOMER_ORDER_DECLINE.format(
                 decline=escape(str(order["decline_reason"]))
             )
         )
-    if order["screenshot_file_id"]:
-        extra_parts.append(texts.ADMIN_CUSTOMER_ORDER_RECEIPT)
-    if usage is not None and str(order["status"]) == "provisioned":
-        if usage.is_unlimited_traffic:
-            extra_parts.append(
-                f"  📊 مصرف: <b>{texts.format_bytes(usage.used_bytes)}</b>\n"
-            )
-        else:
-            extra_parts.append(
-                "  📊 مصرف: "
-                f"<b>{texts.format_bytes(usage.used_bytes)}</b>"
-                f" / <b>{texts.format_bytes(usage.total_bytes)}</b>"
-                f" · باقی <b>{texts.format_bytes(usage.remaining_bytes)}</b>\n"
-            )
 
-    return texts.ADMIN_CUSTOMER_ORDER_LINE.format(
+    footer = "\n".join(footer_lines)
+    if footer:
+        footer += "\n"
+
+    return texts.ADMIN_CUSTOMER_ORDER_BLOCK.format(
         order_id=order["id"],
         test_mark=test_mark,
         status=status,
         location=escape(str(order["location_name"])),
-        volume=vol,
-        duration=texts.format_order_duration(
-            int(order["duration_days"]), is_test=is_test
-        ),
-        price=texts.format_price(int(order["price"])),
-        nickname=nick,
-        created_at=escape(str(order["created_at"])),
-        panel_line=panel_line,
-        extra_lines="".join(extra_parts),
+        plan_detail=plan_detail,
+        created_at=created_at,
+        footer=footer,
     )
 
 
@@ -185,7 +196,7 @@ async def format_customer_detail(db: Database, user_id: int) -> str | None:
         return None
 
     username = _username_label(row)
-    ban_state = "مسدود 🚫" if bool(row["is_banned"]) else "فعال ✅"
+    ban_state = "مسدود" if bool(row["is_banned"]) else "فعال"
     orders = db.list_user_orders_admin(user_id, limit=50, exclude_test=True)
     usage_map = await load_panel_usage_for_orders(db, orders)
 
