@@ -4,7 +4,7 @@ import logging
 from html import escape
 
 from aiogram import Bot, F, Router
-from aiogram.filters import Command, CommandObject
+from aiogram.filters import Command, CommandObject, StateFilter
 from aiogram.types import CallbackQuery, Message
 
 from app import keyboards, texts
@@ -43,6 +43,61 @@ log = logging.getLogger(__name__)
 
 
 # ---------- generic ----------
+def _forwarded_user_id(message: Message) -> int | None:
+    origin = getattr(message, "forward_origin", None)
+    sender_user = getattr(origin, "sender_user", None)
+    if sender_user is not None:
+        user_id = getattr(sender_user, "id", None)
+        if user_id is not None:
+            return int(user_id)
+
+    forwarded_from = getattr(message, "forward_from", None)
+    if forwarded_from is not None:
+        user_id = getattr(forwarded_from, "id", None)
+        if user_id is not None:
+            return int(user_id)
+
+    return None
+
+
+def _forwarded_chat_id(message: Message) -> int | None:
+    origin = getattr(message, "forward_origin", None)
+    for attr in ("sender_chat", "chat"):
+        chat = getattr(origin, attr, None)
+        if chat is not None:
+            chat_id = getattr(chat, "id", None)
+            if chat_id is not None:
+                return int(chat_id)
+
+    forwarded_chat = getattr(message, "forward_from_chat", None)
+    if forwarded_chat is not None:
+        chat_id = getattr(forwarded_chat, "id", None)
+        if chat_id is not None:
+            return int(chat_id)
+
+    return None
+
+
+@router.message(StateFilter(None), F.forward_origin)
+async def msg_forwarded_user_id(
+    message: Message, settings: Settings, db: Database
+) -> None:
+    if not await guard_admin_message(message, settings, db, PANEL):
+        return
+
+    user_id = _forwarded_user_id(message)
+    if user_id is not None:
+        await message.answer(texts.FORWARDED_USER_ID.format(user_id=user_id))
+        return
+
+    chat_id = _forwarded_chat_id(message)
+    if chat_id is not None:
+        await message.answer(texts.FORWARDED_CHAT_ID.format(chat_id=chat_id))
+        return
+
+    await message.answer(texts.FORWARDED_USER_HIDDEN)
+
+
 @router.message(Command("stats"))
 async def cmd_stats(message: Message, settings: Settings, db: Database) -> None:
     if not await guard_admin_message(message, settings, db, PANEL):

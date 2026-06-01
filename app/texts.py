@@ -87,6 +87,19 @@ ADMIN_USER_INFO_ALERT = (
     "نام: {full_name}\n"
     "یوزرنیم: {username}"
 )
+FORWARDED_USER_ID = (
+    "👤 شناسه کاربر فورواردشده:\n"
+    "<code>{user_id}</code>"
+)
+FORWARDED_USER_HIDDEN = (
+    "شناسه این پیام قابل مشاهده نیست.\n"
+    "کاربر ارسال‌کننده، نمایش مشخصات در فوروارد را محدود کرده است."
+)
+FORWARDED_CHAT_ID = (
+    "این پیام از کاربر عادی فوروارد نشده است.\n"
+    "شناسه مبدأ:\n"
+    "<code>{chat_id}</code>"
+)
 
 # My services
 BTN_VIEW_CONFIGS  = "📋 دریافت کانفیگ‌ها"
