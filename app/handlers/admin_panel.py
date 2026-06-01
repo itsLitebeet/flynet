@@ -637,7 +637,7 @@ async def cb_admin_services(
             db,
             settings,
             callback.from_user.id,
-            edit_in_place=True,
+            edit_in_place=False,
         )
     await callback.answer()
 
@@ -660,9 +660,15 @@ async def msg_admin_services(
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_TOGGLE_MANUAL)
-async def cb_admin_toggle_manual(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+async def cb_admin_toggle_manual(
+    callback: CallbackQuery,
+    state: FSMContext,
+    settings: Settings,
+    db: Database,
+) -> None:
     if await _guard_cb(callback, settings, db, SERVICES) is None:
         return
+    await state.clear()
     enabled = not db.is_manual_purchase_enabled()
     db.set_manual_purchase_enabled(enabled)
     mode = "پلن ازپیش‌تعریف ✅" if enabled else "فرمول قیمت ❌"
@@ -672,7 +678,7 @@ async def cb_admin_toggle_manual(callback: CallbackQuery, settings: Settings, db
             db,
             settings,
             callback.from_user.id,
-            edit_in_place=True,
+            edit_in_place=False,
         )
     await callback.answer(f"خرید دستی: {mode}")
 

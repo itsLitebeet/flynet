@@ -57,7 +57,9 @@ def _parse_price(raw: str) -> int | None:
     return int(s)
 
 
-async def _commit_package(message: Message, state: FSMContext, db: Database) -> None:
+async def _commit_package(
+    message: Message, state: FSMContext, db: Database, settings: Settings
+) -> None:
     data = await state.get_data()
     try:
         loc_id = int(data["location_id"])
@@ -88,8 +90,10 @@ async def _commit_package(message: Message, state: FSMContext, db: Database) -> 
             price=texts.format_price(price),
         )
         + f"\n📍 {loc_name}",
-        reply_markup=keyboards.admin_add_service_done_keyboard(),
     )
+    user = message.from_user
+    if user is not None:
+        await send_services(message, db, settings, user.id, edit_in_place=False)
 
 
 def _eligible_locations(db: Database):
@@ -164,6 +168,7 @@ async def _prompt_price(
 async def start_add_service_wizard(
     message: Message, state: FSMContext, db: Database
 ) -> None:
+    """Start add-plan wizard; always clears a previous unfinished flow."""
     await state.clear()
     await _prompt_location(message, state, db)
 
@@ -211,32 +216,9 @@ async def add_service_cancel_cb(
         db,
         settings,
         callback.from_user.id,
-        edit_in_place=True,
+        edit_in_place=False,
     )
     await callback.answer(texts.CANCELLED)
-
-
-@router.callback_query(
-    StateFilter(AdminAddServiceFlow),
-    F.data == keyboards.CB_ADM_SERVICES,
-)
-async def add_service_back_to_services(
-    callback: CallbackQuery, state: FSMContext, settings: Settings, db: Database
-) -> None:
-    if not await guard_admin_callback(callback, settings, db, SERVICES):
-        return
-    if callback.from_user is None or not isinstance(callback.message, Message):
-        await callback.answer()
-        return
-    await state.clear()
-    await send_services(
-        callback.message,
-        db,
-        settings,
-        callback.from_user.id,
-        edit_in_place=True,
-    )
-    await callback.answer()
 
 
 # ---------- location ----------
@@ -551,4 +533,4 @@ async def msg_price(
         return
 
     await state.update_data(price=price)
-    await _commit_package(message, state, db)
+    await _commit_package(message, state, db, settings)

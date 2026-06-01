@@ -129,6 +129,7 @@ async def cmd_addservice(
     if not await guard_admin_message(message, settings, db, SERVICES):
         return
 
+    await state.clear()
     parts = (command.args or "").split()
     if len(parts) != 4:
         from app.handlers.admin_add_service import start_add_service_wizard
@@ -172,6 +173,10 @@ async def cmd_addservice(
         )
         + f"\n📍 {loc_name}"
     )
+    if message.from_user is not None:
+        from app.handlers.admin_panel import send_services
+
+        await send_services(message, db, settings, message.from_user.id)
 
 
 @router.message(Command("delservice"))

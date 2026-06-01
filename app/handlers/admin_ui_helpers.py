@@ -30,6 +30,17 @@ async def admin_edit_or_answer(
         except TelegramBadRequest as exc:
             err = (exc.message or "").lower()
             if "message is not modified" in err:
+                if reply_markup is not None:
+                    try:
+                        await message.edit_reply_markup(reply_markup=reply_markup)
+                        return
+                    except TelegramBadRequest:
+                        pass
+                await message.answer(
+                    text,
+                    reply_markup=reply_markup,
+                    parse_mode=ParseMode.HTML,
+                )
                 return
             if "privacy_restricted" in err or "user_privacy" in err:
                 reply_markup = None
