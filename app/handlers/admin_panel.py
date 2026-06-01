@@ -622,9 +622,15 @@ async def cb_admin_settings_refresh(callback: CallbackQuery, settings: Settings,
 
 @router.callback_query(F.data == keyboards.CB_ADM_SERVICES)
 @router.callback_query(F.data == keyboards.CB_ADM_SERVICES_REFRESH)
-async def cb_admin_services(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+async def cb_admin_services(
+    callback: CallbackQuery,
+    state: FSMContext,
+    settings: Settings,
+    db: Database,
+) -> None:
     if await _guard_cb(callback, settings, db, SERVICES) is None:
         return
+    await state.clear()
     if isinstance(callback.message, Message) and callback.from_user is not None:
         await send_services(
             callback.message,
@@ -634,6 +640,23 @@ async def cb_admin_services(callback: CallbackQuery, settings: Settings, db: Dat
             edit_in_place=True,
         )
     await callback.answer()
+
+
+@router.message(F.text == texts.ADMIN_BTN_SERVICES)
+async def msg_admin_services(
+    message: Message, state: FSMContext, settings: Settings, db: Database
+) -> None:
+    """Reply-keyboard «پلن‌های فروش» — works even during other admin wizards."""
+    if not admin_from_message(message, settings):
+        return
+    user = message.from_user
+    if user is None:
+        return
+    if not admin_can(user.id, SERVICES, settings, db):
+        await message.answer(texts.NOT_PERMITTED)
+        return
+    await state.clear()
+    await send_services(message, db, settings, user.id)
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_TOGGLE_MANUAL)

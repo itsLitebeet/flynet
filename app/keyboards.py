@@ -509,9 +509,11 @@ def admin_reply_keyboard(user_id: int, settings, db) -> ReplyKeyboardMarkup:
 
     settings_row: list[KeyboardButton] = []
     if _admin_perm(user_id, SETTINGS, settings, db) or _admin_perm(
-        user_id, SERVICES, settings, db
-    ) or _admin_perm(user_id, OFFER, settings, db):
+        user_id, OFFER, settings, db
+    ):
         settings_row.append(KeyboardButton(text=texts.ADMIN_BTN_SETTINGS))
+    if _admin_perm(user_id, SERVICES, settings, db):
+        settings_row.append(KeyboardButton(text=texts.ADMIN_BTN_SERVICES))
     if settings_row:
         rows.append(settings_row)
 
