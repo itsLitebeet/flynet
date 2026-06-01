@@ -8,22 +8,8 @@ from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import InlineKeyboardMarkup, Message
 
-from app import keyboards, texts
-from app.config import Settings
+from app import texts
 from app.db import Database
-from app.handlers.admin_helpers import admin_panel_access
-from app.ui_reply import show_bottom_keyboard
-
-
-async def restore_admin_reply_keyboard(
-    message: Message, user_id: int, settings: Settings, db: Database
-) -> None:
-    """Keep the admin bottom menu visible alongside inline panels."""
-    if not admin_panel_access(user_id, settings, db):
-        return
-    markup = keyboards.admin_reply_keyboard(user_id, settings, db)
-    await show_bottom_keyboard(message, markup)
-
 
 async def admin_edit_or_answer(
     message: Message,
@@ -31,9 +17,6 @@ async def admin_edit_or_answer(
     reply_markup: InlineKeyboardMarkup | None = None,
     *,
     edit_in_place: bool = False,
-    admin_user_id: int | None = None,
-    settings: Settings | None = None,
-    db: Database | None = None,
 ) -> None:
     """Prefer editing the current message; fall back to a new one."""
     if edit_in_place:
@@ -43,18 +26,10 @@ async def admin_edit_or_answer(
                 reply_markup=reply_markup,
                 parse_mode=ParseMode.HTML,
             )
-            if admin_user_id is not None and settings is not None and db is not None:
-                await restore_admin_reply_keyboard(
-                    message, admin_user_id, settings, db
-                )
             return
         except TelegramBadRequest as exc:
             err = (exc.message or "").lower()
             if "message is not modified" in err:
-                if admin_user_id is not None and settings is not None and db is not None:
-                    await restore_admin_reply_keyboard(
-                        message, admin_user_id, settings, db
-                    )
                 return
             if "privacy_restricted" in err or "user_privacy" in err:
                 reply_markup = None
@@ -64,10 +39,6 @@ async def admin_edit_or_answer(
                     reply_markup=reply_markup,
                     parse_mode=ParseMode.HTML,
                 )
-                if admin_user_id is not None and settings is not None and db is not None:
-                    await restore_admin_reply_keyboard(
-                        message, admin_user_id, settings, db
-                    )
                 return
             except TelegramBadRequest:
                 pass
@@ -81,9 +52,6 @@ async def admin_edit_or_answer(
         err = (exc.message or "").lower()
         if "privacy_restricted" in err or "user_privacy" in err:
             await message.answer(text, parse_mode=ParseMode.HTML)
-
-    if admin_user_id is not None and settings is not None and db is not None:
-        await restore_admin_reply_keyboard(message, admin_user_id, settings, db)
 
 
 def format_services_list_text(db: Database, *, loc_filter: int | None = None) -> str:

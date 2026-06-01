@@ -166,7 +166,6 @@ async def add_client_back_home(
         callback.message,
         settings,
         db,
-        admin_user_id=callback.from_user.id,
         edit_in_place=False,
     )
     await callback.answer()
@@ -185,26 +184,16 @@ async def add_client_flow_cancel(
 ) -> None:
     await _cancel_wizard_and_cleanup(event, state, bot)
 
-    uid = event.from_user.id if event.from_user else None
-    if uid is not None:
-        msg = (
-            event.message
-            if isinstance(event, CallbackQuery) and isinstance(event.message, Message)
-            else event
-            if isinstance(event, Message)
-            else None
-        )
-        if isinstance(msg, Message):
-            from app.ui_reply import show_bottom_keyboard
-
-            await show_bottom_keyboard(
-                msg, keyboards.admin_reply_keyboard(uid, settings, db)
-            )
-
     if isinstance(event, CallbackQuery):
         await event.answer(texts.CANCELLED)
     else:
-        await event.answer(texts.CANCELLED)
+        uid = event.from_user.id if event.from_user else None
+        markup = (
+            keyboards.admin_reply_keyboard(uid, settings, db)
+            if uid is not None
+            else None
+        )
+        await event.answer(texts.CANCELLED, reply_markup=markup)
         try:
             await event.delete()
         except Exception:  # noqa: BLE001

@@ -49,6 +49,7 @@ CB_ADMIN_DECLINE_CANCEL_PREFIX = "adm:decx:"  # adm:decx:<order_id>
 
 # Admin panel navigation
 CB_ADM_HOME              = "adm:home"
+CB_ADM_SHOW_REPLY        = "adm:showkb"
 CB_ADM_DASH              = "adm:dash"
 CB_ADM_PENDING_LIST      = "adm:plist"
 CB_ADM_SETTINGS          = "adm:set"
@@ -164,9 +165,11 @@ def main_reply_keyboard(*, show_test: bool = False) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=rows,
         resize_keyboard=True,
-        is_persistent=True,
     )
 
+
+# Shown with ReplyKeyboardRemove so the chat is not left empty.
+HIDE_KEYBOARD_REPLY_TEXT = " "
 
 def hide_reply_keyboard() -> ReplyKeyboardRemove:
     """Hide bottom buttons during wizards (order, support, rename)."""
@@ -509,7 +512,6 @@ def admin_reply_keyboard(user_id: int, settings, db) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=rows or [[KeyboardButton(text=texts.ADMIN_BTN_DASHBOARD)]],
         resize_keyboard=True,
-        is_persistent=True,
     )
 
 

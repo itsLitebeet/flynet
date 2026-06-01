@@ -45,7 +45,6 @@ from app.handlers.admin_ui_helpers import (
     admin_edit_or_answer,
     format_services_list_text,
     format_tools_menu_text,
-    restore_admin_reply_keyboard,
 )
 from app.handlers.admin_users_ui import format_user_detail, format_users_page
 from app.handlers.log_channel import start_log_channel_wizard
@@ -116,9 +115,6 @@ async def send_admin_home(
             _admin_home_body(db),
             keyboards.admin_home_inline(uid, settings, db),
             edit_in_place=True,
-            admin_user_id=uid,
-            settings=settings,
-            db=db,
         )
         return
     await message.answer(
@@ -147,9 +143,6 @@ async def send_pending_list(
             texts.ADMIN_PENDING_EMPTY,
             footer,
             edit_in_place=edit_in_place,
-            admin_user_id=user_id,
-            settings=settings,
-            db=db,
         )
         return
 
@@ -168,9 +161,6 @@ async def send_pending_list(
         texts.ADMIN_PENDING_HEADER.format(count=len(rows)),
         keyboards.admin_pending_list(buttons, user_id, settings, db),
         edit_in_place=edit_in_place,
-        admin_user_id=user_id,
-        settings=settings,
-        db=db,
     )
 
 
@@ -190,9 +180,6 @@ async def send_settings(
         body,
         keyboards.admin_settings_inline(user_id, settings, db),
         edit_in_place=edit_in_place,
-        admin_user_id=user_id,
-        settings=settings,
-        db=db,
     )
 
 
@@ -214,9 +201,6 @@ async def send_services(
             manual_enabled=db.is_manual_purchase_enabled()
         ),
         edit_in_place=edit_in_place,
-        admin_user_id=user_id,
-        settings=settings,
-        db=db,
     )
 
 
@@ -236,9 +220,6 @@ async def send_base_plans(
             db.get_duration_presets(),
         ),
         edit_in_place=edit_in_place,
-        admin_user_id=user_id,
-        settings=settings,
-        db=db,
     )
 
 
@@ -257,9 +238,6 @@ async def send_tools(
             user_id, settings, db, has_log_channel=bool(db.get_log_channel_id())
         ),
         edit_in_place=edit_in_place,
-        admin_user_id=user_id,
-        settings=settings,
-        db=db,
     )
 
 
@@ -278,9 +256,6 @@ async def send_locations(
             texts.ADMIN_LOC_EMPTY,
             keyboards.admin_home_inline(user_id, settings, db),
             edit_in_place=edit_in_place,
-            admin_user_id=user_id,
-            settings=settings,
-            db=db,
         )
         return
     await admin_edit_or_answer(
@@ -288,9 +263,6 @@ async def send_locations(
         texts.ADMIN_LOCATIONS_MENU.format(count=len(locs)),
         keyboards.admin_locations_list(locs),
         edit_in_place=edit_in_place,
-        admin_user_id=user_id,
-        settings=settings,
-        db=db,
     )
 
 
@@ -300,8 +272,6 @@ async def send_location_detail(
     loc_id: int,
     *,
     edit_in_place: bool = False,
-    settings: Settings | None = None,
-    admin_user_id: int | None = None,
 ) -> bool:
     loc = db.get_location(loc_id)
     if loc is None:
@@ -343,9 +313,6 @@ async def send_location_detail(
             is_test=loc.is_test,
         ),
         edit_in_place=edit_in_place,
-        admin_user_id=admin_user_id,
-        settings=settings,
-        db=db,
     )
     return True
 
@@ -375,7 +342,6 @@ async def send_users(
             await message.answer(
                 text, reply_markup=markup, parse_mode=ParseMode.HTML
             )
-        await restore_admin_reply_keyboard(message, user_id, settings, db)
         return
 
     markup = keyboards.admin_users_keyboard(
@@ -392,7 +358,6 @@ async def send_users(
             )
     else:
         await message.answer(text, reply_markup=markup, parse_mode=ParseMode.HTML)
-    await restore_admin_reply_keyboard(message, user_id, settings, db)
 
 
 async def send_user_detail(
@@ -430,7 +395,6 @@ async def send_user_detail(
             )
     else:
         await message.answer(text, reply_markup=markup, parse_mode=ParseMode.HTML)
-    await restore_admin_reply_keyboard(message, actor_id, settings, db)
     return True
 
 
@@ -551,7 +515,6 @@ async def cb_admin_home(
         callback.message,
         settings,
         db,
-        admin_user_id=callback.from_user.id,
         edit_in_place=True,
     )
     await callback.answer()
@@ -572,7 +535,6 @@ async def cb_admin_dash(
         callback.message,
         settings,
         db,
-        admin_user_id=callback.from_user.id,
         edit_in_place=True,
     )
     await callback.answer()
@@ -600,9 +562,6 @@ async def cb_admin_orders(
             texts.ADMIN_ORDER_LOOKUP_PROMPT,
             keyboards.admin_flow_cancel_inline(back_data=keyboards.CB_ADM_HOME),
             edit_in_place=True,
-            admin_user_id=uid,
-            settings=settings,
-            db=db,
         )
         await state.set_state(AdminPanelFlow.waiting_order_id)
     await callback.answer()
@@ -811,9 +770,6 @@ async def cb_admin_order_lookup_start(callback: CallbackQuery, state: FSMContext
         texts.ADMIN_ORDER_LOOKUP_PROMPT,
         keyboards.admin_flow_cancel_inline(back_data=keyboards.CB_ADM_PENDING_LIST),
         edit_in_place=True,
-        admin_user_id=uid,
-        settings=settings,
-        db=db,
     )
     await callback.answer()
 
@@ -853,14 +809,13 @@ async def admin_panel_flow_cancel(
                     event.message,
                     settings,
                     db,
-                    admin_user_id=user_id,
                     edit_in_place=True,
                 )
         await event.answer(texts.CANCELLED)
     else:
         await event.answer(texts.CANCELLED)
         if isinstance(event, Message):
-            await restore_admin_reply_keyboard(event, user_id, settings, db)
+            await send_admin_home(event, settings, db)
 
 
 @router.message(StateFilter(AdminPanelFlow.waiting_order_id))
@@ -980,8 +935,6 @@ async def cb_admin_toggle_test_from_loc(callback: CallbackQuery, settings: Setti
             db,
             loc_id,
             edit_in_place=True,
-            settings=settings,
-            admin_user_id=callback.from_user.id if callback.from_user else None,
         )
     await callback.answer(f"دکمه تست: {state_word}")
 
@@ -1239,8 +1192,6 @@ async def cb_admin_loc_detail(callback: CallbackQuery, settings: Settings, db: D
         db,
         loc_id,
         edit_in_place=True,
-        settings=settings,
-        admin_user_id=callback.from_user.id if callback.from_user else None,
     ):
         await callback.answer("لوکیشن یافت نشد.", show_alert=True)
         return
@@ -1274,8 +1225,6 @@ async def cb_admin_loc_toggle(callback: CallbackQuery, settings: Settings, db: D
             db,
             loc_id,
             edit_in_place=True,
-            settings=settings,
-            admin_user_id=callback.from_user.id if callback.from_user else None,
         )
 
 
@@ -1311,8 +1260,6 @@ async def cb_admin_loc_purchase_toggle(
             db,
             loc_id,
             edit_in_place=True,
-            settings=settings,
-            admin_user_id=callback.from_user.id if callback.from_user else None,
         )
 
 

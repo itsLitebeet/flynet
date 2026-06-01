@@ -50,9 +50,6 @@ async def send_customers(
         text,
         markup,
         edit_in_place=edit_in_place,
-        admin_user_id=actor_id,
-        settings=settings,
-        db=db,
     )
 
 
@@ -86,9 +83,6 @@ async def send_customer_detail(
         text,
         markup,
         edit_in_place=edit_in_place,
-        admin_user_id=actor_id,
-        settings=settings,
-        db=db,
     )
     return True
 
@@ -162,9 +156,6 @@ async def cb_admin_customers_search_start(
         texts.ADMIN_CUSTOMERS_SEARCH_PROMPT,
         keyboards.admin_flow_cancel_inline(back_data=keyboards.CB_ADM_CUSTOMERS),
         edit_in_place=True,
-        admin_user_id=uid,
-        settings=settings,
-        db=db,
     )
     await callback.answer()
 
