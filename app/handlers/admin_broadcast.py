@@ -65,14 +65,14 @@ def _caption_preview(message: Message, *, max_len: int = 120) -> str:
 
 
 async def _start_broadcast_wizard(message: Message, state: FSMContext) -> None:
-    from app.ui_reply import hide_bottom_keyboard
+    from app.ui_reply import answer_with_inline_keyboard
 
     await state.clear()
-    await hide_bottom_keyboard(message)
     await state.set_state(BroadcastFlow.waiting_content)
-    await message.answer(
+    await answer_with_inline_keyboard(
+        message,
         texts.BROADCAST_PROMPT,
-        reply_markup=keyboards.broadcast_cancel_keyboard(),
+        keyboards.broadcast_cancel_keyboard(),
         parse_mode=ParseMode.HTML,
     )
 

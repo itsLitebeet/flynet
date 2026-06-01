@@ -99,17 +99,16 @@ async def _prompt_volume(message: Message, state: FSMContext) -> None:
 async def _start_add_client(
     message: Message, state: FSMContext, db: Database
 ) -> None:
-    from app.ui_reply import hide_bottom_keyboard
+    from app.ui_reply import answer_with_inline_keyboard
 
     await state.clear()
-    await hide_bottom_keyboard(message)
     await state.set_state(AdminAddClientFlow.waiting_user_id)
-    await _wizard_reply(
+    sent = await answer_with_inline_keyboard(
         message,
-        state,
         texts.ADMIN_ADD_CLIENT_USER_PROMPT,
-        reply_markup=keyboards.admin_add_client_user_keyboard(),
+        keyboards.admin_add_client_user_keyboard(),
     )
+    await _track_wizard_message(state, sent)
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_ADD_CLIENT)

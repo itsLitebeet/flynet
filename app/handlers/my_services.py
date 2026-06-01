@@ -269,10 +269,6 @@ async def _show_services_list(
     *,
     edit_in_place: bool = False,
 ) -> None:
-    if not edit_in_place:
-        from app.ui_reply import hide_bottom_keyboard
-
-        await hide_bottom_keyboard(message)
     rows = await filter_visible_orders(db, db.list_user_orders(user_id, limit=50))
     if not rows:
         text = texts.MY_SERVICES_EMPTY
@@ -315,7 +311,11 @@ async def _show_services_list(
         except Exception:  # noqa: BLE001
             await message.answer(text, reply_markup=markup, parse_mode=ParseMode.HTML)
     else:
-        await message.answer(text, reply_markup=markup, parse_mode=ParseMode.HTML)
+        from app.ui_reply import answer_with_inline_keyboard
+
+        await answer_with_inline_keyboard(
+            message, text, markup, parse_mode=ParseMode.HTML
+        )
 
 
 # ---------- entry: list ----------

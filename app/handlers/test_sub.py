@@ -60,17 +60,17 @@ async def _start_test_flow(
 
     loc = db.get_test_location()
     assert loc is not None
-    from app.ui_reply import hide_bottom_keyboard
-
     await state.set_state(TestFlow.confirming)
-    await hide_bottom_keyboard(message)
-    await message.answer(
+    from app.ui_reply import answer_with_inline_keyboard
+
+    await answer_with_inline_keyboard(
+        message,
         texts.TEST_SUB_CONFIRM.format(
             location=escape(loc.name),
             volume=texts.format_test_volume(),
             duration=texts.format_test_duration(),
         ),
-        reply_markup=keyboards.test_sub_confirm(),
+        keyboards.test_sub_confirm(),
     )
 
 

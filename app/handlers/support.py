@@ -40,10 +40,13 @@ def _buyer_keyboard_for(user_id: int | None, db: Database):
 async def _open_support_message(message: Message, state: FSMContext) -> None:
     await state.clear()
     await state.set_state(SupportFlow.waiting_for_message)
-    from app.ui_reply import hide_bottom_keyboard
+    from app.ui_reply import answer_with_inline_keyboard
 
-    await hide_bottom_keyboard(message)
-    await message.answer(texts.SUPPORT_PROMPT, reply_markup=keyboards.cancel_support())
+    await answer_with_inline_keyboard(
+        message,
+        texts.SUPPORT_PROMPT,
+        keyboards.cancel_support(),
+    )
 
 
 @router.message(F.text == texts.BTN_SUPPORT, StateFilter(None))
