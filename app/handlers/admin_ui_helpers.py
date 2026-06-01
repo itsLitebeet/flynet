@@ -2,14 +2,76 @@
 
 from __future__ import annotations
 
+import logging
 from html import escape
 
+from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import InlineKeyboardMarkup, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from app import texts
 from app.db import Database
+
+log = logging.getLogger(__name__)
+
+
+def callback_inline_ids(callback: CallbackQuery) -> tuple[int, int] | None:
+    """Chat and message id for the message that owns the tapped inline button."""
+    msg = callback.message
+    if msg is None:
+        return None
+    return msg.chat.id, msg.message_id
+
+
+async def present_inline_screen(
+    bot: Bot,
+    *,
+    chat_id: int,
+    message_id: int | None,
+    text: str,
+    reply_markup: InlineKeyboardMarkup | None,
+    prefer_edit: bool,
+) -> bool:
+    """Update an existing inline message or send a new one (reliable for callbacks)."""
+    if prefer_edit and message_id is not None:
+        try:
+            await bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=text,
+                reply_markup=reply_markup,
+                parse_mode=ParseMode.HTML,
+            )
+            return True
+        except TelegramBadRequest as exc:
+            err = (exc.message or str(exc)).lower()
+            log.warning(
+                "inline edit failed chat=%s msg=%s: %s",
+                chat_id,
+                message_id,
+                exc.message or exc,
+            )
+            if "message is not modified" in err:
+                if reply_markup is not None:
+                    try:
+                        await bot.edit_message_reply_markup(
+                            chat_id=chat_id,
+                            message_id=message_id,
+                            reply_markup=reply_markup,
+                        )
+                        return True
+                    except TelegramBadRequest:
+                        pass
+                return True
+    await bot.send_message(
+        chat_id=chat_id,
+        text=text,
+        reply_markup=reply_markup,
+        parse_mode=ParseMode.HTML,
+    )
+    return True
+
 
 async def admin_edit_or_answer(
     message: Message,

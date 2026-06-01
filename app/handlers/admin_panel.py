@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from html import escape
 
 from aiogram import Bot, F, Router
@@ -43,9 +44,13 @@ from app.handlers.admin_helpers import (
 from app.handlers.admin_order import send_admin_order_view
 from app.handlers.admin_ui_helpers import (
     admin_edit_or_answer,
+    callback_inline_ids,
     format_services_list_text,
     format_tools_menu_text,
+    present_inline_screen,
 )
+
+log = logging.getLogger(__name__)
 from app.handlers.admin_users_ui import format_user_detail, format_users_page
 from app.handlers.log_channel import start_log_channel_wizard
 
@@ -174,15 +179,72 @@ async def send_settings(
     user_id: int,
     *,
     edit_in_place: bool = False,
-) -> None:
+    bot: Bot | None = None,
+    chat_id: int | None = None,
+    message_id: int | None = None,
+) -> bool:
     body = texts.ADMIN_SETTINGS_MENU.format(
         settings_block=format_settings_text(db)
     )
+    markup = keyboards.admin_settings_inline(user_id, settings, db)
+    cid = chat_id if chat_id is not None else message.chat.id
+    mid = message_id
+    if mid is None and edit_in_place:
+        mid = message.message_id
+    if bot is not None:
+        return await present_inline_screen(
+            bot,
+            chat_id=cid,
+            message_id=mid if edit_in_place else None,
+            text=body,
+            reply_markup=markup,
+            prefer_edit=edit_in_place,
+        )
     await admin_edit_or_answer(
         message,
         body,
-        keyboards.admin_settings_inline(user_id, settings, db),
+        markup,
         edit_in_place=edit_in_place,
+    )
+    return True
+
+
+async def _present_settings_on_callback(
+    callback: CallbackQuery,
+    bot: Bot,
+    settings: Settings,
+    db: Database,
+    user_id: int,
+) -> bool:
+    target = callback_inline_ids(callback)
+    if target is None:
+        return False
+    chat_id, msg_id = target
+    body = texts.ADMIN_SETTINGS_MENU.format(
+        settings_block=format_settings_text(db)
+    )
+    markup = keyboards.admin_settings_inline(user_id, settings, db)
+    return await present_inline_screen(
+        bot,
+        chat_id=chat_id,
+        message_id=msg_id,
+        text=body,
+        reply_markup=markup,
+        prefer_edit=True,
+    )
+
+
+def _services_menu_body(db: Database) -> str:
+    body = format_services_list_text(db)
+    if len(body) <= 3900:
+        return body
+    mode = "روشن ✅" if db.is_manual_purchase_enabled() else "خاموش ❌"
+    return texts.ADMIN_SERVICES_MENU.format(
+        manual_mode=mode,
+        packages_block=(
+            "ℹ️ لیست خیلی طولانی است — "
+            "<code>/listservices</code> را بزنید."
+        ),
     )
 
 
@@ -193,16 +255,26 @@ async def send_services(
     user_id: int,
     *,
     edit_in_place: bool = False,
+    bot: Bot | None = None,
 ) -> None:
-    body = format_services_list_text(db)
-    if len(body) > 4000:
-        body = body[:3900] + "\n\n<i>… برای لیست کامل: <code>/listservices</code></i>"
+    body = _services_menu_body(db)
+    markup = keyboards.admin_services_inline(
+        manual_enabled=db.is_manual_purchase_enabled()
+    )
+    if bot is not None:
+        await present_inline_screen(
+            bot,
+            chat_id=message.chat.id,
+            message_id=message.message_id if edit_in_place else None,
+            text=body,
+            reply_markup=markup,
+            prefer_edit=edit_in_place,
+        )
+        return
     await admin_edit_or_answer(
         message,
         body,
-        keyboards.admin_services_inline(
-            manual_enabled=db.is_manual_purchase_enabled()
-        ),
+        markup,
         edit_in_place=edit_in_place,
     )
 
@@ -592,7 +664,11 @@ async def cb_admin_pending(
 
 @router.callback_query(F.data == keyboards.CB_ADM_SETTINGS)
 async def cb_admin_settings(
-    callback: CallbackQuery, state: FSMContext, settings: Settings, db: Database
+    callback: CallbackQuery,
+    state: FSMContext,
+    bot: Bot,
+    settings: Settings,
+    db: Database,
 ) -> None:
     if callback.from_user is None:
         await callback.answer()
@@ -606,17 +682,30 @@ async def cb_admin_settings(
         await callback.answer(texts.NOT_PERMITTED, show_alert=True)
         return
     await state.clear()
-    if isinstance(callback.message, Message):
-        await send_settings(callback.message, settings, db, callback.from_user.id, edit_in_place=True)
+    if callback.from_user is None:
+        await callback.answer()
+        return
+    if not await _present_settings_on_callback(
+        callback, bot, settings, db, callback.from_user.id
+    ):
+        await callback.answer("پیام یافت نشد.", show_alert=True)
+        return
     await callback.answer()
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_SETTINGS_REFRESH)
-async def cb_admin_settings_refresh(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+async def cb_admin_settings_refresh(
+    callback: CallbackQuery,
+    bot: Bot,
+    settings: Settings,
+    db: Database,
+) -> None:
     if await _guard_cb(callback, settings, db, SETTINGS) is None:
         return
-    if isinstance(callback.message, Message):
-        await send_settings(callback.message, settings, db, callback.from_user.id, edit_in_place=True)
+    if callback.from_user is not None:
+        await _present_settings_on_callback(
+            callback, bot, settings, db, callback.from_user.id
+        )
     await callback.answer(texts.ADMIN_BTN_REFRESH)
 
 
@@ -624,6 +713,7 @@ async def cb_admin_settings_refresh(callback: CallbackQuery, settings: Settings,
 async def cb_admin_services(
     callback: CallbackQuery,
     state: FSMContext,
+    bot: Bot,
     settings: Settings,
     db: Database,
 ) -> None:
@@ -631,21 +721,55 @@ async def cb_admin_services(
     if await _guard_cb(callback, settings, db, SERVICES) is None:
         return
     await state.clear()
-    if isinstance(callback.message, Message) and callback.from_user is not None:
-        await send_services(
-            callback.message,
-            db,
-            settings,
-            callback.from_user.id,
-            edit_in_place=True,
+
+    target = callback_inline_ids(callback)
+    if target is None or callback.from_user is None:
+        log.warning("cb_admin_services: no callback.message")
+        await callback.answer("پیام یافت نشد.", show_alert=True)
+        return
+
+    chat_id, msg_id = target
+    body = _services_menu_body(db)
+    markup = keyboards.admin_services_inline(
+        manual_enabled=db.is_manual_purchase_enabled()
+    )
+    try:
+        await present_inline_screen(
+            bot,
+            chat_id=chat_id,
+            message_id=msg_id,
+            text=body,
+            reply_markup=markup,
+            prefer_edit=True,
         )
-    await callback.answer()
+        await callback.answer()
+    except Exception:  # noqa: BLE001
+        log.exception(
+            "cb_admin_services failed chat=%s msg=%s", chat_id, msg_id
+        )
+        try:
+            await present_inline_screen(
+                bot,
+                chat_id=chat_id,
+                message_id=None,
+                text=body,
+                reply_markup=markup,
+                prefer_edit=False,
+            )
+            await callback.answer()
+        except Exception:  # noqa: BLE001
+            log.exception("cb_admin_services fallback failed")
+            await callback.answer(
+                "باز کردن پلن‌های فروش ممکن نشد. /admin را بزنید و دوباره امتحان کنید.",
+                show_alert=True,
+            )
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_SERVICES_REFRESH)
 async def cb_admin_services_refresh(
     callback: CallbackQuery,
     state: FSMContext,
+    bot: Bot,
     settings: Settings,
     db: Database,
 ) -> None:
@@ -653,15 +777,49 @@ async def cb_admin_services_refresh(
     if await _guard_cb(callback, settings, db, SERVICES) is None:
         return
     await state.clear()
-    if isinstance(callback.message, Message) and callback.from_user is not None:
-        await send_services(
-            callback.message,
-            db,
-            settings,
-            callback.from_user.id,
-            edit_in_place=False,
-        )
     await callback.answer(texts.ADMIN_BTN_REFRESH)
+    if callback.message is None or callback.from_user is None:
+        return
+    await send_services(
+        callback.message,
+        db,
+        settings,
+        callback.from_user.id,
+        edit_in_place=False,
+        bot=bot,
+    )
+
+
+@router.callback_query(F.data == keyboards.CB_ADM_ADDSVC_HELP)
+async def cb_admin_services_legacy_hint(
+    callback: CallbackQuery,
+    state: FSMContext,
+    bot: Bot,
+    settings: Settings,
+    db: Database,
+) -> None:
+    """Old inline keyboards used adm:hsvc — open the sales-plans menu."""
+    if await _guard_cb(callback, settings, db, SERVICES) is None:
+        return
+    await state.clear()
+    target = callback_inline_ids(callback)
+    if target is None or callback.from_user is None:
+        await callback.answer("پیام یافت نشد.", show_alert=True)
+        return
+    chat_id, msg_id = target
+    body = _services_menu_body(db)
+    markup = keyboards.admin_services_inline(
+        manual_enabled=db.is_manual_purchase_enabled()
+    )
+    await present_inline_screen(
+        bot,
+        chat_id=chat_id,
+        message_id=msg_id,
+        text=body,
+        reply_markup=markup,
+        prefer_edit=True,
+    )
+    await callback.answer()
 
 
 @router.message(F.text == texts.ADMIN_BTN_SERVICES)
@@ -685,6 +843,7 @@ async def msg_admin_services(
 async def cb_admin_toggle_manual(
     callback: CallbackQuery,
     state: FSMContext,
+    bot: Bot,
     settings: Settings,
     db: Database,
 ) -> None:
@@ -694,15 +853,16 @@ async def cb_admin_toggle_manual(
     enabled = not db.is_manual_purchase_enabled()
     db.set_manual_purchase_enabled(enabled)
     mode = "پلن ازپیش‌تعریف ✅" if enabled else "فرمول قیمت ❌"
-    if isinstance(callback.message, Message) and callback.from_user is not None:
+    await callback.answer(f"خرید دستی: {mode}")
+    if callback.message is not None and callback.from_user is not None:
         await send_services(
             callback.message,
             db,
             settings,
             callback.from_user.id,
-            edit_in_place=False,
+            edit_in_place=True,
+            bot=bot,
         )
-    await callback.answer(f"خرید دستی: {mode}")
 
 
 @router.callback_query(F.data == keyboards.CB_ADM_PLANS)
