@@ -454,6 +454,21 @@ SUPPORT_PROMPT = (
 SUPPORT_SENT     = "✅ پیام شما با موفقیت برای پشتیبانی ارسال شد. به‌زودی پاسخ خواهیم داد."
 SUPPORT_TOO_LONG = "❗ پیام شما خیلی طولانی است. لطفاً آن را کوتاه‌تر کنید."
 SUPPORT_EMPTY    = "❗ لطفاً یک پیام متنی ارسال کنید."
+SUPPORT_ADMIN_REPLY = "💬 پاسخ"
+SUPPORT_ADMIN_CLOSE = "✅ بستن"
+SUPPORT_REPLY_PROMPT = (
+    "💬 پاسخ تیکت <code>#{ticket_id}</code> را ارسال کنید.\n"
+    "برای لغو /cancel را بفرستید."
+)
+SUPPORT_REPLY_SENT_ADMIN = "✅ پاسخ برای کاربر ارسال شد و تیکت بسته شد."
+SUPPORT_REPLY_FAILED_USER = "❗ ارسال پاسخ به کاربر ممکن نشد. احتمالاً ربات را بلاک کرده است."
+SUPPORT_REPLY_SENT_USER = (
+    "💬 <b>پاسخ پشتیبانی NetFly</b>\n\n"
+    "{message}"
+)
+SUPPORT_TICKET_CLOSED = "✅ تیکت <code>#{ticket_id}</code> بسته شد."
+SUPPORT_TICKET_NOT_FOUND = "❗ تیکت پیدا نشد."
+SUPPORT_TICKET_ALREADY_CLOSED = "این تیکت قبلاً بسته شده است."
 
 CANCELLED   = "❌ عملیات لغو شد."
 NOT_ADMIN   = "⛔ این دستور فقط برای ادمین‌ها در دسترس است."

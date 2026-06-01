@@ -38,6 +38,8 @@ CB_ORDER_BACK_DUR = "ord:back:dur"
 
 # Support
 CB_CANCEL_SUPPORT = "support:cancel"
+CB_SUPPORT_REPLY_PREFIX = "support:reply:"  # support:reply:<ticket_id>
+CB_SUPPORT_CLOSE_PREFIX = "support:close:"  # support:close:<ticket_id>
 
 # Admin review
 CB_ADMIN_ACCEPT_PREFIX  = "adm:acc:"   # adm:acc:<order_id>
@@ -328,6 +330,23 @@ def cancel_support() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text=texts.BTN_CANCEL, callback_data=CB_CANCEL_SUPPORT)]
+        ]
+    )
+
+
+def admin_support_ticket(ticket_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.SUPPORT_ADMIN_REPLY,
+                    callback_data=f"{CB_SUPPORT_REPLY_PREFIX}{ticket_id}",
+                ),
+                InlineKeyboardButton(
+                    text=texts.SUPPORT_ADMIN_CLOSE,
+                    callback_data=f"{CB_SUPPORT_CLOSE_PREFIX}{ticket_id}",
+                ),
+            ],
         ]
     )
 

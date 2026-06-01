@@ -1308,6 +1308,19 @@ class Database:
             )
             return int(cur.lastrowid or 0)
 
+    def get_ticket(self, ticket_id: int) -> sqlite3.Row | None:
+        with self._cursor() as cur:
+            cur.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,))
+            return cur.fetchone()
+
+    def close_ticket(self, ticket_id: int) -> bool:
+        with self._cursor() as cur:
+            cur.execute(
+                "UPDATE tickets SET status = 'closed' WHERE id = ?",
+                (ticket_id,),
+            )
+            return cur.rowcount > 0
+
     def count_tickets(self) -> int:
         with self._cursor() as cur:
             cur.execute("SELECT COUNT(*) AS c FROM tickets")
