@@ -10,14 +10,19 @@ from app import keyboards
 KEYBOARD_UPDATE_PLACEHOLDER = "."
 
 
+async def _send_keyboard_update(message: Message, reply_markup) -> None:
+    sent = await message.answer(KEYBOARD_UPDATE_PLACEHOLDER, reply_markup=reply_markup)
+    try:
+        await sent.delete()
+    except Exception:  # noqa: BLE001 - deleting can fail for old clients/permissions.
+        pass
+
+
 async def hide_bottom_keyboard(message: Message) -> None:
     """Remove custom reply keyboard buttons in this chat."""
-    await message.answer(
-        KEYBOARD_UPDATE_PLACEHOLDER,
-        reply_markup=keyboards.hide_reply_keyboard(),
-    )
+    await _send_keyboard_update(message, keyboards.hide_reply_keyboard())
 
 
 async def show_bottom_keyboard(message: Message, markup: ReplyKeyboardMarkup) -> None:
     """Show (or restore) custom reply keyboard buttons."""
-    await message.answer(KEYBOARD_UPDATE_PLACEHOLDER, reply_markup=markup)
+    await _send_keyboard_update(message, markup)
