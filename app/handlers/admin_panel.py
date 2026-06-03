@@ -1283,6 +1283,46 @@ async def cb_admin_user_detail(callback: CallbackQuery, settings: Settings, db: 
     await callback.answer()
 
 
+@router.callback_query(F.data.startswith(keyboards.CB_ADM_USER_UPDATE_PREFIX))
+async def cb_admin_update_user(callback: CallbackQuery, bot: Bot, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, USERS) is None:
+        return
+    raw = (callback.data or "").removeprefix(keyboards.CB_ADM_USER_UPDATE_PREFIX)
+    try:
+        user_id = int(raw)
+    except ValueError:
+        await callback.answer()
+        return
+    
+    try:
+        chat = await bot.get_chat(user_id)
+        db.upsert_user(
+            user_id=user_id,
+            username=chat.username,
+            first_name=chat.first_name,
+            last_name=chat.last_name,
+            lang_code=None,
+        )
+        await callback.answer("✅ اطلاعات کاربر از تلگرام بروزرسانی شد.", show_alert=True)
+    except Exception as e:
+        await callback.answer("❌ امکان دریافت اطلاعات از تلگرام وجود ندارد (کاربر ربات را استارت نکرده است).", show_alert=True)
+        return
+
+    if not isinstance(callback.message, Message):
+        return
+
+    # Refresh the view
+    if not await send_user_detail(
+        callback.message,
+        settings,
+        db,
+        user_id,
+        actor_id=callback.from_user.id,
+        edit_in_place=True,
+    ):
+        pass
+
+
 @router.callback_query(F.data == keyboards.CB_ADM_CMD_HELP)
 async def cb_admin_cmd_help(callback: CallbackQuery, settings: Settings, db: Database) -> None:
     if await _guard_cb(callback, settings, db, PANEL) is None:

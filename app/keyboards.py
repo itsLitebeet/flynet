@@ -1009,6 +1009,12 @@ def admin_user_detail_keyboard(
             )
         )
         rows.append([ban_btn])
+    rows.append([
+        InlineKeyboardButton(
+            text="🔄 بروزرسانی از تلگرام",
+            callback_data=f"{CB_ADM_USER_UPDATE_PREFIX}{user_id}",
+        )
+    ])
     if order_ids and _admin_perm(actor_id, ORDERS_MANAGE, settings, db):
         order_row: list[InlineKeyboardButton] = []
         for oid in order_ids[:6]:
