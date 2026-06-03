@@ -494,6 +494,7 @@ class NetFlyLogger:
         action: str,
         order=None,
         notes: str | None = None,
+        fetch_panel: bool = True,
     ) -> None:
         row = order if order is not None else self._db.get_order(order_id)
         detail_parts = [
@@ -505,9 +506,10 @@ class NetFlyLogger:
             detail_parts.append(f"📝 جزئیات عملیات: {escape(notes)}")
         if row is not None:
             detail_parts.append(_order_manage_detail_block(self._db, row))
-            panel_live = await self._panel_live_line(row)
-            if panel_live:
-                detail_parts.append(panel_live)
+            if fetch_panel:
+                panel_live = await self._panel_live_line(row)
+                if panel_live:
+                    detail_parts.append(panel_live)
         else:
             detail_parts.append(
                 "<i>رکورد سفارش در ربات یافت نشد (احتمالاً حذف شده).</i>"

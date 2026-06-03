@@ -380,6 +380,7 @@ async def cb_order_delete_ok(
             action="حذف از پنل و ربات",
             order=order,
             notes=delete_notes,
+            fetch_panel=False,
         )
 
     if not db.delete_order(order_id):
