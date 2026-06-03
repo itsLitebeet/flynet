@@ -152,6 +152,7 @@ async def format_customers_page(
     ]
 
     for c in customers:
+        lines.append("<blockquote>")
         lines.append(_format_customer_list_line(c))
         uid = int(c["user_id"])
         with_panel = [o for o in orders_by_user[uid] if o["xui_email"]]
@@ -161,6 +162,7 @@ async def format_customers_page(
                 lines.append(_panel_client_summary(o, usage_map.get(email)))
             if len(with_panel) > 3:
                 lines.append(f"   <i>+{len(with_panel) - 3} سرویس پنل دیگر…</i>")
+        lines.append("</blockquote>")
         lines.append("")
 
     return "\n".join(lines).rstrip(), total_pages, customers
@@ -183,7 +185,9 @@ async def format_customers_search_results(
         "",
     ]
     for r in rows:
+        lines.append("<blockquote>")
         lines.append(_format_customer_list_line(r))
+        lines.append("</blockquote>")
         lines.append("")
 
     return "\n".join(lines).rstrip(), rows
