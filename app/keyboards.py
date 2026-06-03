@@ -1037,7 +1037,7 @@ def admin_customers_keyboard(
     customer_btns: list[InlineKeyboardButton] = []
     for c in customers:
         uid = int(c["user_id"])
-        label = (c["first_name"] or "").strip() or str(uid)
+        label = (c["first_name"] or "").strip() or (c["username"] or "").strip() or str(uid)
         if len(label) > 16:
             label = label[:15] + "…"
         orders_n = int(c["order_count"])
@@ -1085,7 +1085,7 @@ def admin_customers_search_keyboard(customers: list) -> InlineKeyboardMarkup:
     customer_btns: list[InlineKeyboardButton] = []
     for c in customers:
         uid = int(c["user_id"])
-        label = (c["first_name"] or "").strip() or str(uid)
+        label = (c["first_name"] or "").strip() or (c["username"] or "").strip() or str(uid)
         if len(label) > 18:
             label = label[:17] + "…"
         customer_btns.append(

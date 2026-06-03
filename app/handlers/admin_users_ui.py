@@ -22,7 +22,10 @@ def _user_display_name(row) -> str:
     parts = [row["first_name"], last]
     name = " ".join(p for p in parts if p).strip()
     if not name:
-        name = row.get("username") or ""
+        try:
+            name = row["username"] or ""
+        except (IndexError, KeyError):
+            name = ""
         name = name.strip()
     if not name:
         name = str(row["user_id"])
