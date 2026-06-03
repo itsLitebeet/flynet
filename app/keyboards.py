@@ -224,12 +224,12 @@ def main_menu(*, show_test: bool = False) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text=texts.BTN_MY_SERVICES, callback_data=CB_MAIN_MY_SERVICES, style='primary'),
         ],
         [
-            InlineKeyboardButton(text=texts.BTN_MY_ACCOUNT, callback_data=CB_MAIN_ACCOUNT),
-            InlineKeyboardButton(text=texts.BTN_SUPPORT,    callback_data=CB_MAIN_SUPPORT),
+            InlineKeyboardButton(text=texts.BTN_MY_ACCOUNT, callback_data=CB_MAIN_ACCOUNT,style='primary'),
+            InlineKeyboardButton(text=texts.BTN_SUPPORT,    callback_data=CB_MAIN_SUPPORT,style='primary'),
         ],
         [
-            InlineKeyboardButton(text=texts.BTN_HELP,  callback_data=CB_MAIN_HELP),
-            InlineKeyboardButton(text=texts.BTN_ABOUT, callback_data=CB_MAIN_ABOUT),
+            InlineKeyboardButton(text=texts.BTN_HELP,  callback_data=CB_MAIN_HELP,style='primary'),
+            InlineKeyboardButton(text=texts.BTN_ABOUT, callback_data=CB_MAIN_ABOUT,style='primary'),
         ],
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -239,7 +239,7 @@ def join_channel_keyboard(join_url: str | None) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     if join_url:
         rows.append([
-            InlineKeyboardButton(text=texts.BTN_JOIN_CHANNEL, url=join_url),
+            InlineKeyboardButton(text=texts.BTN_JOIN_CHANNEL, url=join_url,style='success'),
         ])
     rows.append([
         InlineKeyboardButton(
@@ -267,7 +267,7 @@ def test_sub_confirm() -> InlineKeyboardMarkup:
 def back_to_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_MAIN_HOME)]
+            [InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_MAIN_HOME,style='danger')]
         ]
     )
 
@@ -277,9 +277,9 @@ def locations(locations: list[Location]) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for loc in locations:
         rows.append(
-            [InlineKeyboardButton(text=loc.name, callback_data=f"{CB_LOC_PREFIX}{loc.id}")]
+            [InlineKeyboardButton(text=loc.name, callback_data=f"{CB_LOC_PREFIX}{loc.id}",style='primary')]
         )
-    rows.append([InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_MAIN_HOME)])
+    rows.append([InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_MAIN_HOME,style='danger')])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -300,22 +300,22 @@ def _chunk_buttons(
 
 def volumes(volume_presets_gb: list[int]) -> InlineKeyboardMarkup:
     preset_btns = [
-        InlineKeyboardButton(text=f"{gb} GB", callback_data=f"{CB_VOL_PREFIX}{gb}")
+        InlineKeyboardButton(text=f"{gb} GB", callback_data=f"{CB_VOL_PREFIX}{gb}",style='primary')
         for gb in volume_presets_gb
     ]
     rows = _chunk_buttons(preset_btns, per_row=3)
-    rows.append([InlineKeyboardButton(text=texts.BTN_CUSTOM, callback_data=CB_VOL_CUSTOM)])
-    rows.append([InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ORDER_BACK_LOC)])
+    rows.append([InlineKeyboardButton(text=texts.BTN_CUSTOM, callback_data=CB_VOL_CUSTOM,style='primary')])
+    rows.append([InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ORDER_BACK_LOC,style='danger')])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def durations(duration_presets_days: list[int]) -> InlineKeyboardMarkup:
     preset_btns = [
-        InlineKeyboardButton(text=f"{d} روزه", callback_data=f"{CB_DUR_PREFIX}{d}")
+        InlineKeyboardButton(text=f"{d} روزه", callback_data=f"{CB_DUR_PREFIX}{d}",style='primary')
         for d in duration_presets_days
     ]
     rows = _chunk_buttons(preset_btns, per_row=3)
-    rows.append([InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ORDER_BACK_VOL)])
+    rows.append([InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ORDER_BACK_VOL,style='danger')])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -329,13 +329,13 @@ def service_packages(packages: list, db) -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text=texts.format_service_package_term(pkg.duration_days, final),
                 callback_data=cb,
-            ),
+            style='primary'),
             InlineKeyboardButton(
                 text=texts.format_service_package_volume(pkg.volume_gb),
                 callback_data=cb,
-            ),
+            style='primary'),
         ])
-    rows.append([InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ORDER_BACK_LOC)])
+    rows.append([InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ORDER_BACK_LOC,style='danger')])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -343,7 +343,7 @@ def confirm_order(*, back_callback: str = CB_ORDER_BACK_DUR) -> InlineKeyboardMa
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text=texts.BTN_CONFIRM, callback_data=CB_ORDER_CONFIRM, style='success')],
-            [InlineKeyboardButton(text=texts.BTN_BACK, callback_data=back_callback)],
+            [InlineKeyboardButton(text=texts.BTN_BACK, callback_data=back_callback,style='danger')],
             [InlineKeyboardButton(text=texts.BTN_CANCEL, callback_data=CB_ORDER_CANCEL, style='danger')],
         ]
     )
@@ -405,9 +405,9 @@ def my_services_list(orders: list[dict]) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for o in orders:
         rows.append([
-            InlineKeyboardButton(text=o["label"], callback_data=f"{CB_MY_DETAIL_PREFIX}{o['id']}")
+            InlineKeyboardButton(text=o["label"], callback_data=f"{CB_MY_DETAIL_PREFIX}{o['id']}",style='primary')
         ])
-    rows.append([InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_MAIN_HOME)])
+    rows.append([InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_MAIN_HOME,style='danger')])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -420,43 +420,43 @@ def my_service_detail(
             InlineKeyboardButton(
                 text=texts.BTN_VIEW_CONFIGS,
                 callback_data=f"{CB_MY_CONFIGS_PREFIX}{order_id}",
-            ),
+            style='success'),
         ])
         rows.append([
             InlineKeyboardButton(
                 text=texts.BTN_REFRESH_USAGE,
                 callback_data=f"{CB_MY_REFRESH_USAGE_PREFIX}{order_id}",
-            ),
+            style='primary'),
         ])
         if not is_test:
             toggle_text = texts.BTN_TOGGLE_OFF if enabled else texts.BTN_TOGGLE_ON
             rows.append([
                 InlineKeyboardButton(
-                    text=toggle_text, callback_data=f"{CB_MY_TOGGLE_PREFIX}{order_id}"
-                ),
+                    text=toggle_text, callback_data=f"{CB_MY_TOGGLE_PREFIX}{order_id}",
+                style='primary'),
                 InlineKeyboardButton(
-                    text=texts.BTN_RENAME, callback_data=f"{CB_MY_RENAME_PREFIX}{order_id}"
-                ),
+                    text=texts.BTN_RENAME, callback_data=f"{CB_MY_RENAME_PREFIX}{order_id}",
+                style='primary'),
             ])
             rows.append([
                 InlineKeyboardButton(
-                    text=texts.BTN_REGEN, callback_data=f"{CB_MY_REGEN_PREFIX}{order_id}"
-                ),
+                    text=texts.BTN_REGEN, callback_data=f"{CB_MY_REGEN_PREFIX}{order_id}",
+                style='primary'),
             ])
     elif not is_test:
         rows.append([
             InlineKeyboardButton(
-                text=texts.BTN_RENAME, callback_data=f"{CB_MY_RENAME_PREFIX}{order_id}"
-            ),
+                text=texts.BTN_RENAME, callback_data=f"{CB_MY_RENAME_PREFIX}{order_id}",
+            style='primary'),
         ])
-    rows.append([InlineKeyboardButton(text="🔙 لیست سرویس‌ها", callback_data=CB_MY_LIST)])
+    rows.append([InlineKeyboardButton(text="🔙 لیست سرویس‌ها", callback_data=CB_MY_LIST,style='danger')])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def back_to_service(order_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[[
-            InlineKeyboardButton(text="🔙 جزئیات سرویس", callback_data=f"{CB_MY_DETAIL_PREFIX}{order_id}")
+            InlineKeyboardButton(text="🔙 جزئیات سرویس", callback_data=f"{CB_MY_DETAIL_PREFIX}{order_id}",style='danger')
         ]]
     )
 
@@ -469,7 +469,7 @@ def regen_confirm(order_id: int) -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(text=texts.BTN_BACK,
-                                     callback_data=f"{CB_MY_DETAIL_PREFIX}{order_id}"),
+                                     callback_data=f"{CB_MY_DETAIL_PREFIX}{order_id}",style='danger'),
             ],
         ]
     )
@@ -570,7 +570,7 @@ def admin_home_inline(user_id: int, settings, db) -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text=texts.ADMIN_BTN_ORDER_LOOKUP,
                 callback_data=CB_ADM_ORDER_LOOKUP,
-            )
+            style='primary')
         )
     if order_row:
         rows.append(order_row)
@@ -578,8 +578,8 @@ def admin_home_inline(user_id: int, settings, db) -> InlineKeyboardMarkup:
     if _admin_perm(user_id, CUSTOMERS, settings, db):
         rows.append([
             InlineKeyboardButton(
-                text=texts.ADMIN_BTN_CUSTOMERS, callback_data=CB_ADM_CUSTOMERS
-            ),
+                text=texts.ADMIN_BTN_CUSTOMERS, callback_data=CB_ADM_CUSTOMERS,
+            style='primary'),
         ])
 
     if _admin_perm(user_id, ORDERS_MANAGE, settings, db):
@@ -592,8 +592,8 @@ def admin_home_inline(user_id: int, settings, db) -> InlineKeyboardMarkup:
     if _admin_perm(user_id, USERS, settings, db):
         rows.append([
             InlineKeyboardButton(
-                text=texts.ADMIN_BTN_USERS, callback_data=CB_ADM_USERS
-            )
+                text=texts.ADMIN_BTN_USERS, callback_data=CB_ADM_USERS,
+            style='primary')
         ])
 
     r3: list[InlineKeyboardButton] = []
@@ -602,15 +602,15 @@ def admin_home_inline(user_id: int, settings, db) -> InlineKeyboardMarkup:
     ) or _admin_perm(user_id, OFFER, settings, db):
         r3.append(
             InlineKeyboardButton(
-                text=texts.ADMIN_BTN_SETTINGS, callback_data=CB_ADM_SETTINGS
-            )
+                text=texts.ADMIN_BTN_SETTINGS, callback_data=CB_ADM_SETTINGS,
+            style='primary')
         )
     if _admin_perm(user_id, LOCATIONS, settings, db):
         r3.append(
             InlineKeyboardButton(
                 text=texts.ADMIN_BTN_LOCATIONS,
                 callback_data=CB_ADM_LOCATIONS_LIST,
-            )
+            style='success')
         )
     if r3:
         rows.append(r3)
@@ -621,8 +621,8 @@ def admin_home_inline(user_id: int, settings, db) -> InlineKeyboardMarkup:
     ):
         rows.append([
             InlineKeyboardButton(
-                text=texts.ADMIN_BTN_TOOLS, callback_data=CB_ADM_TOOLS
-            )
+                text=texts.ADMIN_BTN_TOOLS, callback_data=CB_ADM_TOOLS,
+            style='primary')
         ])
 
     from app.handlers.admin_helpers import is_owner
@@ -630,14 +630,14 @@ def admin_home_inline(user_id: int, settings, db) -> InlineKeyboardMarkup:
     if is_owner(user_id, settings):
         rows.append([
             InlineKeyboardButton(
-                text="👮 دسترسی ادمین‌ها", callback_data=CB_ADM_ROLES
-            )
+                text="👮 دسترسی ادمین‌ها", callback_data=CB_ADM_ROLES,
+            style='primary')
         ])
 
     rows.append([
         InlineKeyboardButton(
-            text=texts.ADMIN_CMD_HELP_BTN, callback_data=CB_ADM_CMD_HELP
-        )
+            text=texts.ADMIN_CMD_HELP_BTN, callback_data=CB_ADM_CMD_HELP,
+        style='primary')
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -659,12 +659,12 @@ def admin_pending_footer(user_id: int, settings, db) -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text=texts.ADMIN_BTN_ORDER_LOOKUP,
                 callback_data=CB_ADM_ORDER_LOOKUP,
-            )
+            style='primary')
         )
     if row:
         rows.append(row)
     rows.append([
-        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME),
+        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME,style='danger'),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -676,7 +676,7 @@ def admin_flow_cancel_inline(*, back_data: str = CB_ADM_HOME) -> InlineKeyboardM
                 InlineKeyboardButton(
                     text=texts.BTN_CANCEL, callback_data=CB_ADM_FLOW_CANCEL, style='danger'
                 ),
-                InlineKeyboardButton(text=texts.BTN_BACK, callback_data=back_data),
+                InlineKeyboardButton(text=texts.BTN_BACK, callback_data=back_data,style='danger'),
             ],
         ]
     )
@@ -689,7 +689,7 @@ def admin_offer_inline(db) -> InlineKeyboardMarkup:
         InlineKeyboardButton(
             text=f"{p}٪",
             callback_data=f"{CB_ADM_OFFER_PCT_PREFIX}{p}",
-        )
+        style='primary')
         for p in presets
     ]
     return InlineKeyboardMarkup(
@@ -699,17 +699,17 @@ def admin_offer_inline(db) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text="✏️ درصد دلخواه",
                     callback_data=CB_ADM_OFFER_PCT_CUSTOM,
-                ),
+                style='primary'),
             ],
             [
                 InlineKeyboardButton(
                     text="💵 کم کردن مبلغ",
                     callback_data=CB_ADM_OFFER_AMOUNT,
-                ),
+                style='primary'),
                 InlineKeyboardButton(
                     text="🏷 قیمت ثابت همه",
                     callback_data=CB_ADM_OFFER_FIXED,
-                ),
+                style='primary'),
             ],
             [
                 InlineKeyboardButton(
@@ -718,9 +718,9 @@ def admin_offer_inline(db) -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_OFFER
-                ),
-                InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_SETTINGS),
+                    text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_OFFER,
+                style='primary'),
+                InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_SETTINGS,style='danger'),
             ],
         ]
     )
@@ -734,46 +734,46 @@ def admin_settings_inline(user_id: int, settings, db) -> InlineKeyboardMarkup:
     if _admin_perm(user_id, OFFER, settings, db):
         rows.append([
             InlineKeyboardButton(
-                text=texts.ADMIN_BTN_OFFER, callback_data=CB_ADM_OFFER
-            ),
+                text=texts.ADMIN_BTN_OFFER, callback_data=CB_ADM_OFFER,
+            style='danger'),
         ])
     hint_row: list[InlineKeyboardButton] = []
     if _admin_perm(user_id, SETTINGS, settings, db):
         hint_row.append(
             InlineKeyboardButton(
-                text=texts.ADMIN_BTN_SETCARD_HELP, callback_data=CB_ADM_SETCARD_HELP
-            )
+                text=texts.ADMIN_BTN_SETCARD_HELP, callback_data=CB_ADM_SETCARD_HELP,
+            style='primary')
         )
         hint_row.append(
             InlineKeyboardButton(
-                text=texts.ADMIN_BTN_SETPRICE_HELP, callback_data=CB_ADM_SETPRICE_HELP
-            )
+                text=texts.ADMIN_BTN_SETPRICE_HELP, callback_data=CB_ADM_SETPRICE_HELP,
+            style='primary')
         )
     if hint_row:
         rows.append(hint_row)
     plan_row: list[InlineKeyboardButton] = []
     if _admin_perm(user_id, SERVICES, settings, db):
         plan_row.append(
-            InlineKeyboardButton(text="📋 پلن‌های پایه", callback_data=CB_ADM_PLANS)
+            InlineKeyboardButton(text="📋 پلن‌های پایه", callback_data=CB_ADM_PLANS,style='primary')
         )
         plan_row.append(
             InlineKeyboardButton(
-                text=texts.ADMIN_BTN_SERVICES, callback_data=CB_ADM_SERVICES
-            )
+                text=texts.ADMIN_BTN_SERVICES, callback_data=CB_ADM_SERVICES,
+            style='primary')
         )
     if plan_row:
         rows.append(plan_row)
     if is_owner(user_id, settings):
         rows.append([
             InlineKeyboardButton(
-                text="👮 دسترسی ادمین‌ها", callback_data=CB_ADM_ROLES
-            ),
+                text="👮 دسترسی ادمین‌ها", callback_data=CB_ADM_ROLES,
+            style='primary'),
         ])
     rows.append([
         InlineKeyboardButton(
-            text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_SETTINGS_REFRESH
-        ),
-        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME),
+            text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_SETTINGS_REFRESH,
+        style='primary'),
+        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME,style='danger'),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -795,17 +795,17 @@ def admin_roles_keyboard(settings, db) -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text=short.get(r, r),
                 callback_data=f"{CB_ADM_ROLE_SET_PREFIX}{uid}:{r}",
-            )
+            style='primary')
             for r in VALID_ROLES
         ])
     rows.append([
         InlineKeyboardButton(
             text=texts.ADMIN_BTN_PERM_MATRIX,
             callback_data=CB_ADM_PERM_MATRIX,
-        ),
+        style='primary'),
     ])
     rows.append([
-        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_SETTINGS),
+        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_SETTINGS,style='danger'),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -821,16 +821,16 @@ def admin_perm_matrix_home_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text=f"✏️ {label}",
                 callback_data=f"{CB_ADM_PERM_ROLE_PREFIX}{role}",
-            ),
+            style='primary'),
         ])
     rows.append([
         InlineKeyboardButton(
             text=texts.ADMIN_BTN_PERM_RESET_ALL,
             callback_data=CB_ADM_PERM_RESET_ALL,
-        ),
+        style='primary'),
     ])
     rows.append([
-        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_ROLES),
+        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_ROLES,style='danger'),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -852,7 +852,7 @@ def admin_perm_role_keyboard(role: str, db) -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text=label,
                 callback_data=f"{CB_ADM_PERM_TOGGLE_PREFIX}{role}:{perm}",
-            )
+            style='primary')
         )
         if len(pair) == 2:
             rows.append(pair)
@@ -863,12 +863,12 @@ def admin_perm_role_keyboard(role: str, db) -> InlineKeyboardMarkup:
         InlineKeyboardButton(
             text=texts.ADMIN_BTN_PERM_RESET_ROLE,
             callback_data=f"{CB_ADM_PERM_RESET_PREFIX}{role}",
-        ),
+        style='primary'),
     ])
     rows.append([
         InlineKeyboardButton(
-            text=texts.BTN_BACK, callback_data=CB_ADM_PERM_MATRIX
-        ),
+            text=texts.BTN_BACK, callback_data=CB_ADM_PERM_MATRIX,
+        style='danger'),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -883,22 +883,22 @@ def admin_services_inline(*, manual_enabled: bool) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=toggle_label, callback_data=CB_ADM_TOGGLE_MANUAL
-                ),
+                    text=toggle_label, callback_data=CB_ADM_TOGGLE_MANUAL,
+                style='primary'),
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_ADD_SVC_HELP, callback_data=CB_ADM_ADD_SVC
-                ),
+                    text=texts.ADMIN_BTN_ADD_SVC_HELP, callback_data=CB_ADM_ADD_SVC,
+                style='success'),
                 InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_EDIT_SVC_HELP, callback_data=CB_ADM_EDITSVC_HELP
-                ),
+                    text=texts.ADMIN_BTN_EDIT_SVC_HELP, callback_data=CB_ADM_EDITSVC_HELP,
+                style='primary'),
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_SERVICES_REFRESH
-                ),
-                InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_SETTINGS),
+                    text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_SERVICES_REFRESH,
+                style='primary'),
+                InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_SETTINGS,style='danger'),
             ],
         ]
     )
@@ -913,23 +913,23 @@ def admin_plans_keyboard(
             InlineKeyboardButton(
                 text=f"❌ حذف {gb} GB",
                 callback_data=f"{CB_ADM_VOL_DEL_PREFIX}{gb}",
-            )
+            style='primary')
         ])
     for days in duration_presets:
         rows.append([
             InlineKeyboardButton(
                 text=f"❌ حذف {days} روز",
                 callback_data=f"{CB_ADM_DUR_DEL_PREFIX}{days}",
-            )
+            style='primary')
         ])
     rows.append([
         InlineKeyboardButton(
-            text="➕ راهنمای افزودن", callback_data=CB_ADM_PLAN_ADD_HINT
-        ),
+            text="➕ راهنمای افزودن", callback_data=CB_ADM_PLAN_ADD_HINT,
+        style='primary'),
     ])
     rows.append([
-        InlineKeyboardButton(text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_PLANS),
-        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_SETTINGS),
+        InlineKeyboardButton(text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_PLANS,style='primary'),
+        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_SETTINGS,style='danger'),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -948,7 +948,7 @@ def admin_users_keyboard(
             InlineKeyboardButton(
                 text=f"👤 {label}",
                 callback_data=f"{CB_ADM_USER_DETAIL_PREFIX}{uid}",
-            )
+            style='primary')
         ])
     nav: list[InlineKeyboardButton] = []
     if page > 0:
@@ -956,20 +956,20 @@ def admin_users_keyboard(
             InlineKeyboardButton(
                 text="◀️ قبلی",
                 callback_data=f"{CB_ADM_USERS_PAGE_PREFIX}{page - 1}",
-            )
+            style='primary')
         )
     if page < total_pages - 1:
         nav.append(
             InlineKeyboardButton(
                 text="بعدی ▶️",
                 callback_data=f"{CB_ADM_USERS_PAGE_PREFIX}{page + 1}",
-            )
+            style='primary')
         )
     if nav:
         rows.append(nav)
     rows.append([
-        InlineKeyboardButton(text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_USERS),
-        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME),
+        InlineKeyboardButton(text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_USERS,style='primary'),
+        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME,style='danger'),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -990,7 +990,7 @@ def admin_user_detail_keyboard(
             InlineKeyboardButton(
                 text=texts.BTN_USER_INFO,
                 callback_data=f"{CB_ADM_USER_INFO_PREFIX}{user_id}",
-            ),
+            style='primary'),
         ],
     ]
     if _admin_perm(actor_id, USERS, settings, db):
@@ -1016,7 +1016,7 @@ def admin_user_detail_keyboard(
                 InlineKeyboardButton(
                     text=f"{texts.ADMIN_BTN_ORDER_MANAGE} #{oid}",
                     callback_data=f"{CB_ADM_ORDER_MANAGE_PREFIX}{oid}",
-                )
+                style='primary')
             )
             if len(order_row) == 2:
                 rows.append(order_row)
@@ -1025,8 +1025,8 @@ def admin_user_detail_keyboard(
             rows.append(order_row)
     rows.append([
         InlineKeyboardButton(
-            text="🔙 لیست کاربران", callback_data=CB_ADM_USERS
-        ),
+            text="🔙 لیست کاربران", callback_data=CB_ADM_USERS,
+        style='danger'),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -1046,7 +1046,7 @@ def admin_customers_keyboard(
             InlineKeyboardButton(
                 text=f"🛒 {label} ({orders_n})",
                 callback_data=f"{CB_ADM_CUST_DETAIL_PREFIX}{uid}",
-            )
+            style='primary')
         )
     rows.extend(_chunk_buttons(customer_btns, per_row=3))
     nav: list[InlineKeyboardButton] = []
@@ -1055,14 +1055,14 @@ def admin_customers_keyboard(
             InlineKeyboardButton(
                 text="◀️ قبلی",
                 callback_data=f"{CB_ADM_CUSTOMERS_PAGE_PREFIX}{page - 1}",
-            )
+            style='primary')
         )
     if page < total_pages - 1:
         nav.append(
             InlineKeyboardButton(
                 text="بعدی ▶️",
                 callback_data=f"{CB_ADM_CUSTOMERS_PAGE_PREFIX}{page + 1}",
-            )
+            style='primary')
         )
     if nav:
         rows.append(nav)
@@ -1070,13 +1070,13 @@ def admin_customers_keyboard(
         InlineKeyboardButton(
             text=texts.ADMIN_BTN_CUSTOMERS_SEARCH,
             callback_data=CB_ADM_CUSTOMERS_SEARCH,
-        ),
+        style='primary'),
     ])
     rows.append([
         InlineKeyboardButton(
-            text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_CUSTOMERS
-        ),
-        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME),
+            text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_CUSTOMERS,
+        style='primary'),
+        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME,style='danger'),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -1093,17 +1093,17 @@ def admin_customers_search_keyboard(customers: list) -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text=f"🛒 {label}",
                 callback_data=f"{CB_ADM_CUST_DETAIL_PREFIX}{uid}",
-            )
+            style='primary')
         )
     rows.extend(_chunk_buttons(customer_btns, per_row=3))
     rows.append([
         InlineKeyboardButton(
             text=texts.ADMIN_BTN_CUSTOMERS_SEARCH,
             callback_data=CB_ADM_CUSTOMERS_SEARCH,
-        ),
+        style='primary'),
         InlineKeyboardButton(
-            text="🔙 لیست مشتریان", callback_data=CB_ADM_CUSTOMERS
-        ),
+            text="🔙 لیست مشتریان", callback_data=CB_ADM_CUSTOMERS,
+        style='danger'),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -1123,7 +1123,7 @@ def admin_customer_detail_keyboard(
         InlineKeyboardButton(
             text="👥 نمای کاربران",
             callback_data=f"{CB_ADM_USER_DETAIL_PREFIX}{user_id}",
-        ),
+        style='primary'),
     ]
     if _admin_perm(actor_id, USERS, settings, db):
         ban_btn = (
@@ -1141,7 +1141,7 @@ def admin_customer_detail_keyboard(
             InlineKeyboardButton(
                 text=texts.BTN_USER_INFO,
                 callback_data=f"{CB_ADM_USER_INFO_PREFIX}{user_id}",
-            ),
+            style='primary'),
         ],
         row2,
         [
@@ -1157,7 +1157,7 @@ def admin_customer_detail_keyboard(
                 InlineKeyboardButton(
                     text=f"{texts.ADMIN_BTN_ORDER_MANAGE} #{oid}",
                     callback_data=f"{CB_ADM_ORDER_MANAGE_PREFIX}{oid}",
-                )
+                style='primary')
             )
             if len(order_row) == 2:
                 rows.append(order_row)
@@ -1166,8 +1166,8 @@ def admin_customer_detail_keyboard(
             rows.append(order_row)
     rows.append([
         InlineKeyboardButton(
-            text="🔙 لیست مشتریان", callback_data=CB_ADM_CUSTOMERS
-        ),
+            text="🔙 لیست مشتریان", callback_data=CB_ADM_CUSTOMERS,
+        style='danger'),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -1181,43 +1181,43 @@ def admin_order_plan_edit_keyboard(order_id: int) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="+1 GB", callback_data=f"{p}{oid}:1"
-                ),
+                    text="+1 GB", callback_data=f"{p}{oid}:1",
+                style='primary'),
                 InlineKeyboardButton(
-                    text="+5 GB", callback_data=f"{p}{oid}:5"
-                ),
+                    text="+5 GB", callback_data=f"{p}{oid}:5",
+                style='primary'),
                 InlineKeyboardButton(
-                    text="+10 GB", callback_data=f"{p}{oid}:10"
-                ),
+                    text="+10 GB", callback_data=f"{p}{oid}:10",
+                style='primary'),
             ],
             [
                 InlineKeyboardButton(
                     text=texts.BTN_ORDER_SET_GB,
                     callback_data=f"{CB_ADM_ORDER_SET_GB_ASK_PREFIX}{oid}",
-                ),
+                style='primary'),
             ],
             [
                 InlineKeyboardButton(
-                    text="+7 روز", callback_data=f"{d}{oid}:7"
-                ),
+                    text="+7 روز", callback_data=f"{d}{oid}:7",
+                style='primary'),
                 InlineKeyboardButton(
-                    text="+30 روز", callback_data=f"{d}{oid}:30"
-                ),
+                    text="+30 روز", callback_data=f"{d}{oid}:30",
+                style='primary'),
                 InlineKeyboardButton(
-                    text="+90 روز", callback_data=f"{d}{oid}:90"
-                ),
+                    text="+90 روز", callback_data=f"{d}{oid}:90",
+                style='primary'),
             ],
             [
                 InlineKeyboardButton(
                     text=texts.BTN_ORDER_ADD_DAYS,
                     callback_data=f"{CB_ADM_ORDER_ADD_DAYS_ASK_PREFIX}{oid}",
-                ),
+                style='success'),
             ],
             [
                 InlineKeyboardButton(
                     text=texts.BTN_BACK,
                     callback_data=f"{CB_ADM_ORDER_MANAGE_PREFIX}{oid}",
-                ),
+                style='danger'),
             ],
         ]
     )
@@ -1236,28 +1236,28 @@ def admin_edit_order_keyboard(
             InlineKeyboardButton(
                 text=texts.BTN_ORDER_EDIT_PLAN,
                 callback_data=f"{CB_ADM_ORDER_EDIT_PLAN_PREFIX}{order_id}",
-            ),
+            style='primary'),
         ])
         rows.append([
             InlineKeyboardButton(
                 text=texts.BTN_ORDER_ENABLE,
                 callback_data=f"{CB_ADM_ORDER_ENABLE_PREFIX}{order_id}",
-            ),
+            style='success'),
             InlineKeyboardButton(
                 text=texts.BTN_ORDER_DISABLE,
                 callback_data=f"{CB_ADM_ORDER_DISABLE_PREFIX}{order_id}",
-            ),
+            style='danger'),
         ])
     if show_db_delete:
         rows.append([
             InlineKeyboardButton(
                 text=texts.BTN_ORDER_DELETE,
                 callback_data=f"{CB_ADM_ORDER_DELETE_ASK_PREFIX}{order_id}",
-            ),
+            style='danger'),
         ])
     if back_data:
         rows.append([
-            InlineKeyboardButton(text=texts.BTN_BACK, callback_data=back_data),
+            InlineKeyboardButton(text=texts.BTN_BACK, callback_data=back_data,style='danger'),
         ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -1269,11 +1269,11 @@ def admin_order_delete_confirm(order_id: int) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text=texts.BTN_ORDER_DELETE_CONFIRM,
                     callback_data=f"{CB_ADM_ORDER_DELETE_OK_PREFIX}{order_id}",
-                ),
+                style='danger'),
                 InlineKeyboardButton(
                     text=texts.BTN_CANCEL,
                     callback_data=CB_ADM_ORDER_DELETE_CANCEL,
-                ),
+                style='danger'),
             ],
         ]
     )
@@ -1286,11 +1286,11 @@ def broadcast_confirm_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text=texts.BTN_BROADCAST_SEND,
                     callback_data=CB_BROADCAST_CONFIRM,
-                ),
+                style='primary'),
                 InlineKeyboardButton(
                     text=texts.BTN_BROADCAST_CANCEL,
                     callback_data=CB_BROADCAST_CANCEL,
-                ),
+                style='danger'),
             ],
         ]
     )
@@ -1303,7 +1303,7 @@ def broadcast_cancel_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text=texts.BTN_BROADCAST_CANCEL,
                     callback_data=CB_BROADCAST_CANCEL,
-                ),
+                style='danger'),
             ],
         ]
     )
@@ -1323,59 +1323,59 @@ def admin_tools_inline(
     if _admin_perm(user_id, TOOLS_BROADCAST, settings, db):
         rows.append([
             InlineKeyboardButton(
-                text=texts.BTN_ADMIN_BROADCAST, callback_data=CB_ADM_BROADCAST
-            ),
+                text=texts.BTN_ADMIN_BROADCAST, callback_data=CB_ADM_BROADCAST,
+            style='primary'),
         ])
     if _admin_perm(user_id, TOOLS_MISC, settings, db):
         log_row: list[InlineKeyboardButton] = [
             InlineKeyboardButton(
-                text=texts.ADMIN_BTN_LOG_CHANNEL, callback_data=CB_ADM_LOG_CHANNEL
-            ),
+                text=texts.ADMIN_BTN_LOG_CHANNEL, callback_data=CB_ADM_LOG_CHANNEL,
+            style='primary'),
         ]
         if has_log_channel:
             log_row.append(
                 InlineKeyboardButton(
-                    text="❌ قطع لاگ", callback_data=CB_ADM_LOG_CHANNEL_OFF
-                )
+                    text="❌ قطع لاگ", callback_data=CB_ADM_LOG_CHANNEL_OFF,
+                style='danger')
             )
         rows.append(log_row)
         req_row: list[InlineKeyboardButton] = [
             InlineKeyboardButton(
-                text=texts.ADMIN_BTN_REQ_CHANNEL, callback_data=CB_ADM_REQ_CHANNEL
-            ),
+                text=texts.ADMIN_BTN_REQ_CHANNEL, callback_data=CB_ADM_REQ_CHANNEL,
+            style='primary'),
         ]
         if has_req_channel:
             req_row.append(
                 InlineKeyboardButton(
                     text="❌ قطع عضویت اجباری",
                     callback_data=CB_ADM_REQ_CHANNEL_OFF,
-                )
+                style='danger')
             )
         rows.append(req_row)
         rows.append([
             InlineKeyboardButton(
-                text=texts.ADMIN_BTN_TOGGLE_TEST, callback_data=CB_ADM_TOGGLE_TEST
-            ),
+                text=texts.ADMIN_BTN_TOGGLE_TEST, callback_data=CB_ADM_TOGGLE_TEST,
+            style='primary'),
         ])
     if _admin_perm(user_id, TOOLS_SYNC, settings, db):
         rows.append([
             InlineKeyboardButton(
-                text="🔄 همگام‌سازی پنل", callback_data=CB_ADM_TOOL_SYNC
-            ),
+                text="🔄 همگام‌سازی پنل", callback_data=CB_ADM_TOOL_SYNC,
+            style='primary'),
             InlineKeyboardButton(
-                text="🗑 پاکسازی رد/پرداخت‌نشده", callback_data=CB_ADM_TOOL_CLEAR
-            ),
+                text="🗑 پاکسازی رد/پرداخت‌نشده", callback_data=CB_ADM_TOOL_CLEAR,
+            style='primary'),
         ])
     rows.append([
         InlineKeyboardButton(
-            text=texts.ADMIN_CMD_HELP_BTN, callback_data=CB_ADM_CMD_HELP
-        ),
+            text=texts.ADMIN_CMD_HELP_BTN, callback_data=CB_ADM_CMD_HELP,
+        style='primary'),
     ])
     rows.append([
         InlineKeyboardButton(
-            text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_TOOLS
-        ),
-        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME),
+            text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_TOOLS,
+        style='primary'),
+        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME,style='danger'),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -1389,7 +1389,7 @@ def admin_pending_list(
             InlineKeyboardButton(
                 text=o["label"],
                 callback_data=f"{CB_ADM_ORDER_VIEW_PREFIX}{o['id']}",
-            )
+            style='primary')
         ])
     footer = admin_pending_footer(user_id, settings, db).inline_keyboard
     rows.extend(footer)
@@ -1403,7 +1403,7 @@ def admin_add_client_user_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text=texts.ADMIN_BTN_ADD_CLIENT_SKIP_USER,
                     callback_data=CB_ADM_ADD_CLIENT_SKIP_USER,
-                ),
+                style='success'),
             ],
             [
                 InlineKeyboardButton(
@@ -1422,10 +1422,10 @@ def admin_add_service_locations(locs: list[Location]) -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text=f"{emoji} #{loc.id} {loc.name}",
                 callback_data=f"{CB_ADM_ADD_SVC_LOC_PREFIX}{loc.id}",
-            )
+            style='primary')
         ])
     rows.append([
-        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_SERVICES),
+        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_SERVICES,style='danger'),
         InlineKeyboardButton(text=texts.BTN_CANCEL, callback_data=CB_ADM_FLOW_CANCEL, style='danger'),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -1436,17 +1436,17 @@ def admin_add_service_volumes(volume_presets_gb: list[int]) -> InlineKeyboardMar
         InlineKeyboardButton(
             text=f"{gb} GB",
             callback_data=f"{CB_ADM_ADD_SVC_VOL_PREFIX}{gb}",
-        )
+        style='primary')
         for gb in volume_presets_gb
     ]
     rows = _chunk_buttons(preset_btns, per_row=3)
     rows.append([
         InlineKeyboardButton(
-            text=texts.BTN_CUSTOM, callback_data=CB_ADM_ADD_SVC_VOL_CUSTOM
-        ),
+            text=texts.BTN_CUSTOM, callback_data=CB_ADM_ADD_SVC_VOL_CUSTOM,
+        style='primary'),
     ])
     rows.append([
-        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_ADD_SVC_BACK_LOC),
+        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_ADD_SVC_BACK_LOC,style='danger'),
         InlineKeyboardButton(text=texts.BTN_CANCEL, callback_data=CB_ADM_FLOW_CANCEL, style='danger'),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -1457,17 +1457,17 @@ def admin_add_service_durations(duration_presets_days: list[int]) -> InlineKeybo
         InlineKeyboardButton(
             text=f"{d} روز",
             callback_data=f"{CB_ADM_ADD_SVC_DUR_PREFIX}{d}",
-        )
+        style='primary')
         for d in duration_presets_days
     ]
     rows = _chunk_buttons(preset_btns, per_row=3)
     rows.append([
         InlineKeyboardButton(
-            text=texts.BTN_CUSTOM, callback_data=CB_ADM_ADD_SVC_DUR_CUSTOM
-        ),
+            text=texts.BTN_CUSTOM, callback_data=CB_ADM_ADD_SVC_DUR_CUSTOM,
+        style='primary'),
     ])
     rows.append([
-        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_ADD_SVC_BACK_VOL),
+        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_ADD_SVC_BACK_VOL,style='danger'),
         InlineKeyboardButton(text=texts.BTN_CANCEL, callback_data=CB_ADM_FLOW_CANCEL, style='danger'),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -1480,12 +1480,12 @@ def admin_add_service_done_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text=texts.ADMIN_BTN_ADD_SVC_HELP,
                     callback_data=CB_ADM_ADD_SVC,
-                ),
+                style='success'),
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_SERVICES, callback_data=CB_ADM_SERVICES
-                ),
+                    text=texts.ADMIN_BTN_SERVICES, callback_data=CB_ADM_SERVICES,
+                style='primary'),
             ],
         ]
     )
@@ -1498,7 +1498,7 @@ def admin_add_client_locations(locs: list[Location]) -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text=loc.name,
                 callback_data=f"{CB_ADM_ADD_CLIENT_LOC_PREFIX}{loc.id}",
-            )
+            style='primary')
         ])
     rows.append([
         InlineKeyboardButton(
@@ -1515,12 +1515,12 @@ def admin_add_client_done_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text=texts.ADMIN_BTN_ADD_CLIENT,
                     callback_data=CB_ADM_ADD_CLIENT,
-                ),
+                style='success'),
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_PANEL, callback_data=CB_ADM_HOME
-                ),
+                    text=texts.ADMIN_BTN_PANEL, callback_data=CB_ADM_HOME,
+                style='primary'),
             ],
         ]
     )
@@ -1542,14 +1542,14 @@ def admin_locations_list(locs: list[Location]) -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text=f"{emoji} #{loc.id} {loc.name}",
                 callback_data=f"{CB_ADM_LOC_DETAIL_PREFIX}{loc.id}",
-            )
+            style='primary')
         ])
     rows.append(admin_locations_list_footer())
     rows.append([
         InlineKeyboardButton(
-            text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_LOCATIONS_LIST
-        ),
-        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME),
+            text=texts.ADMIN_BTN_REFRESH, callback_data=CB_ADM_LOCATIONS_LIST,
+        style='primary'),
+        InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_ADM_HOME,style='danger'),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -1572,13 +1572,13 @@ def admin_location_detail(
             InlineKeyboardButton(
                 text=texts.ADMIN_BTN_EDIT_LOC,
                 callback_data=f"{CB_ADM_LOC_EDIT_PREFIX}{location_id}",
-            ),
+            style='primary'),
         ],
         [
             InlineKeyboardButton(
                 text=toggle_label,
                 callback_data=f"{CB_ADM_LOC_TOGGLE_PREFIX}{location_id}",
-            ),
+            style='primary'),
         ],
     ]
     if not is_test:
@@ -1587,7 +1587,7 @@ def admin_location_detail(
                 InlineKeyboardButton(
                     text=purchase_label,
                     callback_data=f"{CB_ADM_LOC_PURCHASE_PREFIX}{location_id}",
-                ),
+                style='primary'),
             ]
         )
     rows.append(
@@ -1595,7 +1595,7 @@ def admin_location_detail(
             InlineKeyboardButton(
                 text="⚠️ حذف کامل لوکیشن",
                 callback_data=f"{CB_ADM_LOC_PURGE_PREFIX}{location_id}",
-            ),
+            style='primary'),
         ]
     )
     if is_test:
@@ -1605,18 +1605,18 @@ def admin_location_detail(
                 InlineKeyboardButton(
                     text=texts.ADMIN_BTN_TOGGLE_TEST,
                     callback_data=f"{CB_ADM_TOGGLE_TEST_LOC_PREFIX}{location_id}",
-                ),
+                style='primary'),
             ],
         )
     rows.append([
         InlineKeyboardButton(
-            text=texts.ADMIN_BTN_ADD_LOC_HELP, callback_data=CB_ADM_ADDLOC_HELP
-        ),
+            text=texts.ADMIN_BTN_ADD_LOC_HELP, callback_data=CB_ADM_ADDLOC_HELP,
+        style='success'),
     ])
     rows.append([
         InlineKeyboardButton(
-            text="🔙 لیست لوکیشن‌ها", callback_data=CB_ADM_LOCATIONS_LIST
-        ),
+            text="🔙 لیست لوکیشن‌ها", callback_data=CB_ADM_LOCATIONS_LIST,
+        style='danger'),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -1624,8 +1624,8 @@ def admin_location_detail(
 def admin_locations_list_footer() -> list[InlineKeyboardButton]:
     return [
         InlineKeyboardButton(
-            text=texts.ADMIN_BTN_ADD_LOC_HELP, callback_data=CB_ADM_ADDLOC_HELP
-        ),
+            text=texts.ADMIN_BTN_ADD_LOC_HELP, callback_data=CB_ADM_ADDLOC_HELP,
+        style='success'),
     ]
 
 
@@ -1640,7 +1640,7 @@ def decline_reason_keyboard(order_id: int) -> InlineKeyboardMarkup:
                 callback_data=(
                     f"{CB_ADMIN_DECLINE_PRESET_PREFIX}{order_id}:{preset_id}"
                 ),
-            )
+            style='primary')
         )
         if len(row) == 2:
             rows.append(row)
@@ -1651,7 +1651,7 @@ def decline_reason_keyboard(order_id: int) -> InlineKeyboardMarkup:
         InlineKeyboardButton(
             text=texts.BTN_CANCEL,
             callback_data=f"{CB_ADMIN_DECLINE_CANCEL_PREFIX}{order_id}",
-        ),
+        style='danger'),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -1661,21 +1661,21 @@ def admin_review(order_id: int, user_id: int) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.BTN_ACCEPT, callback_data=f"{CB_ADMIN_ACCEPT_PREFIX}{order_id}"
-                ),
+                    text=texts.BTN_ACCEPT, callback_data=f"{CB_ADMIN_ACCEPT_PREFIX}{order_id}",
+                style='success'),
                 InlineKeyboardButton(
-                    text=texts.BTN_DECLINE, callback_data=f"{CB_ADMIN_DECLINE_PREFIX}{order_id}"
-                ),
+                    text=texts.BTN_DECLINE, callback_data=f"{CB_ADMIN_DECLINE_PREFIX}{order_id}",
+                style='primary'),
             ],
             [
                 InlineKeyboardButton(
                     text=f"{texts.ADMIN_BTN_ORDER_MANAGE} #{order_id}",
                     callback_data=f"{CB_ADM_ORDER_MANAGE_PREFIX}{order_id}",
-                ),
+                style='primary'),
                 InlineKeyboardButton(
                     text=texts.BTN_USER_INFO,
                     callback_data=f"{CB_ADM_USER_INFO_PREFIX}{user_id}",
-                ),
+                style='primary'),
             ],
         ]
     )
