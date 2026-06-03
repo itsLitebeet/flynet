@@ -566,7 +566,7 @@ def admin_home_inline(user_id: int, settings, db) -> InlineKeyboardMarkup:
                 text=texts.ADMIN_BTN_PENDING, callback_data=CB_ADM_PENDING_LIST
             )
         )
-    elif _admin_perm(user_id, ORDERS_MANAGE, settings, db):
+    if _admin_perm(user_id, ORDERS_MANAGE, settings, db):
         order_row.append(
             InlineKeyboardButton(
                 text=texts.ADMIN_BTN_ORDER_LOOKUP,
