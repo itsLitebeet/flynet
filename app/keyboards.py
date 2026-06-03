@@ -122,6 +122,7 @@ CB_ADM_ORDER_SET_GB_ASK_PREFIX = "adm:ogbask:" # adm:ogbask:<order_id>
 CB_ADM_ORDER_ADD_DAYS_ASK_PREFIX = "adm:odyask:" # adm:odyask:<order_id>
 CB_ADM_USER_BAN_PREFIX       = "adm:ban:"   # adm:ban:<user_id>
 CB_ADM_USER_UNBAN_PREFIX     = "adm:unban:" # adm:unban:<user_id>
+CB_ADM_USER_UPDATE_PREFIX    = "adm:uupd:"  # adm:uupd:<user_id>
 CB_ADM_LOC_DETAIL_PREFIX = "adm:ld:"    # adm:ld:<location_id>
 CB_ADM_LOC_EDIT_PREFIX   = "adm:le:"    # adm:le:<location_id>
 CB_ADM_LOC_TOGGLE_PREFIX = "adm:lt:"    # adm:lt:<location_id>
@@ -1145,6 +1146,12 @@ def admin_customer_detail_keyboard(
             ),
         ],
         row2,
+        [
+            InlineKeyboardButton(
+                text="🔄 بروزرسانی از تلگرام",
+                callback_data=f"{CB_ADM_USER_UPDATE_PREFIX}{user_id}",
+            ),
+        ],
     ]
     if order_ids and _admin_perm(actor_id, ORDERS_MANAGE, settings, db):
         order_row: list[InlineKeyboardButton] = []
