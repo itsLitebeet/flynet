@@ -236,11 +236,27 @@ async def add_client_user_id(
         await _wizard_reply(message, state, texts.ADMIN_ADD_CLIENT_USER_INVALID)
         return
 
+    try:
+        chat = await message.bot.get_chat(user_id)
+        username = chat.username
+        first_name = chat.first_name
+        last_name = chat.last_name
+    except Exception:
+        existing = db.get_user(user_id)
+        if existing:
+            username = existing["username"]
+            first_name = existing["first_name"]
+            last_name = existing["last_name"]
+        else:
+            username = None
+            first_name = None
+            last_name = None
+
     db.upsert_user(
         user_id=user_id,
-        username=None,
-        first_name=None,
-        last_name=None,
+        username=username,
+        first_name=first_name,
+        last_name=last_name,
         lang_code=None,
     )
     await state.update_data(target_user_id=user_id)
