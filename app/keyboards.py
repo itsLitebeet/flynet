@@ -1034,18 +1034,20 @@ def admin_customers_keyboard(
     customers: list, *, page: int, total_pages: int
 ) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
+    customer_btns: list[InlineKeyboardButton] = []
     for c in customers:
         uid = int(c["user_id"])
         label = (c["first_name"] or "").strip() or str(uid)
         if len(label) > 16:
             label = label[:15] + "…"
         orders_n = int(c["order_count"])
-        rows.append([
+        customer_btns.append(
             InlineKeyboardButton(
                 text=f"🛒 {label} ({orders_n})",
                 callback_data=f"{CB_ADM_CUST_DETAIL_PREFIX}{uid}",
             )
-        ])
+        )
+    rows.extend(_chunk_buttons(customer_btns, per_row=3))
     nav: list[InlineKeyboardButton] = []
     if page > 0:
         nav.append(
@@ -1080,17 +1082,19 @@ def admin_customers_keyboard(
 
 def admin_customers_search_keyboard(customers: list) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
+    customer_btns: list[InlineKeyboardButton] = []
     for c in customers:
         uid = int(c["user_id"])
         label = (c["first_name"] or "").strip() or str(uid)
         if len(label) > 18:
             label = label[:17] + "…"
-        rows.append([
+        customer_btns.append(
             InlineKeyboardButton(
                 text=f"🛒 {label}",
                 callback_data=f"{CB_ADM_CUST_DETAIL_PREFIX}{uid}",
             )
-        ])
+        )
+    rows.extend(_chunk_buttons(customer_btns, per_row=3))
     rows.append([
         InlineKeyboardButton(
             text=texts.ADMIN_BTN_CUSTOMERS_SEARCH,
