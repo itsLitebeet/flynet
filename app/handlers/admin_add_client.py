@@ -200,23 +200,6 @@ async def add_client_flow_cancel(
             pass
 
 
-@router.callback_query(
-    F.data == keyboards.CB_ADM_ADD_CLIENT_SKIP_USER,
-    StateFilter(AdminAddClientFlow.waiting_user_id),
-)
-async def add_client_skip_user(
-    callback: CallbackQuery, state: FSMContext, settings: Settings, db: Database
-) -> None:
-    if not await guard_admin_callback(callback, settings, db, ORDERS_MANAGE):
-        return
-    if not isinstance(callback.message, Message):
-        await callback.answer()
-        return
-    await state.update_data(target_user_id=None)
-    await _prompt_volume(callback.message, state)
-    await callback.answer()
-
-
 @router.message(StateFilter(AdminAddClientFlow.waiting_user_id))
 async def add_client_user_id(
     message: Message, state: FSMContext, settings: Settings, db: Database
@@ -225,13 +208,17 @@ async def add_client_user_id(
         await state.clear()
         return
 
-    raw = (message.text or "").strip()
-    if raw.lower() in _SKIP_USER_TEXT:
-        await state.update_data(target_user_id=None)
-        await _prompt_volume(message, state)
-        return
+    user_id = None
+    if getattr(message, "forward_origin", None) and getattr(message.forward_origin, "type", None) == "user":
+        user_id = getattr(getattr(message.forward_origin, "sender_user", None), "id", None)
+    
+    if not user_id and getattr(message, "forward_from", None):
+        user_id = getattr(message.forward_from, "id", None)
 
-    user_id = _parse_positive_int(raw)
+    if not user_id:
+        raw = (message.text or "").strip()
+        user_id = _parse_positive_int(raw)
+
     if user_id is None:
         await _wizard_reply(message, state, texts.ADMIN_ADD_CLIENT_USER_INVALID)
         return

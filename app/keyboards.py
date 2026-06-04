@@ -1401,12 +1401,6 @@ def admin_add_client_user_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.ADMIN_BTN_ADD_CLIENT_SKIP_USER,
-                    callback_data=CB_ADM_ADD_CLIENT_SKIP_USER,
-                style='success'),
-            ],
-            [
-                InlineKeyboardButton(
                     text=texts.BTN_CANCEL, callback_data=CB_ADM_FLOW_CANCEL, style='danger'
                 ),
             ],
