@@ -513,7 +513,7 @@ class XuiClient:
         if enable is not None:
             body["enable"] = enable
             
-        payload = {"client": body}
+        payload = body
         if inbound_ids is not None:
             payload["inboundIds"] = list(inbound_ids)
 
