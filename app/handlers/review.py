@@ -147,12 +147,12 @@ async def cb_accept_order(
         await bot.send_message(int(order["user_id"]), texts.ORDER_PROVISION_FAILED_USER)
         return
 
-    renew_of_order_id = order.get('renew_of_order_id')
+    renew_of_order_id = order['renew_of_order_id']
     is_renewal = bool(renew_of_order_id)
     parent_order = None
     if is_renewal:
         parent_order = db.get_order(int(renew_of_order_id))
-        if parent_order and parent_order.get('xui_email'):
+        if parent_order and parent_order['xui_email']:
             email = parent_order['xui_email']
         else:
             is_renewal = False
@@ -171,10 +171,10 @@ async def cb_accept_order(
                 )
                 
                 import json
-                sub_id = parent_order.get('xui_sub_id')
-                client_uuid = parent_order.get('xui_client_uuid')
+                sub_id = parent_order['xui_sub_id']
+                client_uuid = parent_order['xui_client_uuid']
                 try:
-                    sub_links = json.loads(parent_order.get('sub_links') or '[]')
+                    sub_links = json.loads(parent_order['sub_links'] or '[]')
                 except Exception:
                     sub_links = []
                 
