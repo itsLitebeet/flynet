@@ -614,8 +614,13 @@ async def cb_cancel_anywhere(
     F.data == keyboards.CB_ORDER_BACK_LOC,
     StateFilter(OrderFlow),
 )
-async def cb_back_to_locations(callback: CallbackQuery, state: FSMContext, db: Database) -> None:
-    await _show_locations(callback, db, state)
+async def cb_back_to_locations(
+    callback: CallbackQuery, state: FSMContext, db: Database, bot: Bot
+) -> None:
+    if isinstance(callback.message, Message):
+        await _abort_order_flow(callback.message, state, db, bot)
+    else:
+        await state.clear()
     await callback.answer()
 
 
