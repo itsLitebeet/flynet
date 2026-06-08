@@ -593,9 +593,9 @@ class XuiClient:
 
         new_email = await self.allocate_regen_email(order_id, is_test=is_test)
         try:
-            await self.update_client(email=old_email, enable=False)
+            await self.delete_client(old_email)
         except XuiError as exc:
-            log.warning("Could not disable %s before regen: %s", old_email, exc)
+            log.warning("Could not delete %s before regen: %s", old_email, exc)
 
         add_resp = await self.add_client(
             email=new_email,
