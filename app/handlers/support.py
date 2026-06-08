@@ -43,7 +43,8 @@ async def _open_support_message(message: Message, state: FSMContext) -> None:
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="ورود به ربات پشتیبانی", url="https://t.me/NetFlySupportBot")]
+        [InlineKeyboardButton(text="ورود به ربات پشتیبانی", url="https://t.me/NetFlySupportBot")],
+        [InlineKeyboardButton(text=texts.BTN_CANCEL, callback_data=keyboards.CB_CANCEL_SUPPORT, style='danger')]
     ])
 
     await answer_with_inline_keyboard(
