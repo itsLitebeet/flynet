@@ -77,7 +77,7 @@ async def migrate_order(db: Database, order: dict, old_loc: Any, new_loc: Any) -
 async def main():
     print("🔍 Opening database...")
     db = Database("netfly.db")
-    locations = db.get_all_locations()
+    locations = db.list_locations(only_enabled=False)
     
     print("\n🌍 Available Locations:")
     for loc in locations:
