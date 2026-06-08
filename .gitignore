@@ -8,3 +8,4 @@ venv/
 .idea/
 .vscode/
 *.log
+3x-ui-main/
