@@ -740,8 +740,7 @@ def admin_offer_inline(db) -> InlineKeyboardMarkup:
 
 
 def admin_settings_inline(user_id: int, settings, db) -> InlineKeyboardMarkup:
-    from app.admin_perms import OFFER, SERVICES, SETTINGS
-    from app.handlers.admin_helpers import is_owner
+    from app.admin_perms import OFFER, SERVICES, SETTINGS, is_owner
 
     rows: list[list[InlineKeyboardButton]] = []
     if _admin_perm(user_id, OFFER, settings, db):
