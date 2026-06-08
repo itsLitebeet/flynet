@@ -126,6 +126,9 @@ async def admin_edit_or_answer(
         err = (exc.message or "").lower()
         if "privacy_restricted" in err or "user_privacy" in err:
             await message.answer(text, parse_mode=ParseMode.HTML)
+        else:
+            log.error(f"admin_edit_or_answer completely failed: {exc}")
+            raise
 
 
 def format_services_list_text(db: Database, *, loc_filter: int | None = None) -> str:
