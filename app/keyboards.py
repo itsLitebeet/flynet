@@ -173,8 +173,8 @@ def main_reply_keyboard(*, show_test: bool = False) -> ReplyKeyboardMarkup:
         rows.append([KeyboardButton(text=texts.BTN_TEST_SUB)])
     rows.extend([
         [
-            KeyboardButton(text=texts.BTN_MY_SERVICES),
-            KeyboardButton(text=texts.BTN_BUY),
+            KeyboardButton(text=texts.BTN_MY_SERVICES, style='success'),
+            KeyboardButton(text=texts.BTN_BUY, style='primary'),
         ],
         [
             KeyboardButton(text=texts.BTN_MY_ACCOUNT),
