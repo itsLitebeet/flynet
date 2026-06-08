@@ -629,7 +629,7 @@ def admin_home_inline(user_id: int, settings, db) -> InlineKeyboardMarkup:
             style='primary')
         ])
 
-    from app.handlers.admin_helpers import is_owner
+    from app.admin_perms import is_owner
 
     if is_owner(user_id, settings):
         rows.append([
