@@ -459,13 +459,25 @@ class XuiClient:
         enable = client.get("enable")
         if not isinstance(enable, bool):
             enable = True
-        return {
+            
+        body = {
             "email": new_email or str(client.get("email", "")),
             "totalGB": _as_int(client.get("totalGB")),
             "expiryTime": _as_int(client.get("expiryTime")),
             "tgId": _as_int(client.get("tgId")),
             "enable": enable,
         }
+        
+        # 3x-ui requires the UUID (usually named "id") in updates to avoid regeneration
+        if "id" in client:
+            body["id"] = str(client["id"])
+        elif "uuid" in client:
+            body["id"] = str(client["uuid"])
+            
+        if "subId" in client:
+            body["subId"] = str(client["subId"])
+            
+        return body
 
     async def update_client(
         self,
