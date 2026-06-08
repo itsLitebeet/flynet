@@ -173,8 +173,8 @@ def main_reply_keyboard(*, show_test: bool = False) -> ReplyKeyboardMarkup:
         rows.append([KeyboardButton(text=texts.BTN_TEST_SUB)])
     rows.extend([
         [
-            KeyboardButton(text=texts.BTN_BUY),
             KeyboardButton(text=texts.BTN_MY_SERVICES),
+            KeyboardButton(text=texts.BTN_BUY),
         ],
         [
             KeyboardButton(text=texts.BTN_MY_ACCOUNT),
@@ -230,8 +230,8 @@ def main_menu(*, show_test: bool = False) -> InlineKeyboardMarkup:
         ])
     rows.extend([
         [
-            InlineKeyboardButton(text=texts.BTN_BUY,         callback_data=CB_MAIN_BUY,         style='success'),
-            InlineKeyboardButton(text=texts.BTN_MY_SERVICES, callback_data=CB_MAIN_MY_SERVICES, style='primary'),
+            InlineKeyboardButton(text=texts.BTN_MY_SERVICES, callback_data=CB_MAIN_MY_SERVICES, style='success'),
+            InlineKeyboardButton(text=texts.BTN_BUY,         callback_data=CB_MAIN_BUY,         style='primary'),
         ],
         [
             InlineKeyboardButton(text=texts.BTN_MY_ACCOUNT, callback_data=CB_MAIN_ACCOUNT,style='primary'),
