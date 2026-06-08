@@ -15,7 +15,7 @@ CUSTOM_VOLUME_MAX_GB = 500
 
 # Free test subscription (one per user)
 TEST_VOLUME_MB = 100
-TEST_DURATION_HOURS = 2
+TEST_DURATION_HOURS = 5
 
 
 # ---------- helpers ----------

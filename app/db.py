@@ -1004,6 +1004,11 @@ class Database:
             )
             return cur.fetchone() is not None
 
+    def clear_test_clients(self) -> int:
+        with self._cursor() as cur:
+            cur.execute("DELETE FROM orders WHERE is_test = 1")
+            return cur.rowcount
+
     def set_location_pricing(
         self,
         location_id: int,

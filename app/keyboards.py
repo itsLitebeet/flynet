@@ -137,6 +137,7 @@ CB_ADM_LOC_TOGGLE_PREFIX = "adm:lt:"    # adm:lt:<location_id>
 CB_ADM_LOC_PURCHASE_PREFIX = "adm:lp:"  # adm:lp:<location_id>
 CB_ADM_TOOL_SYNC         = "adm:tsync"
 CB_ADM_TOOL_CLEAR        = "adm:tclr"
+CB_ADM_TOOL_CLEAR_TEST   = "adm:tclrt"
 CB_ADM_ADD_CLIENT        = "adm:addcl"
 CB_ADM_ADD_CLIENT_SKIP_USER = "adm:acsk"
 CB_ADM_ADD_CLIENT_LOC_PREFIX = "adm:acl:"  # adm:acl:<location_id>
@@ -1377,6 +1378,11 @@ def admin_tools_inline(
             InlineKeyboardButton(
                 text="🗑 پاکسازی رد/پرداخت‌نشده", callback_data=CB_ADM_TOOL_CLEAR,
             style='primary'),
+        ])
+        rows.append([
+            InlineKeyboardButton(
+                text="🧹 پاکسازی دیتابیس ربات از اکانت های تست (جهت اجازه دادن به کاربران قدیمی برای ساخت مجدد)", callback_data=CB_ADM_TOOL_CLEAR_TEST,
+            style='danger'),
         ])
     rows.append([
         InlineKeyboardButton(

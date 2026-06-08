@@ -1632,3 +1632,12 @@ async def cb_admin_tool_clear(callback: CallbackQuery, settings: Settings, db: D
     if isinstance(callback.message, Message):
         await callback.message.answer(run_clear_declined(db))
     await callback.answer("انجام شد ✅")
+
+@router.callback_query(F.data == keyboards.CB_ADM_TOOL_CLEAR_TEST)
+async def cb_admin_tool_clear_test(callback: CallbackQuery, settings: Settings, db: Database) -> None:
+    if await _guard_cb(callback, settings, db, TOOLS_SYNC) is None:
+        return
+    count = db.clear_test_clients()
+    if isinstance(callback.message, Message):
+        await callback.message.answer(f"✅ تعداد {count} اکانت تست از دیتابیس ربات پاکسازی شد. اکنون کاربران قدیمی می‌توانند مجددا تست دریافت کنند.")
+    await callback.answer("انجام شد ✅")
