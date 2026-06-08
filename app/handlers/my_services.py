@@ -444,9 +444,10 @@ async def cb_view_configs_filtered(callback: CallbackQuery, db: Database) -> Non
         sub_links = []
         
     # Filter the sub_links based on keywords
+    import urllib.parse
     filtered_links = []
     for link in sub_links:
-        link_lower = link.lower()
+        link_lower = urllib.parse.unquote(link).lower()
         if not keywords or any(kw in link_lower for kw in keywords):
             filtered_links.append(link)
             
