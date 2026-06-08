@@ -474,16 +474,13 @@ class XuiClient:
             "expiryTime": _as_int(client.get("expiryTime")),
             "tgId": _as_int(client.get("tgId")),
             "enable": enable,
+            "limitIp": _as_int(client.get("limitIp", 0)),
+            "reset": _as_int(client.get("reset", 0)),
         }
         
-        # 3x-ui requires the UUID (usually named "id") in updates to avoid regeneration
-        if "id" in client:
-            body["id"] = str(client["id"])
-        elif "uuid" in client:
-            body["id"] = str(client["uuid"])
-            
-        if "subId" in client:
-            body["subId"] = str(client["subId"])
+        for key in ["id", "uuid", "subId", "flow"]:
+            if key in client and client[key]:
+                body[key if key != "uuid" else "id"] = str(client[key])
             
         return body
 
