@@ -509,7 +509,38 @@ def _order_receipt_caption(db: Database, order) -> str | None:
 
 
 # ---------- /admin opens panel ----------
+@router.message(Command("clear"))
+async def cmd_clear(message: Message, settings: Settings, db: Database) -> None:
+    if message.from_user is None:
+        return
+    if not is_admin(message.from_user.id, settings):
+        return
+
+    try:
+        count = int(message.text.split()[1])
+    except (IndexError, ValueError, AttributeError):
+        count = 100
+        
+    msg = await message.answer(f"🧹 در حال پاکسازی {count} پیام اخیر...")
+    
+    deleted = 0
+    import asyncio
+    for i in range(message.message_id, max(0, message.message_id - count), -1):
+        try:
+            await message.bot.delete_message(chat_id=message.chat.id, message_id=i)
+            deleted += 1
+            await asyncio.sleep(0.05)
+        except Exception:
+            pass
+            
+    try:
+        await msg.edit_text(f"✅ پاکسازی انجام شد. {deleted} پیام حذف شد.")
+    except Exception:
+        pass
+
+
 @router.message(Command("admin"))
+@router.message(Command("panel"))
 async def cmd_admin_panel(message: Message, settings: Settings, db: Database) -> None:
     if message.from_user is None:
         return
