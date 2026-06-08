@@ -76,7 +76,7 @@ async def migrate_order(db: Database, order: dict, old_loc: Any, new_loc: Any) -
 
 async def main():
     print("🔍 Opening database...")
-    db = Database("data/bot.sqlite3")
+    db = Database("netfly.db")
     locations = db.get_all_locations()
     
     print("\n🌍 Available Locations:")
