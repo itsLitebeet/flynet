@@ -343,6 +343,8 @@ class XuiClient:
         tg_user_id: int,
         expiry_time_ms: int | None = None,
         total_bytes: int | None = None,
+        client_uuid: str | None = None,
+        sub_id: str | None = None,
     ) -> dict[str, Any]:
         total = (
             int(total_bytes)
@@ -354,15 +356,21 @@ class XuiClient:
             if expiry_time_ms is not None
             else _expiry_ms_from_days(duration_days)
         )
+        client_payload = {
+            "email": email,
+            "totalGB": total,
+            "expiryTime": expiry,
+            "tgId": tg_user_id,
+            "limitIp": 0,
+            "enable": True,
+        }
+        if client_uuid:
+            client_payload["id"] = client_uuid
+        if sub_id:
+            client_payload["subId"] = sub_id
+
         body = {
-            "client": {
-                "email": email,
-                "totalGB": total,
-                "expiryTime": expiry,
-                "tgId": tg_user_id,
-                "limitIp": 0,
-                "enable": True,
-            },
+            "client": client_payload,
             "inboundIds": list(inbound_ids),
         }
         return await self._request(
@@ -489,6 +497,7 @@ class XuiClient:
         expiry_time_ms: int | None = None,
         tg_user_id: int | None = None,
         enable: bool | None = None,
+        inbound_ids: list[int] | None = None,
     ) -> dict[str, Any]:
         """Update a client; merges with current panel state before applying changes."""
         client = await self.find_client(email)
@@ -506,9 +515,13 @@ class XuiClient:
             body["tgId"] = tg_user_id
         if enable is not None:
             body["enable"] = enable
+            
+        payload = {"client": body}
+        if inbound_ids is not None:
+            payload["inboundIds"] = list(inbound_ids)
 
         return await self._request(
-            "POST", f"/panel/api/clients/update/{email}", json_body=body
+            "POST", f"/panel/api/clients/update/{email}", json_body=payload
         )
 
     async def delete_client(self, email: str, *, keep_traffic: int = 1) -> dict[str, Any]:
