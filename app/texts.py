@@ -438,10 +438,27 @@ def format_configs_block(sub_url: str | None, sub_links: list[str]) -> str:
         parts.append("🔔 <b>لینک اشتراک:</b>")
         parts.append(f"<code>{sub_url}</code>")
         parts.append("")
+        
     if sub_links:
-        parts.append("📋 <b>لینک‌های جداگانه:</b>")
-        for link in sub_links:
-            parts.append(f"<code>{link}</code>")
+        total_len = sum(len(link) for link in sub_links)
+        if total_len > 2500:
+            if sub_url:
+                parts.append("📋 <b>لینک‌های جداگانه:</b>\n<i>لینک‌ها به دلیل طولانی بودن مخفی شدند. لطفاً از <b>لینک اشتراک</b> استفاده کنید.</i>")
+            else:
+                parts.append("📋 <b>لینک‌های جداگانه:</b>")
+                # Add as many as we can fit within ~2500 chars
+                current_len = 0
+                for link in sub_links:
+                    if current_len + len(link) > 2500:
+                        parts.append("<i>...سایر لینک‌ها به دلیل محدودیت تلگرام مخفی شدند...</i>")
+                        break
+                    parts.append(f"<code>{link}</code>")
+                    current_len += len(link)
+        else:
+            parts.append("📋 <b>لینک‌های جداگانه:</b>")
+            for link in sub_links:
+                parts.append(f"<code>{link}</code>")
+                
     if not parts:
         parts.append("—")
     return "\n".join(parts)
