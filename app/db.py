@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS locations (
     enabled           INTEGER NOT NULL DEFAULT 1,
     purchase_enabled  INTEGER NOT NULL DEFAULT 1,
     is_test           INTEGER NOT NULL DEFAULT 0,
+    config_buttons    TEXT    NOT NULL DEFAULT '[]',
     created_at        TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -133,6 +134,7 @@ class Location:
     enabled: bool
     purchase_enabled: bool
     is_test: bool
+    config_buttons: list[dict[str, Any]]
 
     def render_sub_url(self, sub_id: str | None) -> str | None:
         if not self.sub_url_template or not sub_id:
@@ -180,6 +182,15 @@ def _row_to_location(row: sqlite3.Row) -> Location:
             return int(v) if v is not None else None
         except (IndexError, KeyError, TypeError, ValueError):
             return None
+            
+    config_buttons = []
+    try:
+        if "config_buttons" in row.keys() and row["config_buttons"]:
+            config_buttons = json.loads(row["config_buttons"])
+            if not isinstance(config_buttons, list):
+                config_buttons = []
+    except (json.JSONDecodeError, TypeError, KeyError):
+        config_buttons = []
 
     return Location(
         id=int(row["id"]),
@@ -198,6 +209,7 @@ def _row_to_location(row: sqlite3.Row) -> Location:
             else True
         ),
         is_test=bool(row["is_test"]) if "is_test" in row.keys() else False,
+        config_buttons=config_buttons,
     )
 
 
@@ -238,6 +250,8 @@ class Database:
         to additive evolution.
         """
         self._ensure_column("locations", "sub_url_template", "TEXT")
+        self._ensure_column("locations", "config_buttons", "TEXT DEFAULT '[]'")
+        self._ensure_column("locations", "is_test", "INTEGER NOT NULL DEFAULT 0")
         self._ensure_column("locations", "price_base", "INTEGER")
         self._ensure_column("locations", "price_per_gb", "INTEGER")
         self._ensure_column("locations", "price_per_day", "INTEGER")
@@ -1039,6 +1053,14 @@ class Database:
                     sub_url_template,
                     location_id,
                 ),
+            )
+            return cur.rowcount > 0
+
+    def set_location_config_buttons(self, location_id: int, buttons: list[dict[str, Any]]) -> bool:
+        with self._cursor() as cur:
+            cur.execute(
+                "UPDATE locations SET config_buttons = ? WHERE id = ?",
+                (json.dumps(buttons), location_id),
             )
             return cur.rowcount > 0
 

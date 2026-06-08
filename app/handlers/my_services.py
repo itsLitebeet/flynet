@@ -382,14 +382,91 @@ async def cb_view_configs(callback: CallbackQuery, db: Database) -> None:
         sub_links = []
 
     sub_url = location.render_sub_url(row["xui_sub_id"]) if location else None
-    configs_block = texts.format_configs_block(
-        sub_url=sub_url, sub_links=[escape(x) for x in sub_links]
-    )
-    await _edit_or_answer(
-        callback,
-        texts.VIEW_CONFIGS_TITLE.format(order_id=order_id, configs_block=configs_block),
-        keyboards.back_to_service(order_id),
-    )
+    
+    # Check if this location has config buttons configured
+    config_buttons = location.config_buttons if location else []
+    
+    if config_buttons:
+        # Instead of just showing the configs block directly, we show the buttons menu
+        await _edit_or_answer(
+            callback,
+            "🎛 لطفاً موقعیت جغرافیایی کانفیگ مورد نظر خود را انتخاب کنید:",
+            keyboards.view_configs_keyboard(order_id, config_buttons),
+        )
+    else:
+        configs_block = texts.format_configs_block(
+            sub_url=sub_url, sub_links=[escape(x) for x in sub_links]
+        )
+        await _edit_or_answer(
+            callback,
+            texts.VIEW_CONFIGS_TITLE.format(order_id=order_id, configs_block=configs_block),
+            keyboards.back_to_service(order_id),
+        )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith(keyboards.CB_MY_CONFIGS_FILTER_PREFIX))
+async def cb_view_configs_filtered(callback: CallbackQuery, db: Database) -> None:
+    user = callback.from_user
+    if user is None:
+        await callback.answer()
+        return
+        
+    try:
+        raw = (callback.data or "").removeprefix(keyboards.CB_MY_CONFIGS_FILTER_PREFIX)
+        order_id_str, btn_index_str = raw.split(":")
+        order_id = int(order_id_str)
+        btn_index = int(btn_index_str)
+    except ValueError:
+        await callback.answer()
+        return
+
+    row = await _own_order_or_none(db, order_id, user.id)
+    if row is None or row["status"] != "provisioned":
+        await callback.answer("این سرویس فعال نیست.", show_alert=True)
+        return
+
+    location = db.get_location(int(row["location_id"]))
+    if not location or btn_index < 0 or btn_index >= len(location.config_buttons):
+        await callback.answer("تنظیمات دکمه یافت نشد.", show_alert=True)
+        return
+        
+    btn = location.config_buttons[btn_index]
+    btn_name = btn.get("name", "دریافت کانفیگ")
+    keywords = [k.strip().lower() for k in btn.get("keywords", "").split(",") if k.strip()]
+    
+    sub_links: list[str] = []
+    try:
+        sub_links = json.loads(row["sub_links"] or "[]")
+    except (TypeError, ValueError):
+        sub_links = []
+        
+    # Filter the sub_links based on keywords
+    filtered_links = []
+    for link in sub_links:
+        link_lower = link.lower()
+        if not keywords or any(kw in link_lower for kw in keywords):
+            filtered_links.append(link)
+            
+    sub_url = location.render_sub_url(row["xui_sub_id"]) if location else None
+    
+    # Render
+    if not filtered_links and keywords:
+        configs_block = "هیچ کانفیگی مطابق با این موقعیت یافت نشد."
+    else:
+        configs_block = texts.format_configs_block(
+            sub_url=sub_url, sub_links=[escape(x) for x in filtered_links]
+        )
+        
+    title = f"<b>{escape(btn_name)}</b>\n\n{texts.VIEW_CONFIGS_TITLE.format(order_id=order_id, configs_block=configs_block)}"
+    
+    # We add a back button to go back to the buttons menu
+    markup = keyboards.InlineKeyboardMarkup(inline_keyboard=[
+        [keyboards.InlineKeyboardButton(text="🔙 بازگشت به منوی کانفیگ‌ها", callback_data=f"{keyboards.CB_MY_CONFIGS_PREFIX}{order_id}")],
+        [keyboards.InlineKeyboardButton(text="🔙 جزئیات سرویس", callback_data=f"{keyboards.CB_MY_DETAIL_PREFIX}{order_id}")],
+    ])
+    
+    await _edit_or_answer(callback, title, markup)
     await callback.answer()
 
 

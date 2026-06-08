@@ -55,6 +55,14 @@ CB_ADM_DASH              = "adm:dash"
 CB_ADM_PENDING_LIST      = "adm:plist"
 CB_ADM_SETTINGS          = "adm:set"
 CB_ADM_LOCATIONS_LIST    = "adm:llist"
+CB_ADM_LOC_DETAIL_PREFIX = "adm_loc:"
+CB_ADM_LOC_EDIT_PREFIX   = "adm_loc_e:"
+CB_ADM_LOC_TOGGLE_PREFIX = "adm_loc_t:"
+CB_ADM_LOC_PURCHASE_PREFIX = "adm_loc_p:"
+CB_ADM_LOC_PURGE_PREFIX  = "adm_loc_purge:"
+CB_ADM_LOC_BTNS_PREFIX   = "adm_loc_btns:"
+CB_ADM_LOC_BTN_DEL_PREFIX = "adm_loc_btndel:"
+CB_ADM_LOC_BTN_ADD_PREFIX = "adm_loc_btnadd:"
 CB_ADM_TOOLS             = "adm:tools"
 CB_ADM_USERS                 = "adm:usr"
 CB_ADM_USERS_PAGE_PREFIX     = "adm:usrp:"   # adm:usrp:<page>
@@ -148,6 +156,7 @@ CB_PURGE_CANCEL         = "adm:prg:no"
 CB_MY_LIST                  = "my:list"
 CB_MY_DETAIL_PREFIX         = "my:o:"        # my:o:<order_id>
 CB_MY_CONFIGS_PREFIX        = "my:cfg:"      # my:cfg:<order_id>
+CB_MY_CONFIGS_FILTER_PREFIX = "my_cfg_f:" # my_cfg_f:<order_id>:<btn_index>
 CB_MY_REFRESH_USAGE_PREFIX  = "my:ref:"      # my:ref:<order_id> — refresh usage on detail
 CB_MY_TOGGLE_PREFIX         = "my:tog:"      # my:tog:<order_id>
 CB_MY_RENAME_PREFIX         = "my:ren:"      # my:ren:<order_id>
@@ -1574,6 +1583,12 @@ def admin_location_detail(
         ],
         [
             InlineKeyboardButton(
+                text="🎛 دکمه‌های دریافت کانفیگ",
+                callback_data=f"{CB_ADM_LOC_BTNS_PREFIX}{location_id}",
+            style='primary'),
+        ],
+        [
+            InlineKeyboardButton(
                 text=toggle_label,
                 callback_data=f"{CB_ADM_LOC_TOGGLE_PREFIX}{location_id}",
             style='primary'),
@@ -1677,3 +1692,53 @@ def admin_review(order_id: int, user_id: int) -> InlineKeyboardMarkup:
             ],
         ]
     )
+
+def admin_location_config_buttons(
+    location_id: int,
+    buttons: list[dict[str, str]]
+) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    
+    for i, btn in enumerate(buttons):
+        rows.append([
+            InlineKeyboardButton(
+                text=f"🗑 حذف: {btn.get('name')}",
+                callback_data=f"{CB_ADM_LOC_BTN_DEL_PREFIX}{location_id}:{i}",
+                style="danger"
+            )
+        ])
+        
+    rows.append([
+        InlineKeyboardButton(
+            text="➕ افزودن دکمه جدید",
+            callback_data=f"{CB_ADM_LOC_BTN_ADD_PREFIX}{location_id}",
+            style="primary"
+        )
+    ])
+    rows.append([
+        InlineKeyboardButton(
+            text=texts.BTN_BACK,
+            callback_data=f"{CB_ADM_LOC_DETAIL_PREFIX}{location_id}",
+            style="secondary"
+        )
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+def view_configs_keyboard(order_id: int, buttons: list[dict[str, str]]) -> InlineKeyboardMarkup:
+    rows = []
+    for i, btn in enumerate(buttons):
+        rows.append([
+            InlineKeyboardButton(
+                text=btn.get('name', 'دریافت کانفیگ'),
+                callback_data=f"{CB_MY_CONFIGS_FILTER_PREFIX}{order_id}:{i}",
+                style="primary"
+            )
+        ])
+    rows.append([
+        InlineKeyboardButton(
+            text="🔙 جزئیات سرویس", 
+            callback_data=f"{CB_MY_DETAIL_PREFIX}{order_id}",
+            style="danger"
+        )
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
