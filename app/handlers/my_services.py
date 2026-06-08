@@ -387,10 +387,12 @@ async def cb_view_configs(callback: CallbackQuery, db: Database) -> None:
     config_buttons = location.config_buttons if location else []
     
     if config_buttons:
-        # Instead of just showing the configs block directly, we show the buttons menu
+        text = "🎛 لطفاً موقعیت جغرافیایی کانفیگ مورد نظر خود را انتخاب کنید:"
+        if sub_url:
+            text += f"\n\n🔗 <b>لینک سابسکریپشن شما:</b>\n<code>{escape(sub_url)}</code>"
         await _edit_or_answer(
             callback,
-            "🎛 لطفاً موقعیت جغرافیایی کانفیگ مورد نظر خود را انتخاب کنید:",
+            text,
             keyboards.view_configs_keyboard(order_id, config_buttons),
         )
     else:
