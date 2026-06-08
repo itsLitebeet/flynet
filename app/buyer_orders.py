@@ -57,6 +57,8 @@ def test_ended_with_usage(usage: ClientUsage) -> bool:
 
 async def is_visible_to_buyer(db: Database, row) -> bool:
     """Whether this order should appear in the buyer's service list / detail."""
+    if str(row["status"]) == "completed_renewal":
+        return False
     if is_admin_manual_panel_only(row):
         return False
     if not is_test_order(row):

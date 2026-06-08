@@ -247,13 +247,21 @@ async def cb_accept_order(
         await bot.send_message(int(order['user_id']), texts.ORDER_PROVISION_FAILED_USER)
         return
 
-    db.set_order_provisioned(
-        order_id=order_id,
-        email=result.email,
-        sub_id=result.sub_id,
-        client_uuid=result.client_uuid,
-        sub_links=result.sub_links,
-    )
+    if is_renewal:
+        db.update_order_plan(
+            int(renew_of_order_id),
+            volume_gb=int(parent_order["volume_gb"]) + int(order["volume_gb"]),
+            duration_days=int(parent_order["duration_days"]) + int(order["duration_days"]),
+        )
+        db.set_order_status(order_id, 'completed_renewal', admin_id=callback.from_user.id)
+    else:
+        db.set_order_provisioned(
+            order_id=order_id,
+            email=result.email,
+            sub_id=result.sub_id,
+            client_uuid=result.client_uuid,
+            sub_links=result.sub_links,
+        )
 
     sub_url = location.render_sub_url(result.sub_id)
     configs_block = texts.format_configs_block(
@@ -266,7 +274,7 @@ async def cb_accept_order(
             await bot.send_message(
                 int(order["user_id"]),
                 texts.ORDER_RENEWED_NOTIFY.format(
-                    order_id=order_id,
+                    order_id=int(renew_of_order_id),
                     location=escape(str(order["location_name"])),
                     volume=int(order["volume_gb"]),
                     days=int(order["duration_days"]),
