@@ -39,13 +39,17 @@ def _buyer_keyboard_for(user_id: int | None, db: Database):
 
 async def _open_support_message(message: Message, state: FSMContext) -> None:
     await state.clear()
-    await state.set_state(SupportFlow.waiting_for_message)
     from app.ui_reply import answer_with_inline_keyboard
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="ورود به ربات پشتیبانی", url="https://t.me/NetFlySupportBot")]
+    ])
 
     await answer_with_inline_keyboard(
         message,
         texts.SUPPORT_PROMPT,
-        keyboards.cancel_support(),
+        keyboard,
     )
 
 
