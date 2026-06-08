@@ -50,11 +50,12 @@ from app.handlers.admin_ui_helpers import (
     present_inline_screen,
 )
 
-log = logging.getLogger(__name__)
 from app.channel_gate import is_gate_enabled
 from app.handlers.admin_users_ui import format_user_detail, format_users_page
 from app.handlers.log_channel import start_log_channel_wizard
 from app.handlers.required_channel import start_required_channel_wizard
+
+log = logging.getLogger(__name__)
 
 router = Router(name="admin_panel")
 
@@ -985,7 +986,6 @@ async def cb_admin_order_lookup_start(callback: CallbackQuery, state: FSMContext
         await callback.answer()
         return
 
-    uid = callback.from_user.id if callback.from_user else None
     await state.set_state(AdminPanelFlow.waiting_order_id)
     await admin_edit_or_answer(
         callback.message,
@@ -1304,7 +1304,7 @@ async def cb_admin_update_user(callback: CallbackQuery, bot: Bot, settings: Sett
             lang_code=None,
         )
         await callback.answer("✅ اطلاعات کاربر از تلگرام بروزرسانی شد.", show_alert=True)
-    except Exception as e:
+    except Exception:
         await callback.answer("❌ امکان دریافت اطلاعات از تلگرام وجود ندارد (کاربر ربات را استارت نکرده است).", show_alert=True)
         return
 

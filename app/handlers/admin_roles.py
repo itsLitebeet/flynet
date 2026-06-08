@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-from html import escape
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandObject
 from aiogram.types import CallbackQuery, Message
 
 from app import keyboards, texts
-from app.admin_perms import VALID_ROLES, is_owner, is_staff
+from app.admin_perms import VALID_ROLES, is_owner
 from app.config import Settings
 from app.db import Database
-from app.handlers.admin_helpers import admin_from_message, is_admin
+from app.handlers.admin_helpers import admin_from_message
 from app.handlers.admin_ui_helpers import admin_edit_or_answer
 
 router = Router(name="admin_roles")

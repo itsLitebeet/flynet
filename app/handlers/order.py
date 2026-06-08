@@ -163,8 +163,18 @@ async def _show_locations(callback: CallbackQuery, db: Database, state: FSMConte
         await _edit_or_answer(callback, texts.NO_LOCATIONS_USER, keyboards.back_to_menu())
         await state.clear()
         return
-    await state.set_state(OrderFlow.picking_location)
-    await _edit_or_answer(callback, texts.ORDER_PICK_LOCATION, keyboards.locations(locs))
+
+    # Skip picking location, just pick the first available location
+    loc = locs[0]
+    await state.update_data(
+        location_id=loc.id,
+        location_name=loc.name,
+        inbound_ids=loc.inbound_ids,
+    )
+    if db.is_manual_purchase_enabled():
+        await _show_packages(callback, state, loc.id, loc.name, db)
+    else:
+        await _show_volumes(callback, state, loc.name, db)
 
 
 async def _show_packages(
@@ -262,8 +272,14 @@ async def _show_review(callback: CallbackQuery, state: FSMContext, db: Database)
 
 
 async def _begin_buy_message(message: Message, state: FSMContext, db: Database) -> None:
-    """Start buy flow (reply-keyboard button or inline «خرید»)."""
+    """Start buy flow (skips location picking and goes straight to volume/package)."""
+    # If we are starting fresh (not renewing), clear state
+    data = await state.get_data()
+    renew_order_id = data.get("renew_of_order_id")
     await state.clear()
+    if renew_order_id:
+        await state.update_data(renew_of_order_id=renew_order_id)
+
     locs = db.list_locations(
         only_enabled=True, exclude_test=True, only_purchase_open=True
     )
@@ -273,15 +289,39 @@ async def _begin_buy_message(message: Message, state: FSMContext, db: Database) 
             reply_markup=buyer_reply_keyboard(message, db),
         )
         return
-    await state.set_state(OrderFlow.picking_location)
+    
+    # Pick the first location automatically
+    loc = locs[0]
+    await state.update_data(
+        location_id=loc.id,
+        location_name=loc.name,
+        inbound_ids=loc.inbound_ids,
+    )
+
     from app.ui_reply import answer_with_inline_keyboard
 
-    await answer_with_inline_keyboard(
-        message,
-        texts.ORDER_PICK_LOCATION,
-        keyboards.locations(locs),
-        parse_mode=ParseMode.HTML,
-    )
+    if db.is_manual_purchase_enabled():
+        packages = db.list_service_packages(loc.id)
+        if not packages:
+            await message.answer(texts.ORDER_NO_PACKAGES, reply_markup=buyer_reply_keyboard(message, db))
+            return
+        await state.update_data(purchase_mode=PURCHASE_MODE_PACKAGES)
+        await state.set_state(OrderFlow.picking_package)
+        await answer_with_inline_keyboard(
+            message,
+            texts.ORDER_PICK_PACKAGE.format(location=escape(loc.name)),
+            keyboards.service_packages(packages, db),
+            parse_mode=ParseMode.HTML,
+        )
+    else:
+        await state.update_data(purchase_mode=PURCHASE_MODE_LEGACY)
+        await state.set_state(OrderFlow.picking_volume)
+        await answer_with_inline_keyboard(
+            message,
+            texts.ORDER_PICK_VOLUME.format(location=escape(loc.name)),
+            keyboards.volumes(db.get_volume_presets()),
+            parse_mode=ParseMode.HTML,
+        )
 
 
 # ---------- entry ----------
@@ -516,6 +556,7 @@ async def cb_confirm_order(
         volume_gb=volume_gb,
         duration_days=duration_days,
         price=price_toman,
+        renew_of_order_id=data.get("renew_of_order_id"),
     )
     await state.update_data(order_id=order_id)
     await state.set_state(OrderFlow.awaiting_receipt)

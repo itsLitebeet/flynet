@@ -420,6 +420,14 @@ ORDER_PROVISIONED_NOTIFY = (
     "اپلیکیشن‌های پیشنهادی: V2RayNG، NekoBox، v2rayN، Streisand."
 )
 
+ORDER_RENEWED_NOTIFY = (
+    "♻️ <b>سفارش #{order_id} با موفقیت تمدید شد!</b>\n\n"
+    "📦 لوکیشن: <b>{location}</b>\n"
+    "➕ حجم اضافه‌شده: <b>{volume} گیگابایت</b>\n"
+    "➕ مدت اضافه‌شده: <b>{days} روز</b>\n\n"
+    "💡 سرویس شما در پنل به‌روز شد و نیازی به تغییر کانفیگ یا لینک اشتراک نیست."
+)
+
 
 def format_configs_block(sub_url: str | None, sub_links: list[str]) -> str:
     """Build the connection-info block used in both the order completion message

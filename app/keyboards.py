@@ -152,7 +152,8 @@ CB_MY_REFRESH_USAGE_PREFIX  = "my:ref:"      # my:ref:<order_id> — refresh usa
 CB_MY_TOGGLE_PREFIX         = "my:tog:"      # my:tog:<order_id>
 CB_MY_RENAME_PREFIX         = "my:ren:"      # my:ren:<order_id>
 CB_MY_REGEN_PREFIX          = "my:rg:"       # my:rg:<order_id>      (asks confirmation)
-CB_MY_REGEN_CONFIRM_PREFIX  = "my:rg!ok:"    # my:rg!ok:<order_id>   (actually regen)
+CB_MY_REGEN_CONFIRM_PREFIX  = "my:rg:ok:"    # my:rg:ok:<order_id>   (does it)
+CB_MY_RENEW_PREFIX          = "my:rn:"       # my:rn:<order_id>      (starts renew flow)
 
 
 # ---------- reply keyboard (bottom menu, replaces phone keyboard) ----------
@@ -443,6 +444,11 @@ def my_service_detail(
                     text=texts.BTN_REGEN, callback_data=f"{CB_MY_REGEN_PREFIX}{order_id}",
                 style='primary'),
             ])
+            rows.append([
+                InlineKeyboardButton(
+                    text="♻️ تمدید سرویس", callback_data=f"{CB_MY_RENEW_PREFIX}{order_id}",
+                style='success'),
+            ])
     elif not is_test:
         rows.append([
             InlineKeyboardButton(
@@ -488,7 +494,6 @@ def admin_reply_keyboard(user_id: int, settings, db) -> ReplyKeyboardMarkup:
         LOCATIONS,
         PANEL,
         OFFER,
-        ORDERS_MANAGE,
         ORDERS_REVIEW,
         SERVICES,
         SETTINGS,
@@ -547,7 +552,6 @@ def admin_home_inline(user_id: int, settings, db) -> InlineKeyboardMarkup:
         OFFER,
         ORDERS_MANAGE,
         ORDERS_REVIEW,
-        PANEL,
         SERVICES,
         SETTINGS,
         TOOLS_BROADCAST,
@@ -1317,7 +1321,7 @@ def admin_tools_inline(
     has_log_channel: bool,
     has_req_channel: bool,
 ) -> InlineKeyboardMarkup:
-    from app.admin_perms import ORDERS_MANAGE, TOOLS_BROADCAST, TOOLS_MISC, TOOLS_SYNC
+    from app.admin_perms import TOOLS_BROADCAST, TOOLS_MISC, TOOLS_SYNC
 
     rows: list[list[InlineKeyboardButton]] = []
     if _admin_perm(user_id, TOOLS_BROADCAST, settings, db):

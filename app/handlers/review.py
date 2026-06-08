@@ -147,32 +147,74 @@ async def cb_accept_order(
         await bot.send_message(int(order["user_id"]), texts.ORDER_PROVISION_FAILED_USER)
         return
 
-    email = build_client_email(order_id, is_test=is_test)
+    renew_of_order_id = order.get('renew_of_order_id')
+    is_renewal = bool(renew_of_order_id)
+    parent_order = None
+    if is_renewal:
+        parent_order = db.get_order(int(renew_of_order_id))
+        if parent_order and parent_order.get('xui_email'):
+            email = parent_order['xui_email']
+        else:
+            is_renewal = False
+            email = build_client_email(order_id, is_test=is_test)
+    else:
+        email = build_client_email(order_id, is_test=is_test)
 
     try:
         async with XuiClient(location.base_url, location.api_token) as xui:
-            result = await xui.provision(
-                email=email,
-                volume_gb=int(order["volume_gb"]),
-                duration_days=int(order["duration_days"]),
-                inbound_ids=location.inbound_ids,
-                tg_user_id=int(order["user_id"]),
-                total_bytes=TEST_VOLUME_BYTES if is_test else None,
-                expiry_time_ms=test_expiry_time_ms() if is_test else None,
-            )
+            if is_renewal:
+                await xui.renew_client(
+                    email=email,
+                    volume_gb=int(order['volume_gb']),
+                    duration_days=int(order['duration_days']),
+                    is_test=is_test,
+                )
+                
+                import json
+                sub_id = parent_order.get('xui_sub_id')
+                client_uuid = parent_order.get('xui_client_uuid')
+                try:
+                    sub_links = json.loads(parent_order.get('sub_links') or '[]')
+                except Exception:
+                    sub_links = []
+                
+                if not sub_links and sub_id:
+                    try:
+                        sub_links = await xui.get_sub_links(sub_id)
+                    except Exception:
+                        pass
+                
+                from app.xui import ProvisionedClient
+                result = ProvisionedClient(
+                    email=email,
+                    sub_id=sub_id,
+                    client_uuid=client_uuid,
+                    sub_links=sub_links,
+                    raw_get_response=None,
+                )
+            else:
+                result = await xui.provision(
+                    email=email,
+                    volume_gb=int(order['volume_gb']),
+                    duration_days=int(order['duration_days']),
+                    inbound_ids=location.inbound_ids,
+                    tg_user_id=int(order['user_id']),
+                    total_bytes=TEST_VOLUME_BYTES if is_test else None,
+                    expiry_time_ms=test_expiry_time_ms() if is_test else None,
+                )
     except XuiError as exc:
-        log.warning("Provisioning failed for order %s: %s", order_id, exc)
-        db.set_order_status(order_id, "failed", admin_id=callback.from_user.id)
+        log.warning('Provisioning failed for order %s: %s', order_id, exc)
+        db.set_order_status(order_id, 'failed', admin_id=callback.from_user.id)
         admin = Actor.from_user(callback.from_user)
         if admin is not None:
             await make_logger(bot, db).log_order_provision_failed(
                 order_id=order_id,
                 admin=admin,
-                buyer_id=int(order["user_id"]),
-                location=str(order["location_name"]),
-                volume_gb=int(order["volume_gb"]),
-                duration_days=int(order["duration_days"]),
-                price=int(order["price"]),
+                buyer_id=int(order['user_id']),
+                location=str(order['location_name']),
+                volume_gb=int(order['volume_gb']),
+                duration_days=int(order['duration_days']),
+                price=int(order['price']),
                 error=str(exc),
                 is_test=is_test,
             )
@@ -180,21 +222,21 @@ async def cb_accept_order(
             callback.from_user.id,
             texts.REVIEW_PROVISION_ERR.format(error=escape(str(exc))),
         )
-        await bot.send_message(int(order["user_id"]), texts.ORDER_PROVISION_FAILED_USER)
+        await bot.send_message(int(order['user_id']), texts.ORDER_PROVISION_FAILED_USER)
         return
     except Exception as exc:  # noqa: BLE001 — any other failure (network, etc.)
-        log.exception("Unexpected provisioning error for order %s", order_id)
-        db.set_order_status(order_id, "failed", admin_id=callback.from_user.id)
+        log.exception('Unexpected provisioning error for order %s', order_id)
+        db.set_order_status(order_id, 'failed', admin_id=callback.from_user.id)
         admin = Actor.from_user(callback.from_user)
         if admin is not None:
             await make_logger(bot, db).log_order_provision_failed(
                 order_id=order_id,
                 admin=admin,
-                buyer_id=int(order["user_id"]),
-                location=str(order["location_name"]),
-                volume_gb=int(order["volume_gb"]),
-                duration_days=int(order["duration_days"]),
-                price=int(order["price"]),
+                buyer_id=int(order['user_id']),
+                location=str(order['location_name']),
+                volume_gb=int(order['volume_gb']),
+                duration_days=int(order['duration_days']),
+                price=int(order['price']),
                 error=str(exc),
                 is_test=is_test,
             )
@@ -202,7 +244,7 @@ async def cb_accept_order(
             callback.from_user.id,
             texts.REVIEW_PROVISION_ERR.format(error=escape(str(exc))),
         )
-        await bot.send_message(int(order["user_id"]), texts.ORDER_PROVISION_FAILED_USER)
+        await bot.send_message(int(order['user_id']), texts.ORDER_PROVISION_FAILED_USER)
         return
 
     db.set_order_provisioned(
@@ -220,16 +262,27 @@ async def cb_accept_order(
     )
 
     try:
-        await bot.send_message(
-            int(order["user_id"]),
-            texts.ORDER_PROVISIONED_NOTIFY.format(
-                order_id=order_id,
-                location=escape(str(order["location_name"])),
-                volume=int(order["volume_gb"]),
-                days=int(order["duration_days"]),
-                configs_block=configs_block,
-            ),
-        )
+        if is_renewal:
+            await bot.send_message(
+                int(order["user_id"]),
+                texts.ORDER_RENEWED_NOTIFY.format(
+                    order_id=order_id,
+                    location=escape(str(order["location_name"])),
+                    volume=int(order["volume_gb"]),
+                    days=int(order["duration_days"]),
+                ),
+            )
+        else:
+            await bot.send_message(
+                int(order["user_id"]),
+                texts.ORDER_PROVISIONED_NOTIFY.format(
+                    order_id=order_id,
+                    location=escape(str(order["location_name"])),
+                    volume=int(order["volume_gb"]),
+                    days=int(order["duration_days"]),
+                    configs_block=configs_block,
+                ),
+            )
     except Exception:  # noqa: BLE001 — user may have blocked the bot
         log.exception("Failed to notify user %s about provisioned order %s",
                       order["user_id"], order_id)

@@ -314,54 +314,10 @@ async def add_client_days(
         return
 
     await state.update_data(duration_days=days)
-    await state.set_state(AdminAddClientFlow.picking_location)
-    await _wizard_reply(
-        message,
-        state,
-        texts.ADMIN_ADD_CLIENT_LOCATION_PROMPT,
-        reply_markup=keyboards.admin_add_client_locations(locs),
-    )
-
-
-@router.callback_query(
-    StateFilter(AdminAddClientFlow.picking_location),
-    F.data.startswith(keyboards.CB_ADM_ADD_CLIENT_LOC_PREFIX),
-)
-async def add_client_pick_location(
-    callback: CallbackQuery,
-    state: FSMContext,
-    settings: Settings,
-    db: Database,
-    bot: Bot,
-) -> None:
-    if not await guard_admin_callback(callback, settings, db, ORDERS_MANAGE):
-        return
-    if callback.from_user is None or not isinstance(callback.message, Message):
-        await callback.answer()
-        return
-
-    raw = (callback.data or "").removeprefix(
-        keyboards.CB_ADM_ADD_CLIENT_LOC_PREFIX
-    )
-    try:
-        loc_id = int(raw)
-    except ValueError:
-        await callback.answer()
-        return
-
-    loc = db.get_location(loc_id)
-    if loc is None or not loc.enabled or loc.is_test:
-        await callback.answer("لوکیشن در دسترس نیست.", show_alert=True)
-        return
-
+    
+    loc = locs[0]
+    await state.update_data(location_id=loc.id)
     data = await state.get_data()
-    try:
-        volume_gb = int(data["volume_gb"])
-        duration_days = int(data["duration_days"])
-    except (KeyError, TypeError, ValueError):
-        await state.clear()
-        await callback.answer("اطلاعات ناقص است. دوباره شروع کنید.", show_alert=True)
-        return
 
     target_user_id = data.get("target_user_id")
     if target_user_id is not None:
@@ -371,26 +327,28 @@ async def add_client_pick_location(
             target_user_id = None
 
     if not loc.inbound_ids:
-        await callback.answer("inbound برای این لوکیشن تنظیم نشده.", show_alert=True)
+        await message.answer("inbound برای این لوکیشن تنظیم نشده.")
         return
 
-    await callback.answer()
     await admin_edit_or_answer(
-        callback.message,
+        message,
         texts.ADMIN_ADD_CLIENT_PROVISIONING,
         edit_in_place=True,
     )
+    
+    admin_id = message.from_user.id
+    volume_gb = int(data["volume_gb"])
+    duration_days = int(data["duration_days"])
 
-    admin_id = callback.from_user.id
     price = _calc_order_price(db, volume_gb, duration_days, loc.id)
     panel_only = target_user_id is None
     if panel_only:
         db.upsert_user(
             user_id=admin_id,
-            username=callback.from_user.username,
-            first_name=callback.from_user.first_name,
-            last_name=callback.from_user.last_name,
-            lang_code=callback.from_user.language_code,
+            username=message.from_user.username,
+            first_name=message.from_user.first_name,
+            last_name=message.from_user.last_name,
+            lang_code=message.from_user.language_code,
         )
         order_user_id = admin_id
     else:
@@ -422,7 +380,7 @@ async def add_client_pick_location(
         db.set_order_status(order_id, "failed", admin_id=admin_id)
         await state.clear()
         order_hint = f" (سفارش <code>#{order_id}</code>)"
-        await callback.message.answer(
+        await message.answer(
             texts.ADMIN_ADD_CLIENT_FAILED.format(
                 order_hint=order_hint, error=escape(str(exc))
             )
@@ -433,7 +391,7 @@ async def add_client_pick_location(
         db.set_order_status(order_id, "failed", admin_id=admin_id)
         await state.clear()
         order_hint = f" (سفارش <code>#{order_id}</code>)"
-        await callback.message.answer(
+        await message.answer(
             texts.ADMIN_ADD_CLIENT_FAILED.format(
                 order_hint=order_hint, error=escape(str(exc))
             )
@@ -456,7 +414,7 @@ async def add_client_pick_location(
     )
 
     if not panel_only:
-        await callback.message.answer(
+        await message.answer(
             texts.ADMIN_ADD_CLIENT_OK.format(
                 order_id=order_id,
                 user_id=target_user_id,
@@ -484,7 +442,7 @@ async def add_client_pick_location(
                 "Could not notify user %s about manual provision", target_user_id
             )
     else:
-        await callback.message.answer(
+        await message.answer(
             texts.ADMIN_ADD_CLIENT_OK_PANEL_ONLY.format(
                 order_id=order_id,
                 location=escape(loc.name),
@@ -496,7 +454,7 @@ async def add_client_pick_location(
             reply_markup=keyboards.admin_add_client_done_keyboard(),
         )
 
-    admin = Actor.from_user(callback.from_user)
+    admin = Actor.from_user(message.from_user)
     if admin is not None:
         await make_logger(bot, db).log_manual_client_created(
             order_id=order_id,

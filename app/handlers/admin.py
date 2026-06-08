@@ -32,7 +32,6 @@ from app.handlers.admin_helpers import (
     run_sync_panel,
 )
 from app.handlers.admin_panel import (
-    send_admin_home,
     send_base_plans,
     send_pending_list,
     send_users,

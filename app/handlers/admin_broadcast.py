@@ -19,7 +19,6 @@ from app.db import Database
 from app.admin_perms import TOOLS_BROADCAST
 from app.handlers.admin_helpers import (
     admin_can,
-    admin_panel_access,
     guard_admin_callback,
     guard_admin_message,
     is_admin,

@@ -150,7 +150,6 @@ async def cb_admin_customers_search_start(
         await callback.answer()
         return
     await state.set_state(AdminCustomersFlow.waiting_search)
-    uid = callback.from_user.id if callback.from_user else None
     await admin_edit_or_answer(
         callback.message,
         texts.ADMIN_CUSTOMERS_SEARCH_PROMPT,

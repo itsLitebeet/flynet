@@ -13,7 +13,6 @@ from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.types import CallbackQuery, Message
 
 from app import keyboards, texts
-from app.admin_perms import is_staff
 from app.config import Settings
 from app.db import Database
 

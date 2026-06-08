@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS orders (
     is_test             INTEGER NOT NULL DEFAULT 0,
     created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
     updated_at          TEXT    NOT NULL DEFAULT (datetime('now')),
+    renew_of_order_id   INTEGER,
     FOREIGN KEY (user_id)     REFERENCES users(user_id),
     FOREIGN KEY (location_id) REFERENCES locations(id)
 );
@@ -250,6 +251,7 @@ class Database:
         self._ensure_column(
             "orders", "admin_manual_only", "INTEGER NOT NULL DEFAULT 0"
         )
+        self._ensure_column("orders", "renew_of_order_id", "INTEGER")
         # Legacy status from an earlier version — hard-delete on upgrade.
         with self._cursor() as cur:
             cur.execute("DELETE FROM orders WHERE status = 'panel_removed'")
@@ -1150,13 +1152,14 @@ class Database:
         *,
         is_test: bool = False,
         admin_manual_only: bool = False,
+        renew_of_order_id: int | None = None,
     ) -> int:
         with self._cursor() as cur:
             cur.execute(
                 "INSERT INTO orders "
                 "(user_id, location_id, location_name, volume_gb, duration_days, price, "
-                "is_test, admin_manual_only) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "is_test, admin_manual_only, renew_of_order_id) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     user_id,
                     location_id,
@@ -1166,6 +1169,7 @@ class Database:
                     price,
                     1 if is_test else 0,
                     1 if admin_manual_only else 0,
+                    renew_of_order_id,
                 ),
             )
             return int(cur.lastrowid or 0)

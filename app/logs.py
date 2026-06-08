@@ -10,6 +10,8 @@ from aiogram.enums import ChatType
 from aiogram.types import Message, MessageOriginChannel, User
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 
+from app.db import Database
+
 _CAPTION_MAX = 1024
 _MESSAGE_MAX = 4096
 
@@ -19,7 +21,6 @@ def _fit_message(text: str) -> str:
         return text
     return text[: _MESSAGE_MAX - 20] + "\n\n<i>… (متن کوتاه شد)</i>"
 
-from app.db import Database
 
 log = logging.getLogger(__name__)
 

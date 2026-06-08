@@ -457,7 +457,6 @@ async def cb_order_manage(
         await callback.answer()
         return
 
-    uid = callback.from_user.id if callback.from_user else None
     if not await send_admin_order_view(
         callback.message,
         db,
@@ -501,7 +500,6 @@ async def cb_order_edit_plan_menu(
         order_id=order_id,
         panel_live=panel_live,
     )
-    uid = callback.from_user.id if callback.from_user else None
     await admin_edit_or_answer(
         callback.message,
         text,
@@ -551,7 +549,6 @@ async def cb_order_add_gb(
                 order_id=order_id, add_gb=add_gb, total_gb=total_gb
             )
         )
-        uid = callback.from_user.id if callback.from_user else None
         await send_admin_order_view(
             callback.message,
             db,
@@ -614,7 +611,6 @@ async def cb_order_add_days(
                 expiry=escape(expiry_s),
             )
         )
-        uid = callback.from_user.id if callback.from_user else None
         await send_admin_order_view(
             callback.message,
             db,
@@ -751,7 +747,6 @@ async def msg_order_set_gb(
             order_id=order_id, total_gb=total_gb
         )
     )
-    uid = message.from_user.id if message.from_user else None
     await send_admin_order_view(
         message,
         db,
@@ -813,7 +808,6 @@ async def msg_order_add_days_custom(
             expiry=escape(_format_expiry_ms(new_expiry)),
         )
     )
-    uid = message.from_user.id if message.from_user else None
     await send_admin_order_view(
         message,
         db,

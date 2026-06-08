@@ -698,3 +698,33 @@ async def cb_regen_confirm(callback: CallbackQuery, db: Database) -> None:
         texts.REGEN_OK.format(configs_block=configs_block),
         keyboards.back_to_service(order_id),
     )
+
+@router.callback_query(F.data.startswith(keyboards.CB_MY_RENEW_PREFIX))
+async def cb_my_service_renew(
+    callback: CallbackQuery, state: FSMContext, db: Database
+) -> None:
+    if callback.from_user is None or not isinstance(callback.message, Message):
+        await callback.answer()
+        return
+
+    try:
+        order_id = int((callback.data or '').removeprefix(keyboards.CB_MY_RENEW_PREFIX))
+    except ValueError:
+        await callback.answer()
+        return
+
+    row = db.get_order(order_id)
+    if row is None or row['user_id'] != callback.from_user.id:
+        await callback.answer('سرویس یافت نشد.', show_alert=True)
+        return
+
+    if row['status'] != 'provisioned':
+        await callback.answer('فقط سرویس‌های فعال یا تحویل‌داده‌شده قابل تمدید هستند.', show_alert=True)
+        return
+
+    await state.clear()
+    await state.update_data(renew_of_order_id=order_id)
+    
+    from app.handlers.order import _begin_buy_message
+    await _begin_buy_message(callback.message, state, db)
+    await callback.answer()

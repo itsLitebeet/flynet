@@ -11,7 +11,6 @@ from app.admin_perms import (
     can_access_panel,
     get_role,
     has_permission,
-    is_owner,
     is_staff,
 )
 from app.config import Settings

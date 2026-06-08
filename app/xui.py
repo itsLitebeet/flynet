@@ -665,3 +665,48 @@ class XuiClient:
             sub_links=sub_links,
             raw_get_response=None,
         )
+
+    async def renew_client(
+        self,
+        email: str,
+        volume_gb: int,
+        duration_days: int,
+        is_test: bool = False,
+    ) -> None:
+        from app import texts as _texts
+        usage = await self.get_usage(email)
+        
+        # Calculate new total bytes
+        if is_test:
+            test_cap_bytes = _texts.TEST_VOLUME_MB * 1024 * 1024
+            if usage.is_unlimited_traffic or usage.total_bytes <= 0:
+                new_total_bytes = test_cap_bytes
+            else:
+                new_total_bytes = usage.remaining_bytes + test_cap_bytes
+        else:
+            if usage.is_unlimited_traffic or usage.total_bytes <= 0:
+                new_total_bytes = volume_gb * 1024**3
+            else:
+                new_total_bytes = usage.remaining_bytes + (volume_gb * 1024**3)
+
+        # Calculate new expiry time
+        if is_test:
+            added_ms = _texts.TEST_DURATION_HOURS * 3600 * 1000
+        else:
+            added_ms = duration_days * 24 * 3600 * 1000
+            
+        import time
+        now_ms = int(time.time() * 1000)
+        
+        if usage.expiry_time_ms <= 0:
+            new_expiry_ms = now_ms + added_ms
+        else:
+            base_time = max(now_ms, usage.expiry_time_ms)
+            new_expiry_ms = base_time + added_ms
+
+        await self.update_client(
+            email=email,
+            total_bytes=new_total_bytes,
+            expiry_time_ms=new_expiry_ms,
+            enable=True,
+        )
