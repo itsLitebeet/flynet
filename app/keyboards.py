@@ -1719,7 +1719,7 @@ def admin_location_config_buttons(
         InlineKeyboardButton(
             text=texts.BTN_BACK,
             callback_data=f"{CB_ADM_LOC_DETAIL_PREFIX}{location_id}",
-            style="secondary"
+            style="danger"
         )
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
