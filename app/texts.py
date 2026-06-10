@@ -132,12 +132,12 @@ STATUS_BADGE = {
     "provisioned":      "🟢 فعال",
     "failed":           "⚠️ خطا",
     "expired":          "⏱ منقضی",
-    "quota_exhausted":  "📭 حجم تمام شد",
+    "quota_exhausted":  "اتمام حجم 🔴",
 }
 
 # Live panel state (admin users list / detail when usage is fetched)
 PANEL_BADGE_EXPIRED = "⏱ منقضی"
-PANEL_BADGE_QUOTA_DONE = "📭 حجم تمام شد"
+PANEL_BADGE_QUOTA_DONE = "اتمام حجم 🔴"
 PANEL_BADGE_DISABLED = "⏸ غیرفعال در پنل"
 
 SERVICE_LIST_ITEM = (
