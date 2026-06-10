@@ -119,7 +119,7 @@ def _service_list_label(row) -> str:
         if _is_test_order(row)
         else f"{row['duration_days']}d"
     )
-    return f"{badge} #{row['id']}{test_mark} · {row['location_name']} · {vol}/{dur}{nick}"
+    return f"{badge} #{row['id']}{test_mark} · {vol}/{dur}{nick}"
 
 
 def _format_usage_block(usage: ClientUsage) -> str:
@@ -373,7 +373,14 @@ async def _show_services_list(
             )
         return
 
-    items = [{"id": int(r["id"]), "label": _service_list_label(r)} for r in rows]
+    items = [
+        {
+            "id": int(r["id"]),
+            "label": _service_list_label(r),
+            "status": str(r["status"]),
+        }
+        for r in rows
+    ]
     text = texts.MY_SERVICES_HEADER
     markup = keyboards.my_services_list(items)
     if edit_in_place:

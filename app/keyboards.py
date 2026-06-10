@@ -412,13 +412,14 @@ def purge_confirm(location_id: int) -> InlineKeyboardMarkup:
 
 # ---------- my services ----------
 def my_services_list(orders: list[dict]) -> InlineKeyboardMarkup:
-    """`orders` is a list of dicts with keys: id, label."""
+    """`orders` is a list of dicts with keys: id, label, status."""
     rows: list[list[InlineKeyboardButton]] = []
     for o in orders:
+        style = 'danger' if o.get("status") in ("expired", "quota_exhausted") else 'primary'
         rows.append([
-            InlineKeyboardButton(text=o["label"], callback_data=f"{CB_MY_DETAIL_PREFIX}{o['id']}",style='primary')
+            InlineKeyboardButton(text=o["label"], callback_data=f"{CB_MY_DETAIL_PREFIX}{o['id']}", style=style)
         ])
-    rows.append([InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_MAIN_HOME,style='danger')])
+    rows.append([InlineKeyboardButton(text=texts.BTN_BACK, callback_data=CB_MAIN_HOME, style='danger')])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
