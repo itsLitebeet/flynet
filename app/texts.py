@@ -131,6 +131,8 @@ STATUS_BADGE = {
     "declined":         "❌ ردشده",
     "provisioned":      "🟢 فعال",
     "failed":           "⚠️ خطا",
+    "expired":          "⏱ منقضی",
+    "quota_exhausted":  "📭 حجم تمام شد",
 }
 
 # Live panel state (admin users list / detail when usage is fetched)

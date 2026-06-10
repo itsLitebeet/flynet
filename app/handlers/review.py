@@ -253,6 +253,7 @@ async def cb_accept_order(
             volume_gb=int(parent_order["volume_gb"]) + int(order["volume_gb"]),
             duration_days=int(parent_order["duration_days"]) + int(order["duration_days"]),
         )
+        db.set_order_status(int(renew_of_order_id), 'provisioned')
         db.set_order_status(order_id, 'completed_renewal', admin_id=callback.from_user.id)
     else:
         db.set_order_provisioned(

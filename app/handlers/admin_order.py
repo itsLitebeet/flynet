@@ -71,7 +71,7 @@ async def send_admin_order_view(
 
 async def _panel_for_order(db: Database, order) -> tuple | None:
     """Return (location, email) or None if panel ops impossible."""
-    if str(order["status"]) != "provisioned" or not order["xui_email"]:
+    if str(order["status"]) not in ("provisioned", "expired", "quota_exhausted") or not order["xui_email"]:
         return None
     loc = db.get_location(int(order["location_id"]))
     if loc is None:

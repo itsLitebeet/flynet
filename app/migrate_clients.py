@@ -57,7 +57,12 @@ async def main():
                         email=email,
                         inbound_ids=master_loc.inbound_ids,
                     )
-                    print(f"  [SUCCESS] Updated {email} to use all inbounds.")
+                    db._conn.execute(
+                        "UPDATE orders SET location_id = ?, location_name = ?, updated_at = datetime('now') WHERE id = ?",
+                        (master_loc.id, master_loc.name, order_id)
+                    )
+                    db._conn.commit()
+                    print(f"  [SUCCESS] Updated {email} to use all inbounds and updated database location.")
                 except Exception as e:
                     print(f"  [ERROR] Failed to update {email}: {e}")
             else:
@@ -72,7 +77,12 @@ async def main():
                         client_uuid=uuid,
                         sub_id=sub_id,
                     )
-                    print(f"  [SUCCESS] Created {email} on Master Panel with full limits.")
+                    db._conn.execute(
+                        "UPDATE orders SET location_id = ?, location_name = ?, updated_at = datetime('now') WHERE id = ?",
+                        (master_loc.id, master_loc.name, order_id)
+                    )
+                    db._conn.commit()
+                    print(f"  [SUCCESS] Created {email} on Master Panel and updated database location.")
                 except Exception as e:
                     print(f"  [ERROR] Failed to create {email}: {e}")
 

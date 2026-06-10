@@ -34,10 +34,10 @@ def _user_display_name(row) -> str:
 
 def panel_live_badge(usage: ClientUsage | None, *, db_status: str) -> str:
     """Badge from DB status, or live panel usage when order is provisioned."""
-    if db_status != "provisioned":
+    if db_status not in ("provisioned", "expired", "quota_exhausted"):
         return texts.STATUS_BADGE.get(db_status, escape(db_status))
     if usage is None:
-        return texts.STATUS_BADGE["provisioned"]
+        return texts.STATUS_BADGE.get(db_status, db_status)
 
     now_ms = int(time.time() * 1000)
     if usage.expiry_time_ms > 0 and now_ms >= usage.expiry_time_ms:
@@ -56,7 +56,7 @@ async def load_panel_usage_for_orders(
     by_loc: dict[int, set[str]] = {}
     for o in orders:
         email = o["xui_email"]
-        if not email or str(o["status"]) != "provisioned":
+        if not email or str(o["status"]) not in ("provisioned", "expired", "quota_exhausted"):
             continue
         try:
             loc_id = int(o["location_id"])
@@ -106,7 +106,7 @@ def _panel_client_summary(
         f"   🆔 <code>{escape(str(order['xui_email']))}</code> · "
         f"{st} · {loc}"
     )
-    if usage is not None and str(order["status"]) == "provisioned":
+    if usage is not None and str(order["status"]) in ("provisioned", "expired", "quota_exhausted"):
         if usage.is_unlimited_traffic:
             used = texts.format_bytes(usage.used_bytes)
             line += f" · مصرف {used}"

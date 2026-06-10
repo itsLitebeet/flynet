@@ -518,9 +518,9 @@ class Database:
                 "SELECT u.user_id, u.username, u.first_name, u.last_name, "
                 "u.created_at, u.is_banned, "
                 "COUNT(o.id) AS order_count, "
-                "SUM(CASE WHEN o.status = 'provisioned' THEN 1 ELSE 0 END) "
+                "SUM(CASE WHEN o.status IN ('provisioned', 'expired', 'quota_exhausted') THEN 1 ELSE 0 END) "
                 "AS provisioned_count, "
-                "SUM(CASE WHEN o.status = 'provisioned' THEN o.price ELSE 0 END) "
+                "SUM(CASE WHEN o.status IN ('provisioned', 'expired', 'quota_exhausted') THEN o.price ELSE 0 END) "
                 "AS total_spent, "
                 "MAX(o.updated_at) AS last_order_at "
                 "FROM users u "
@@ -541,9 +541,9 @@ class Database:
 
         agg = (
             "COUNT(o.id) AS order_count, "
-            "SUM(CASE WHEN o.status = 'provisioned' THEN 1 ELSE 0 END) "
+            "SUM(CASE WHEN o.status IN ('provisioned', 'expired', 'quota_exhausted') THEN 1 ELSE 0 END) "
             "AS provisioned_count, "
-            "SUM(CASE WHEN o.status = 'provisioned' THEN o.price ELSE 0 END) "
+            "SUM(CASE WHEN o.status IN ('provisioned', 'expired', 'quota_exhausted') THEN o.price ELSE 0 END) "
             "AS total_spent, "
             "MAX(o.updated_at) AS last_order_at "
         )
@@ -578,7 +578,7 @@ class Database:
         with self._cursor() as cur:
             cur.execute(
                 "SELECT COUNT(o.id) AS total_orders, "
-                "SUM(CASE WHEN o.status = 'provisioned' THEN 1 ELSE 0 END) "
+                "SUM(CASE WHEN o.status IN ('provisioned', 'expired', 'quota_exhausted') THEN 1 ELSE 0 END) "
                 "AS provisioned, "
                 "SUM(CASE WHEN o.status = 'awaiting_review' THEN 1 ELSE 0 END) "
                 "AS awaiting_review, "
@@ -588,9 +588,9 @@ class Database:
                 "AS declined, "
                 "SUM(CASE WHEN o.status = 'failed' THEN 1 ELSE 0 END) "
                 "AS failed, "
-                "SUM(CASE WHEN o.status = 'provisioned' THEN o.price ELSE 0 END) "
+                "SUM(CASE WHEN o.status IN ('provisioned', 'expired', 'quota_exhausted') THEN o.price ELSE 0 END) "
                 "AS paid_revenue, "
-                "SUM(CASE WHEN o.status = 'provisioned' THEN o.price ELSE 0 END) "
+                "SUM(CASE WHEN o.status IN ('provisioned', 'expired', 'quota_exhausted') THEN o.price ELSE 0 END) "
                 "AS total_spent, "
                 "MIN(o.created_at) AS first_order_at, "
                 "MAX(o.updated_at) AS last_order_at "
@@ -1380,7 +1380,12 @@ class Database:
 
     def count_orders_by_status(self, status: str) -> int:
         with self._cursor() as cur:
-            cur.execute("SELECT COUNT(*) AS c FROM orders WHERE status = ?", (status,))
+            if status == "provisioned":
+                cur.execute(
+                    "SELECT COUNT(*) AS c FROM orders WHERE status IN ('provisioned', 'expired', 'quota_exhausted')"
+                )
+            else:
+                cur.execute("SELECT COUNT(*) AS c FROM orders WHERE status = ?", (status,))
             return int(cur.fetchone()["c"])
 
     def pending_orders(self, limit: int = 20) -> list[sqlite3.Row]:
@@ -1399,13 +1404,13 @@ class Database:
         with self._cursor() as cur:
             if location_id is not None:
                 cur.execute(
-                    "SELECT * FROM orders WHERE status = 'provisioned' "
+                    "SELECT * FROM orders WHERE status IN ('provisioned', 'expired', 'quota_exhausted') "
                     "AND location_id = ? ORDER BY id",
                     (location_id,),
                 )
             else:
                 cur.execute(
-                    "SELECT * FROM orders WHERE status = 'provisioned' ORDER BY id"
+                    "SELECT * FROM orders WHERE status IN ('provisioned', 'expired', 'quota_exhausted') ORDER BY id"
                 )
             return list(cur.fetchall())
 

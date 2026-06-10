@@ -173,6 +173,16 @@ async def sync_location_orders(
                 if email not in panel_emails:
                     if db.delete_order(oid):
                         orphan_deleted.append(oid)
+                else:
+                    usage = _usage_from_client(clients_by_email[email])
+                    new_status = "provisioned"
+                    if usage.is_expired:
+                        new_status = "expired"
+                    elif usage.is_quota_exhausted:
+                        new_status = "quota_exhausted"
+                    
+                    if new_status != str(row["status"]):
+                        db.set_order_status(oid, new_status)
 
             return orphan_deleted, test_panel_cleaned, None
     except XuiError as exc:

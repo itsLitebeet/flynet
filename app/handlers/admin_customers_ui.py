@@ -76,7 +76,7 @@ def _format_customer_order_line(
     elif str(order["status"]) != "declined":
         footer_lines.append("<i>پنل: هنوز ساخته نشده</i>")
 
-    if usage is not None and str(order["status"]) == "provisioned":
+    if usage is not None and str(order["status"]) in ("provisioned", "expired", "quota_exhausted"):
         footer_lines.append(_format_usage_compact(usage))
 
     if order["xui_sub_id"]:

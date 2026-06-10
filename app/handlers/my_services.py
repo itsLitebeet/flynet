@@ -159,7 +159,7 @@ def _build_detail_text(
         panel_id_line = f"🆔 شناسه پنل: <code>{escape(str(row['xui_email']))}</code>\n"
 
     usage_block = ""
-    if str(row["status"]) == "provisioned":
+    if str(row["status"]) in ("provisioned", "expired", "quota_exhausted"):
         if usage_error:
             usage_block = texts.SERVICE_DETAIL_USAGE_ERROR.format(
                 error=escape(usage_error)
@@ -184,7 +184,7 @@ def _build_detail_text(
         usage_block=usage_block,
         created_at=str(row["created_at"]),
     )
-    if _is_test_order(row) and str(row["status"]) == "provisioned":
+    if _is_test_order(row) and str(row["status"]) in ("provisioned", "expired", "quota_exhausted"):
         detail += texts.TEST_SERVICE_LIMITED
     return detail
 
@@ -215,7 +215,7 @@ async def _show_service_detail(
         await callback.answer("سرویس یافت نشد.", show_alert=True)
         return
 
-    provisioned = str(row["status"]) == "provisioned"
+    provisioned = str(row["status"]) in ("provisioned", "expired", "quota_exhausted")
     usage: ClientUsage | None = None
     usage_error: str | None = None
     enabled = True
@@ -228,6 +228,19 @@ async def _show_service_detail(
             usage, usage_error = await _fetch_panel_usage(row, location)
             if usage is not None:
                 enabled = usage.enable
+                
+                # Dynamic status update
+                new_status = "provisioned"
+                if usage.is_expired:
+                    new_status = "expired"
+                elif usage.is_quota_exhausted:
+                    new_status = "quota_exhausted"
+                
+                if new_status != str(row["status"]):
+                    db.set_order_status(order_id, new_status)
+                    reloaded_row = db.get_order(order_id)
+                    if reloaded_row:
+                        row = reloaded_row
 
     is_test = _is_test_order(row)
     text = _build_detail_text(row, usage=usage, usage_error=usage_error)
@@ -260,6 +273,29 @@ async def _own_order_or_none(db: Database, order_id: int, user_id: int):
     if not await is_visible_to_buyer(db, row):
         return None
     return row
+
+
+async def _get_order_sub_links(db: Database, row: sqlite3.Row, location) -> list[str]:
+    order_id = int(row["id"])
+    sub_id = row["xui_sub_id"]
+    if location and sub_id:
+        try:
+            async with XuiClient(location.base_url, location.api_token) as xui:
+                links = await xui.get_sub_links(str(sub_id))
+                if links:
+                    db._conn.execute(
+                        "UPDATE orders SET sub_links = ?, updated_at = datetime('now') WHERE id = ?",
+                        (json.dumps(links), order_id)
+                    )
+                    db._conn.commit()
+                    return links
+        except Exception as exc:
+            log.warning("Failed to fetch live sub_links for order %s: %s", order_id, exc)
+            
+    try:
+        return json.loads(row["sub_links"] or "[]")
+    except (TypeError, ValueError):
+        return []
 
 
 async def _show_services_list(
@@ -370,16 +406,12 @@ async def cb_view_configs(callback: CallbackQuery, db: Database) -> None:
         return
 
     row = await _own_order_or_none(db, order_id, user.id)
-    if row is None or row["status"] != "provisioned":
+    if row is None or row["status"] not in ("provisioned", "expired", "quota_exhausted"):
         await callback.answer("این سرویس فعال نیست.", show_alert=True)
         return
 
     location = db.get_location(int(row["location_id"]))
-    sub_links: list[str] = []
-    try:
-        sub_links = json.loads(row["sub_links"] or "[]")
-    except (TypeError, ValueError):
-        sub_links = []
+    sub_links = await _get_order_sub_links(db, row, location)
 
     sub_url = location.render_sub_url(row["xui_sub_id"]) if location else None
     
@@ -424,7 +456,7 @@ async def cb_view_configs_filtered(callback: CallbackQuery, db: Database) -> Non
         return
 
     row = await _own_order_or_none(db, order_id, user.id)
-    if row is None or row["status"] != "provisioned":
+    if row is None or row["status"] not in ("provisioned", "expired", "quota_exhausted"):
         await callback.answer("این سرویس فعال نیست.", show_alert=True)
         return
 
@@ -437,11 +469,7 @@ async def cb_view_configs_filtered(callback: CallbackQuery, db: Database) -> Non
     btn_name = btn.get("name", "دریافت کانفیگ")
     keywords = [k.strip().lower() for k in btn.get("keywords", "").split(",") if k.strip()]
     
-    sub_links: list[str] = []
-    try:
-        sub_links = json.loads(row["sub_links"] or "[]")
-    except (TypeError, ValueError):
-        sub_links = []
+    sub_links = await _get_order_sub_links(db, row, location)
         
     # Filter the sub_links based on keywords
     import urllib.parse
@@ -489,7 +517,7 @@ async def cb_refresh_usage(callback: CallbackQuery, db: Database) -> None:
         return
 
     row = await _own_order_or_none(db, order_id, user.id)
-    if row is None or row["status"] != "provisioned":
+    if row is None or row["status"] not in ("provisioned", "expired", "quota_exhausted"):
         await callback.answer("این سرویس فعال نیست.", show_alert=True)
         return
 
@@ -510,7 +538,7 @@ async def cb_toggle(callback: CallbackQuery, db: Database) -> None:
         return
 
     row = await _own_order_or_none(db, order_id, user.id)
-    if row is None or row["status"] != "provisioned":
+    if row is None or row["status"] not in ("provisioned", "expired", "quota_exhausted"):
         await callback.answer("این سرویس فعال نیست.", show_alert=True)
         return
     if _is_test_order(row):
@@ -626,7 +654,7 @@ async def on_nickname_received(
 
     is_test = bool(row["is_test"]) if "is_test" in row.keys() else False
     new_panel_id: str | None = None
-    if row["status"] == "provisioned" and row["xui_email"]:
+    if row["status"] in ("provisioned", "expired", "quota_exhausted") and row["xui_email"]:
         new_panel_id = email_from_user_label(nick, order_id, is_test=is_test)
         if new_panel_id is None:
             await message.answer(texts.RENAME_INVALID_LABEL)
@@ -693,7 +721,7 @@ async def cb_regen_ask(callback: CallbackQuery, db: Database) -> None:
         return
 
     row = await _own_order_or_none(db, order_id, user.id)
-    if row is None or row["status"] != "provisioned":
+    if row is None or row["status"] not in ("provisioned", "expired", "quota_exhausted"):
         await callback.answer("این سرویس فعال نیست.", show_alert=True)
         return
     if _is_test_order(row):
@@ -720,7 +748,7 @@ async def cb_regen_confirm(callback: CallbackQuery, db: Database) -> None:
         return
 
     row = await _own_order_or_none(db, order_id, user.id)
-    if row is None or row["status"] != "provisioned":
+    if row is None or row["status"] not in ("provisioned", "expired", "quota_exhausted"):
         await callback.answer("این سرویس فعال نیست.", show_alert=True)
         return
     if _is_test_order(row):
@@ -798,7 +826,7 @@ async def cb_my_service_renew(
         await callback.answer('سرویس یافت نشد.', show_alert=True)
         return
 
-    if row['status'] != 'provisioned':
+    if row['status'] not in ('provisioned', 'expired', 'quota_exhausted'):
         await callback.answer('فقط سرویس‌های فعال یا تحویل‌داده‌شده قابل تمدید هستند.', show_alert=True)
         return
 
