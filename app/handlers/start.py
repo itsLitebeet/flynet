@@ -146,6 +146,10 @@ async def cb_home(
                 callback.from_user is not None
                 and buyer_show_test_button(db, callback.from_user.id)
             )
+            try:
+                await callback.message.delete()
+            except Exception:
+                pass
             await callback.message.answer(
                 texts.WELCOME,
                 reply_markup=keyboards.main_reply_keyboard(show_test=show_test),
