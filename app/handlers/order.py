@@ -149,6 +149,10 @@ async def _abort_order_flow(
                     )
             db.delete_order(order_id)
     await state.clear()
+    try:
+        await message.delete()
+    except Exception:
+        pass
     await message.answer(
         texts.CANCELLED, reply_markup=buyer_reply_keyboard(message, db)
     )
