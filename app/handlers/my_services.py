@@ -298,6 +298,46 @@ async def _get_order_sub_links(db: Database, row: sqlite3.Row, location) -> list
         return []
 
 
+async def _sync_user_orders_status(db: Database, user_id: int) -> None:
+    rows = db.list_user_orders(user_id, limit=50)
+    by_loc: dict[int, list[dict]] = {}
+    for r in rows:
+        status = str(r["status"])
+        email = r["xui_email"]
+        if email and status in ("provisioned", "expired", "quota_exhausted"):
+            try:
+                loc_id = int(r["location_id"])
+                by_loc.setdefault(loc_id, []).append(dict(r))
+            except (ValueError, TypeError, KeyError):
+                continue
+                
+    if not by_loc:
+        return
+
+    for loc_id, orders in by_loc.items():
+        loc = db.get_location(loc_id)
+        if not loc:
+            continue
+        try:
+            emails = {o["xui_email"] for o in orders}
+            async with XuiClient(loc.base_url, loc.api_token) as xui:
+                usage_map = await xui.usage_for_emails(emails)
+                for o in orders:
+                    email = o["xui_email"]
+                    usage = usage_map.get(email)
+                    if usage is not None:
+                        new_status = "provisioned"
+                        if usage.is_expired:
+                            new_status = "expired"
+                        elif usage.is_quota_exhausted:
+                            new_status = "quota_exhausted"
+                        
+                        if new_status != o["status"]:
+                            db.set_order_status(o["id"], new_status)
+        except Exception as exc:
+            log.warning("Failed to sync user orders status for location %s: %s", loc_id, exc)
+
+
 async def _show_services_list(
     message: Message,
     db: Database,
@@ -305,6 +345,7 @@ async def _show_services_list(
     *,
     edit_in_place: bool = False,
 ) -> None:
+    await _sync_user_orders_status(db, user_id)
     rows = await filter_visible_orders(db, db.list_user_orders(user_id, limit=50))
     if not rows:
         text = texts.MY_SERVICES_EMPTY
