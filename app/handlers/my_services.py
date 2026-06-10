@@ -255,6 +255,7 @@ async def _show_service_detail(
             provisioned=provisioned,
             enabled=enabled,
             is_test=is_test,
+            status=str(row["status"]),
         ),
     )
     if refresh:
@@ -884,3 +885,71 @@ async def cb_my_service_renew(
     from app.handlers.order import _begin_buy_message
     await _begin_buy_message(callback.message, state, db)
     await callback.answer()
+
+
+# ---------- delete service ----------
+@router.callback_query(F.data.startswith(keyboards.CB_MY_DELETE_PREFIX)
+                       & ~F.data.startswith(keyboards.CB_MY_DELETE_CONFIRM_PREFIX))
+async def cb_delete_ask(callback: CallbackQuery, db: Database) -> None:
+    user = callback.from_user
+    if user is None:
+        await callback.answer()
+        return
+    try:
+        order_id = int((callback.data or "").removeprefix(keyboards.CB_MY_DELETE_PREFIX))
+    except ValueError:
+        await callback.answer()
+        return
+
+    row = await _own_order_or_none(db, order_id, user.id)
+    if row is None:
+        await callback.answer("سرویس یافت نشد.", show_alert=True)
+        return
+    if _is_test_order(row):
+        await callback.answer(texts.TEST_SERVICE_ACTION_BLOCKED, show_alert=True)
+        return
+
+    await _edit_or_answer(callback, texts.DELETE_SERVICE_CONFIRM, keyboards.delete_confirm(order_id))
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith(keyboards.CB_MY_DELETE_CONFIRM_PREFIX))
+async def cb_delete_confirm(callback: CallbackQuery, db: Database) -> None:
+    user = callback.from_user
+    if user is None:
+        await callback.answer()
+        return
+    try:
+        order_id = int((callback.data or "").removeprefix(keyboards.CB_MY_DELETE_CONFIRM_PREFIX))
+    except ValueError:
+        await callback.answer()
+        return
+
+    row = await _own_order_or_none(db, order_id, user.id)
+    if row is None:
+        await callback.answer("سرویس یافت نشد.", show_alert=True)
+        return
+    if _is_test_order(row):
+        await callback.answer(texts.TEST_SERVICE_ACTION_BLOCKED, show_alert=True)
+        return
+
+    # Delete client from panel first
+    email = row["xui_email"]
+    try:
+        location_id = int(row["location_id"])
+        location = db.get_location(location_id)
+    except (ValueError, TypeError, KeyError):
+        location = None
+
+    if location and email:
+        try:
+            async with XuiClient(location.base_url, location.api_token) as xui:
+                await xui.delete_client(str(email))
+        except Exception as exc:
+            log.warning("Could not delete client %s from panel %s: %s", email, location.id, exc)
+
+    # Delete order from bot database
+    db.delete_order(order_id)
+
+    await _edit_or_answer(callback, texts.DELETE_SERVICE_OK, keyboards.back_to_menu())
+    await callback.answer("حذف شد ✅")

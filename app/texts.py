@@ -1549,3 +1549,7 @@ DECLINE_PRESET_REASONS: dict[str, str] = {p[0]: p[2] for p in DECLINE_PRESETS}
 REVIEW_ACCEPTED      = "✅ سفارش تأیید شد. در حال ساخت کانفیگ روی پنل..."
 REVIEW_PROVISION_OK  = "🎉 سفارش با موفقیت فعال و برای کاربر ارسال شد."
 REVIEW_PROVISION_ERR = "⚠️ خطا در فعال‌سازی روی پنل:\n<code>{error}</code>"
+
+DELETE_SERVICE_CONFIRM = "⚠️ آیا از حذف این سرویس مطمئن هستید؟ با این کار سرویس از ربات و پنل به طور کامل حذف خواهد شد و امکان بازیابی آن وجود ندارد."
+DELETE_SERVICE_OK = "✅ سرویس با موفقیت حذف شد."
+DELETE_SERVICE_FAILED = "⚠️ خطا در حذف سرویس: {error}"

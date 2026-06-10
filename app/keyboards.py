@@ -164,6 +164,8 @@ CB_MY_RENAME_PREFIX         = "my:ren:"      # my:ren:<order_id>
 CB_MY_REGEN_PREFIX          = "my:rg:"       # my:rg:<order_id>      (asks confirmation)
 CB_MY_REGEN_CONFIRM_PREFIX  = "my:rg:ok:"    # my:rg:ok:<order_id>   (does it)
 CB_MY_RENEW_PREFIX          = "my:rn:"       # my:rn:<order_id>      (starts renew flow)
+CB_MY_DELETE_PREFIX         = "my:del:"      # my:del:<order_id>     (asks confirmation)
+CB_MY_DELETE_CONFIRM_PREFIX = "my:del:ok:"   # my:del:ok:<order_id>  (does it)
 
 
 # ---------- reply keyboard (bottom menu, replaces phone keyboard) ----------
@@ -424,10 +426,34 @@ def my_services_list(orders: list[dict]) -> InlineKeyboardMarkup:
 
 
 def my_service_detail(
-    order_id: int, *, provisioned: bool, enabled: bool, is_test: bool = False
+    order_id: int, *, provisioned: bool, enabled: bool, is_test: bool = False, status: str = "provisioned"
 ) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
-    if provisioned:
+    
+    if status in ("expired", "quota_exhausted"):
+        rows.append([
+            InlineKeyboardButton(
+                text=texts.BTN_REFRESH_USAGE,
+                callback_data=f"{CB_MY_REFRESH_USAGE_PREFIX}{order_id}",
+                style='primary'
+            ),
+        ])
+        if not is_test:
+            rows.append([
+                InlineKeyboardButton(
+                    text="♻️ تمدید سرویس",
+                    callback_data=f"{CB_MY_RENEW_PREFIX}{order_id}",
+                    style='success'
+                ),
+            ])
+            rows.append([
+                InlineKeyboardButton(
+                    text="🗑️ حذف سرویس",
+                    callback_data=f"{CB_MY_DELETE_PREFIX}{order_id}",
+                    style='danger'
+                ),
+            ])
+    elif provisioned:
         rows.append([
             InlineKeyboardButton(
                 text=texts.BTN_VIEW_CONFIGS,
@@ -468,6 +494,19 @@ def my_service_detail(
         ])
     rows.append([InlineKeyboardButton(text="🔙 لیست سرویس‌ها", callback_data=CB_MY_LIST,style='danger')])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def delete_confirm(order_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🗑️ بله، سرویس حذف شود", callback_data=f"{CB_MY_DELETE_CONFIRM_PREFIX}{order_id}", style='success'),
+            ],
+            [
+                InlineKeyboardButton(text="🔙 انصراف", callback_data=f"{CB_MY_DETAIL_PREFIX}{order_id}", style='danger'),
+            ],
+        ]
+    )
 
 
 def back_to_service(order_id: int) -> InlineKeyboardMarkup:
