@@ -51,6 +51,10 @@ async def send_admin_order_view(
 
     order = await db.get_order(order_id)
     assert order is not None
+
+    if back_data == keyboards.CB_ADM_PENDING_LIST:
+        if str(order["status"]) in ("provisioned", "expired", "quota_exhausted"):
+            back_data = f"{keyboards.CB_ADM_CUST_DETAIL_PREFIX}{int(order['user_id'])}"
     panel_live = await _panel_live_snippet(db, order)
     if panel_live:
         text = f"{text}\n\n{panel_live}"
