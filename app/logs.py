@@ -555,6 +555,9 @@ class NetFlyLogger:
             )
         )
 
+    async def log_admin_action(self, text: str) -> None:
+        await self._send_text(text)
+
 
 def make_logger(bot: Bot, db: Database) -> NetFlyLogger:
     return NetFlyLogger(bot, db)
