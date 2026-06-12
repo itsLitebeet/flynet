@@ -142,7 +142,7 @@ async def _apply_add_gb(
             else _gb_to_bytes(int(order["volume_gb"]))
         )
         new_total = base_bytes + _gb_to_bytes(add_gb)
-        await xui.update_client(email=email, total_bytes=new_total)
+        await xui.update_client(email=email, total_bytes=new_total, enable=True)
     new_gb = max(int(order["volume_gb"]), (new_total + GIB_IN_BYTES - 1) // GIB_IN_BYTES)
     db.update_order_plan(order_id, volume_gb=new_gb)
     return new_gb
@@ -152,7 +152,7 @@ async def _apply_set_gb(
     db: Database, order_id: int, loc, email: str, total_gb: int
 ) -> None:
     async with XuiClient(loc.base_url, loc.api_token) as xui:
-        await xui.update_client(email=email, volume_gb=total_gb)
+        await xui.update_client(email=email, volume_gb=total_gb, enable=True)
     db.update_order_plan(order_id, volume_gb=total_gb)
 
 
@@ -168,7 +168,7 @@ async def _apply_add_days(
             else now_ms
         )
         new_expiry = base_ms + add_days * DAY_IN_SECONDS * 1000
-        await xui.update_client(email=email, expiry_time_ms=new_expiry)
+        await xui.update_client(email=email, expiry_time_ms=new_expiry, enable=True)
     db.update_order_plan(
         order_id, duration_days=int(order["duration_days"]) + add_days
     )
