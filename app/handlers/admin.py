@@ -104,7 +104,7 @@ async def cmd_stats(message: Message, settings: Settings, db: Database) -> None:
         return
     if message.from_user is None:
         return
-    await message.answer(format_stats_text(db))
+    await message.answer(await format_stats_text(db))
 
 
 @router.message(Command("users"))
@@ -146,7 +146,7 @@ async def cmd_addservice(
         await message.answer(texts.ADD_SERVICE_USAGE)
         return
 
-    ok, reason, pkg_id = db.add_service_package(
+    ok, reason, pkg_id = await db.add_service_package(
         loc_id, volume_gb, duration_days, price
     )
     if not ok:
@@ -160,7 +160,7 @@ async def cmd_addservice(
         await message.answer(msg)
         return
 
-    loc = db.get_location(loc_id)
+    loc = await db.get_location(loc_id)
     loc_name = escape(loc.name) if loc else "—"
     await message.answer(
         texts.ADD_SERVICE_OK.format(
@@ -195,7 +195,7 @@ async def cmd_delservice(
         await message.answer(texts.DEL_SERVICE_USAGE)
         return
 
-    if not db.remove_service_package(package_id):
+    if not await db.remove_service_package(package_id):
         await message.answer(texts.DEL_SERVICE_NOTFOUND)
         return
     await message.answer(texts.DEL_SERVICE_OK.format(id=package_id))
@@ -216,14 +216,14 @@ async def cmd_listservices(
         except ValueError:
             await message.answer(texts.ADD_SERVICE_USAGE.replace("addservice", "listservices"))
             return
-        if db.get_location(loc_filter) is None:
+        if await db.get_location(loc_filter) is None:
             await message.answer(texts.ADD_SERVICE_NOT_FOUND)
             return
 
     packages = (
-        db.list_service_packages(loc_filter, only_enabled=False)
+        await db.list_service_packages(loc_filter, only_enabled=False)
         if loc_filter is not None
-        else db.list_all_service_packages()
+        else await db.list_all_service_packages()
     )
     if not packages:
         await message.answer(texts.LIST_SERVICES_EMPTY)
@@ -233,12 +233,12 @@ async def cmd_listservices(
 
     filter_line = f" — لوکیشن <code>#{loc_filter}</code>" if loc_filter else ""
     lines = [texts.LIST_SERVICES_HEADER.format(filter_line=filter_line)]
-    offer = db.get_offer_config()
+    offer = await db.get_offer_config()
     for pkg in packages:
-        loc = db.get_location(pkg.location_id)
+        loc = await db.get_location(pkg.location_id)
         loc_name = escape(loc.name) if loc else "—"
         base = int(pkg.price)
-        final = db.resolve_price(base)
+        final = await db.resolve_price(base)
         if offer.is_active and final < base:
             price_label = format_price_with_offer(base, final)
         else:
@@ -253,7 +253,7 @@ async def cmd_listservices(
                 price=price_label,
             )
         )
-    mode = "روشن ✅" if db.is_manual_purchase_enabled() else "خاموش ❌"
+    mode = "روشن ✅" if await db.is_manual_purchase_enabled() else "خاموش ❌"
     lines.append(f"\n🔀 حالت خرید دستی: <b>{mode}</b>")
     await message.answer("\n".join(lines))
 
@@ -271,15 +271,15 @@ async def cmd_toggle_manual_purchase(
     elif raw in ("off", "0", "no"):
         enabled = False
     elif not raw:
-        enabled = not db.is_manual_purchase_enabled()
+        enabled = not await db.is_manual_purchase_enabled()
     else:
         await message.answer(texts.TOGGLE_MANUAL_PURCHASE_USAGE)
         return
 
-    db.set_manual_purchase_enabled(enabled)
+    await db.set_manual_purchase_enabled(enabled)
     mode = "پلن ازپیش‌تعریف (دکمه‌ها) ✅" if enabled else "انتخاب حجم و مدت (فرمول قیمت) ❌"
     extra = ""
-    if enabled and not db.list_all_service_packages():
+    if enabled and not await db.list_all_service_packages():
         extra = "\n\n⚠️ هنوز پلنی با <code>/addservice</code> تعریف نشده."
     await message.answer(texts.TOGGLE_MANUAL_PURCHASE_OK.format(mode=mode) + extra)
 
@@ -307,7 +307,7 @@ async def cmd_editservice(
         await message.answer(texts.EDIT_SERVICE_USAGE)
         return
 
-    ok, reason = db.update_service_package(
+    ok, reason = await db.update_service_package(
         package_id, volume_gb, duration_days, price
     )
     if not ok:
@@ -344,10 +344,10 @@ async def cmd_ban(
     if message.from_user and user_id == message.from_user.id:
         await message.answer(texts.BAN_SELF)
         return
-    if db.get_user(user_id) is None:
+    if await db.get_user(user_id) is None:
         await message.answer(texts.BAN_USER_NOTFOUND)
         return
-    db.set_user_banned(user_id, True)
+    await db.set_user_banned(user_id, True)
     await message.answer(texts.BAN_OK.format(user_id=user_id))
     await _log_ban_toggle(bot, db, message, user_id, banned=True)
 
@@ -362,10 +362,10 @@ async def cmd_unban(
     if user_id is None:
         await message.answer(texts.UNBAN_USAGE)
         return
-    if db.get_user(user_id) is None:
+    if await db.get_user(user_id) is None:
         await message.answer(texts.BAN_USER_NOTFOUND)
         return
-    db.set_user_banned(user_id, False)
+    await db.set_user_banned(user_id, False)
     await message.answer(texts.UNBAN_OK.format(user_id=user_id))
     await _log_ban_toggle(bot, db, message, user_id, banned=False)
 
@@ -386,7 +386,7 @@ async def _log_ban_toggle(
     from app.logs import Actor, make_logger
 
     admin = Actor.from_user(message.from_user)
-    row = db.get_user(user_id)
+    row = await db.get_user(user_id)
     if admin is None or row is None:
         return
     target = Actor(
@@ -422,8 +422,8 @@ async def cmd_setcard(
         return
 
     number = texts.format_card_number(number)
-    db.set_setting("card_number", number)
-    db.set_setting("card_holder", holder)
+    await db.set_setting("card_number", number)
+    await db.set_setting("card_holder", holder)
     await message.answer(
         texts.SET_CARD_OK.format(number=escape(number), holder=escape(holder))
     )
@@ -449,9 +449,9 @@ async def cmd_setprice(
         await message.answer(texts.SET_PRICE_USAGE)
         return
 
-    db.set_setting("price_base", str(base))
-    db.set_setting("price_per_gb", str(per_gb))
-    db.set_setting("price_per_day", str(per_day))
+    await db.set_setting("price_base", str(base))
+    await db.set_setting("price_per_gb", str(per_gb))
+    await db.set_setting("price_per_day", str(per_day))
     await message.answer(texts.SET_PRICE_OK.format(base=base, per_gb=per_gb, per_day=per_day))
 
 
@@ -459,7 +459,7 @@ async def cmd_setprice(
 async def cmd_showsettings(message: Message, settings: Settings, db: Database) -> None:
     if not await guard_admin_message(message, settings, db, SETTINGS):
         return
-    await message.answer(format_settings_text(db))
+    await message.answer(await format_settings_text(db))
 
 
 # ---------- base buy plans (volume / duration presets) ----------
@@ -486,7 +486,7 @@ async def cmd_add_volume(
     except ValueError:
         await message.answer(texts.ADMIN_PLAN_INVALID)
         return
-    ok, reason = db.add_volume_preset(gb)
+    ok, reason = await db.add_volume_preset(gb)
     if not ok:
         msg = {
             "exists": texts.ADMIN_PLAN_EXISTS,
@@ -513,7 +513,7 @@ async def cmd_del_volume(
     except ValueError:
         await message.answer(texts.ADMIN_PLAN_INVALID)
         return
-    ok, reason = db.remove_volume_preset(gb)
+    ok, reason = await db.remove_volume_preset(gb)
     if not ok:
         msg = {
             "missing": texts.ADMIN_PLAN_NOT_FOUND,
@@ -540,7 +540,7 @@ async def cmd_add_duration(
     except ValueError:
         await message.answer(texts.ADMIN_PLAN_INVALID)
         return
-    ok, reason = db.add_duration_preset(days)
+    ok, reason = await db.add_duration_preset(days)
     if not ok:
         msg = {
             "exists": texts.ADMIN_PLAN_EXISTS,
@@ -567,7 +567,7 @@ async def cmd_del_duration(
     except ValueError:
         await message.answer(texts.ADMIN_PLAN_INVALID)
         return
-    ok, reason = db.remove_duration_preset(days)
+    ok, reason = await db.remove_duration_preset(days)
     if not ok:
         msg = {
             "missing": texts.ADMIN_PLAN_NOT_FOUND,
@@ -585,7 +585,7 @@ async def cmd_locations(message: Message, settings: Settings, db: Database) -> N
     if not await guard_admin_message(message, settings, db, LOCATIONS):
         return
 
-    locs = db.list_locations(only_enabled=False)
+    locs = await db.list_locations(only_enabled=False)
     if not locs:
         await message.answer(texts.LOC_LIST_EMPTY)
         return
@@ -608,7 +608,7 @@ async def cmd_locations(message: Message, settings: Settings, db: Database) -> N
                 base_url=escape(loc.base_url),
                 inbounds=",".join(str(i) for i in loc.inbound_ids) or "—",
                 sub_template=escape(loc.sub_url_template) if loc.sub_url_template else "—",
-                pricing=escape(location_pricing_label(db, loc)),
+                pricing=escape(await location_pricing_label(db, loc)),
             )
         )
     await message.answer("\n\n".join(lines))
@@ -645,15 +645,15 @@ async def cmd_addlocation(
         await message.answer(texts.SET_SUBURL_BAD)
         return
 
-    loc_id = db.add_location(
+    loc_id = await db.add_location(
         name=name,
         base_url=base_url,
         api_token=api_token,
         inbound_ids=inbound_ids,
         sub_url_template=sub_url_template,
     )
-    loc = db.get_location(loc_id)
-    pricing = escape(location_pricing_label(db, loc)) if loc else "—"
+    loc = await db.get_location(loc_id)
+    pricing = escape(await location_pricing_label(db, loc)) if loc else "—"
     extra_sub_line = (
         f"\n🔔 sub: <code>{escape(sub_url_template)}</code>"
         if sub_url_template else ""
@@ -696,14 +696,14 @@ async def cmd_addtestlocation(
         await message.answer(texts.SET_SUBURL_BAD)
         return
 
-    loc_id = db.replace_test_location(
+    loc_id = await db.replace_test_location(
         name=name,
         base_url=base_url,
         api_token=api_token,
         inbound_ids=inbound_ids,
         sub_url_template=sub_url_template,
     )
-    toggle_state = "روشن ✅" if db.is_test_feature_enabled() else "خاموش ❌"
+    toggle_state = "روشن ✅" if await db.is_test_feature_enabled() else "خاموش ❌"
     extra_sub_line = (
         f"\n🔔 sub: <code>{escape(sub_url_template)}</code>"
         if sub_url_template else ""
@@ -735,14 +735,14 @@ async def cmd_toggletest(
     elif raw in ("off", "0", "no"):
         enabled = False
     elif not raw:
-        enabled = not db.is_test_feature_enabled()
+        enabled = not await db.is_test_feature_enabled()
     else:
         await message.answer(texts.TOGGLE_TEST_USAGE)
         return
 
-    db.set_test_feature_enabled(enabled)
+    await db.set_test_feature_enabled(enabled)
     state = "روشن ✅" if enabled else "خاموش ❌"
-    loc = db.get_test_location()
+    loc = await db.get_test_location()
     extra = ""
     if enabled and loc is None:
         extra = "\n\n⚠️ لوکیشن تست ثبت نشده — ابتدا <code>/addtestlocation</code> بزنید."
@@ -766,13 +766,13 @@ async def cmd_setlocationprice(
         await message.answer(texts.SET_LOC_PRICE_USAGE)
         return
 
-    loc = db.get_location(loc_id)
+    loc = await db.get_location(loc_id)
     if loc is None:
         await message.answer(texts.DEL_LOC_NOTFOUND)
         return
 
     if parts[1] == "-":
-        db.set_location_pricing(loc_id, price_base=None, price_per_gb=None, price_per_day=None)
+        await db.set_location_pricing(loc_id, price_base=None, price_per_gb=None, price_per_day=None)
         await message.answer(
             texts.SET_LOC_PRICE_DEFAULT_OK.format(id=loc_id, name=escape(loc.name))
         )
@@ -790,7 +790,7 @@ async def cmd_setlocationprice(
         await message.answer(texts.SET_LOC_PRICE_USAGE)
         return
 
-    db.set_location_pricing(
+    await db.set_location_pricing(
         loc_id, price_base=base, price_per_gb=per_gb, price_per_day=per_day
     )
     await message.answer(
@@ -819,13 +819,13 @@ async def cmd_setsuburl(
         return
 
     template_raw = parts[1].strip()
-    loc = db.get_location(loc_id)
+    loc = await db.get_location(loc_id)
     if loc is None:
         await message.answer(texts.DEL_LOC_NOTFOUND)
         return
 
     if template_raw == "-":
-        db.set_location_sub_url_template(loc_id, None)
+        await db.set_location_sub_url_template(loc_id, None)
         await message.answer(texts.SET_SUBURL_CLEARED.format(id=loc_id))
         return
 
@@ -833,7 +833,7 @@ async def cmd_setsuburl(
         await message.answer(texts.SET_SUBURL_BAD)
         return
 
-    db.set_location_sub_url_template(loc_id, template_raw)
+    await db.set_location_sub_url_template(loc_id, template_raw)
     await message.answer(
         texts.SET_SUBURL_OK.format(id=loc_id, template=escape(template_raw))
     )
@@ -853,7 +853,7 @@ async def cmd_dellocation(
         await message.answer(texts.DEL_LOC_USAGE)
         return
 
-    result = db.remove_location(loc_id)
+    result = await db.remove_location(loc_id)
     if result == "not_found":
         await message.answer(texts.DEL_LOC_NOTFOUND)
     elif result == "disabled":
@@ -876,12 +876,12 @@ async def cmd_purgelocation(
         await message.answer(texts.PURGE_USAGE)
         return
 
-    loc = db.get_location(loc_id)
+    loc = await db.get_location(loc_id)
     if loc is None:
         await message.answer(texts.DEL_LOC_NOTFOUND)
         return
 
-    count = db.count_orders_for_location(loc_id)
+    count = await db.count_orders_for_location(loc_id)
     await message.answer(
         texts.PURGE_CONFIRM.format(id=loc_id, name=escape(loc.name), count=count),
         reply_markup=keyboards.purge_confirm(loc_id),
@@ -904,8 +904,8 @@ async def cb_purge_confirm(
         return
 
     # Capture count BEFORE deletion so the success message is accurate.
-    count = db.count_orders_for_location(loc_id)
-    result = db.purge_location(loc_id)
+    count = await db.count_orders_for_location(loc_id)
+    result = await db.purge_location(loc_id)
     if result == "not_found":
         await callback.answer("یافت نشد", show_alert=True)
         return
@@ -938,13 +938,13 @@ async def cmd_togglelocation(
         await message.answer(texts.TOGGLE_LOC_USAGE)
         return
 
-    loc = db.get_location(loc_id)
+    loc = await db.get_location(loc_id)
     if loc is None:
         await message.answer(texts.DEL_LOC_NOTFOUND)
         return
 
     new_state = not loc.enabled
-    db.set_location_enabled(loc_id, new_state)
+    await db.set_location_enabled(loc_id, new_state)
     await message.answer(
         texts.TOGGLE_LOC_OK.format(id=loc_id, state="فعال" if new_state else "غیرفعال")
     )
@@ -965,7 +965,7 @@ async def cmd_togglepurchase(
         await message.answer(texts.TOGGLE_PURCHASE_USAGE)
         return
 
-    loc = db.get_location(loc_id)
+    loc = await db.get_location(loc_id)
     if loc is None:
         await message.answer(texts.DEL_LOC_NOTFOUND)
         return
@@ -974,7 +974,7 @@ async def cmd_togglepurchase(
         return
 
     new_state = not loc.purchase_enabled
-    db.set_location_purchase_enabled(loc_id, new_state)
+    await db.set_location_purchase_enabled(loc_id, new_state)
     await message.answer(
         texts.TOGGLE_PURCHASE_OK.format(
             id=loc_id,
@@ -1009,7 +1009,7 @@ async def cmd_clearorder(
         await message.answer(texts.CLEAR_ORDER_USAGE)
         return
 
-    if not db.delete_order(order_id):
+    if not await db.delete_order(order_id):
         await message.answer(texts.CLEAR_ORDER_NOTFOUND)
         return
     await message.answer(texts.CLEAR_ORDER_OK.format(id=order_id))
@@ -1019,7 +1019,7 @@ async def cmd_clearorder(
 async def cmd_cleardeclined(message: Message, settings: Settings, db: Database) -> None:
     if not await guard_admin_message(message, settings, db, TOOLS_SYNC):
         return
-    await message.answer(run_clear_declined(db))
+    await message.answer(await run_clear_declined(db))
 
 
 @router.message(Command("syncpanel"))
@@ -1038,7 +1038,7 @@ async def cmd_syncpanel(
         except ValueError:
             await message.answer(texts.SYNC_PANEL_USAGE)
             return
-        if db.get_location(loc_filter) is None:
+        if await db.get_location(loc_filter) is None:
             await message.answer(texts.DEL_LOC_NOTFOUND)
             return
 

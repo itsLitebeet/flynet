@@ -123,7 +123,7 @@ async def run_broadcast_copy(
 async def send_quick_text_broadcast(
     message: Message, bot: Bot, db: Database, text: str
 ) -> None:
-    user_ids = db.all_user_ids()
+    user_ids = await db.all_user_ids()
     await message.answer(
         texts.BROADCAST_STARTED.format(count=len(user_ids)),
         parse_mode=ParseMode.HTML,
@@ -184,7 +184,7 @@ async def broadcast_cancel(
     event: Message | CallbackQuery, state: FSMContext, settings: Settings, db: Database
 ) -> None:
     user_id = event.from_user.id if event.from_user else None
-    if user_id is None or not admin_can(user_id, TOOLS_BROADCAST, settings, db):
+    if user_id is None or not await admin_can(user_id, TOOLS_BROADCAST, settings, db):
         msg = (
             texts.NOT_ADMIN
             if user_id is None or not is_admin(user_id, settings)
@@ -197,7 +197,7 @@ async def broadcast_cancel(
     await state.clear()
     text = texts.BROADCAST_CANCELLED
     kb = (
-        keyboards.admin_reply_keyboard(user_id, settings, db)
+        await keyboards.admin_reply_keyboard(user_id, settings, db)
         if user_id is not None
         else None
     )
@@ -227,7 +227,7 @@ async def on_broadcast_content(
     if message.from_user is None or message.chat is None:
         return
 
-    user_count = len(db.all_user_ids())
+    user_count = len(await db.all_user_ids())
     await state.update_data(
         from_chat_id=message.chat.id,
         message_id=message.message_id,
@@ -275,7 +275,7 @@ async def cb_broadcast_confirm(
         await callback.answer("پیام یافت نشد.", show_alert=True)
         return
 
-    user_ids = db.all_user_ids()
+    user_ids = await db.all_user_ids()
     await state.clear()
 
     if not isinstance(callback.message, Message):
@@ -300,7 +300,7 @@ async def cb_broadcast_confirm(
     uid = callback.from_user.id
     await callback.message.answer(
         texts.BROADCAST_DONE.format(ok=ok, fail=fail),
-        reply_markup=keyboards.admin_reply_keyboard(uid, settings, db),
+        reply_markup=await keyboards.admin_reply_keyboard(uid, settings, db),
         parse_mode=ParseMode.HTML,
     )
 

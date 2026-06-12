@@ -1,17 +1,17 @@
 import asyncio
 import logging
 from app.db import Database
-from app.xui import XuiClient, XuiError
+from app.xui import XuiClient
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger('health_check')
 
 async def check_health(db_path: str = 'netfly.db'):
     log.info('Starting Health Check...')
-    db = Database(db_path)
+    db = await Database.create(db_path)
     
     # 1. Check locations
-    locations = db.list_locations()
+    locations = await db.list_locations()
     log.info(f'Found {len(locations)} locations.')
     for loc in locations:
         if loc.enabled:
@@ -30,14 +30,16 @@ async def check_health(db_path: str = 'netfly.db'):
             log.info(f'Skipping Location {loc.id} (Disabled).')
 
     # 2. Check Orders missing users
-    with db._cursor() as cur:
-        cur.execute('SELECT count(*) FROM orders WHERE user_id NOT IN (SELECT user_id FROM users)')
-        missing = cur.fetchone()[0]
+    async with db._cursor() as cur:
+        await cur.execute('SELECT count(*) AS count FROM orders WHERE user_id NOT IN (SELECT user_id FROM users)')
+        row = await cur.fetchone()
+        missing = int(row['count']) if row else 0
         if missing > 0:
             log.warning(f'Found {missing} orders pointing to missing users.')
         else:
             log.info('[OK] No orphaned orders found.')
             
+    await db.close()
     log.info('Health Check Completed.')
 
 if __name__ == '__main__':

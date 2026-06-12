@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sqlite3
 import time
 from datetime import datetime, timezone
 from html import escape
@@ -221,7 +222,7 @@ async def _show_service_detail(
     enabled = True
 
     if provisioned:
-        location = db.get_location(int(row["location_id"]))
+        location = await db.get_location(int(row["location_id"]))
         if location is None:
             usage_error = "لوکیشن یافت نشد"
         else:
@@ -237,8 +238,8 @@ async def _show_service_detail(
                     new_status = "quota_exhausted"
                 
                 if new_status != str(row["status"]):
-                    db.set_order_status(order_id, new_status)
-                    reloaded_row = db.get_order(order_id)
+                    await db.set_order_status(order_id, new_status)
+                    reloaded_row = await db.get_order(order_id)
                     if reloaded_row:
                         row = reloaded_row
 
@@ -268,7 +269,7 @@ async def _show_service_detail(
 
 
 async def _own_order_or_none(db: Database, order_id: int, user_id: int):
-    row = db.get_order(order_id)
+    row = await db.get_order(order_id)
     if row is None or int(row["user_id"]) != user_id:
         return None
     if not await is_visible_to_buyer(db, row):
@@ -284,11 +285,11 @@ async def _get_order_sub_links(db: Database, row: sqlite3.Row, location) -> list
             async with XuiClient(location.base_url, location.api_token) as xui:
                 links = await xui.get_sub_links(str(sub_id))
                 if links:
-                    db._conn.execute(
-                        "UPDATE orders SET sub_links = ?, updated_at = datetime('now') WHERE id = ?",
-                        (json.dumps(links), order_id)
-                    )
-                    db._conn.commit()
+                    async with db._cursor() as cur:
+                        await cur.execute(
+                            "UPDATE orders SET sub_links = ?, updated_at = datetime('now') WHERE id = ?",
+                            (json.dumps(links), order_id)
+                        )
                     return links
         except Exception as exc:
             log.warning("Failed to fetch live sub_links for order %s: %s", order_id, exc)
@@ -300,7 +301,7 @@ async def _get_order_sub_links(db: Database, row: sqlite3.Row, location) -> list
 
 
 async def _sync_user_orders_status(db: Database, user_id: int) -> None:
-    rows = db.list_user_orders(user_id, limit=50)
+    rows = await db.list_user_orders(user_id, limit=50)
     by_loc: dict[int, list[dict]] = {}
     for r in rows:
         status = str(r["status"])
@@ -316,7 +317,7 @@ async def _sync_user_orders_status(db: Database, user_id: int) -> None:
         return
 
     for loc_id, orders in by_loc.items():
-        loc = db.get_location(loc_id)
+        loc = await db.get_location(loc_id)
         if not loc:
             continue
         try:
@@ -334,7 +335,7 @@ async def _sync_user_orders_status(db: Database, user_id: int) -> None:
                             new_status = "quota_exhausted"
                         
                         if new_status != o["status"]:
-                            db.set_order_status(o["id"], new_status)
+                            await db.set_order_status(o["id"], new_status)
         except Exception as exc:
             log.warning("Failed to sync user orders status for location %s: %s", loc_id, exc)
 
@@ -347,7 +348,7 @@ async def _show_services_list(
     edit_in_place: bool = False,
 ) -> None:
     await _sync_user_orders_status(db, user_id)
-    rows = await filter_visible_orders(db, db.list_user_orders(user_id, limit=50))
+    rows = await filter_visible_orders(db, await db.list_user_orders(user_id, limit=50))
     if not rows:
         text = texts.MY_SERVICES_EMPTY
         if edit_in_place:
@@ -459,7 +460,7 @@ async def cb_view_configs(callback: CallbackQuery, db: Database) -> None:
         await callback.answer("این سرویس فعال نیست.", show_alert=True)
         return
 
-    location = db.get_location(int(row["location_id"]))
+    location = await db.get_location(int(row["location_id"]))
     sub_links = await _get_order_sub_links(db, row, location)
 
     sub_url = location.render_sub_url(row["xui_sub_id"]) if location else None
@@ -509,7 +510,7 @@ async def cb_view_configs_filtered(callback: CallbackQuery, db: Database) -> Non
         await callback.answer("این سرویس فعال نیست.", show_alert=True)
         return
 
-    location = db.get_location(int(row["location_id"]))
+    location = await db.get_location(int(row["location_id"]))
     if not location or btn_index < 0 or btn_index >= len(location.config_buttons):
         await callback.answer("تنظیمات دکمه یافت نشد.", show_alert=True)
         return
@@ -594,7 +595,7 @@ async def cb_toggle(callback: CallbackQuery, db: Database) -> None:
         await callback.answer(texts.TEST_SERVICE_ACTION_BLOCKED, show_alert=True)
         return
 
-    location = db.get_location(int(row["location_id"]))
+    location = await db.get_location(int(row["location_id"]))
     if location is None or not row["xui_email"]:
         await callback.answer("اطلاعات کافی نیست.", show_alert=True)
         return
@@ -690,7 +691,7 @@ async def on_nickname_received(
 
     nick = (message.text or "").strip()
     if nick == "-":
-        db.set_order_nickname(order_id, None)
+        await db.set_order_nickname(order_id, None)
         await state.clear()
         await message.answer(
             texts.RENAME_CLEARED, reply_markup=keyboards.back_to_service(order_id)
@@ -710,7 +711,7 @@ async def on_nickname_received(
             return
 
         old_email = str(row["xui_email"])
-        location = db.get_location(int(row["location_id"]))
+        location = await db.get_location(int(row["location_id"]))
         if location is None:
             await message.answer(texts.RENAME_PANEL_FAILED.format(error="لوکیشن یافت نشد"))
             return
@@ -721,7 +722,7 @@ async def on_nickname_received(
                     await xui.rename_client_email(old_email, new_panel_id)
                     sub_id, client_uuid = await xui.resolve_client_identity(new_panel_id)
                     links = await xui.get_sub_links(sub_id) if sub_id else []
-                    db.update_order_xui(
+                    await db.update_order_xui(
                         order_id=order_id,
                         email=new_panel_id,
                         sub_id=sub_id,
@@ -740,7 +741,7 @@ async def on_nickname_received(
             )
             return
 
-    db.set_order_nickname(order_id, nick or None)
+    await db.set_order_nickname(order_id, nick or None)
     await state.clear()
     if new_panel_id:
         await message.answer(
@@ -804,7 +805,7 @@ async def cb_regen_confirm(callback: CallbackQuery, db: Database) -> None:
         await callback.answer(texts.TEST_SERVICE_ACTION_BLOCKED, show_alert=True)
         return
 
-    location = db.get_location(int(row["location_id"]))
+    location = await db.get_location(int(row["location_id"]))
     if location is None or not row["xui_email"]:
         await callback.answer(texts.REGEN_NOT_SUPPORTED, show_alert=True)
         return
@@ -836,7 +837,7 @@ async def cb_regen_confirm(callback: CallbackQuery, db: Database) -> None:
         )
         return
 
-    db.update_order_xui(
+    await db.update_order_xui(
         order_id=order_id,
         email=result.email,
         sub_id=result.sub_id,
@@ -870,7 +871,7 @@ async def cb_my_service_renew(
         await callback.answer()
         return
 
-    row = db.get_order(order_id)
+    row = await db.get_order(order_id)
     if row is None or row['user_id'] != callback.from_user.id:
         await callback.answer('سرویس یافت نشد.', show_alert=True)
         return
@@ -937,7 +938,7 @@ async def cb_delete_confirm(callback: CallbackQuery, db: Database) -> None:
     email = row["xui_email"]
     try:
         location_id = int(row["location_id"])
-        location = db.get_location(location_id)
+        location = await db.get_location(location_id)
     except (ValueError, TypeError, KeyError):
         location = None
 
@@ -949,7 +950,7 @@ async def cb_delete_confirm(callback: CallbackQuery, db: Database) -> None:
             log.warning("Could not delete client %s from panel %s: %s", email, location.id, exc)
 
     # Delete order from bot database
-    db.delete_order(order_id)
+    await db.delete_order(order_id)
 
     await _edit_or_answer(callback, texts.DELETE_SERVICE_OK, keyboards.back_to_menu())
     await callback.answer("حذف شد ✅")

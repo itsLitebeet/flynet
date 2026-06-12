@@ -67,7 +67,7 @@ async def cb_check_channel_join(
     if check.gate_unavailable:
         from app.channel_gate import required_channel_id, send_gate_unavailable
 
-        cid = required_channel_id(db, settings)
+        cid = await required_channel_id(db, settings)
         if cid is not None:
             await send_gate_unavailable(bot, settings, callback, cid)
         else:
@@ -79,7 +79,7 @@ async def cb_check_channel_join(
         await callback.answer(texts.JOIN_VERIFIED_OK)
         if callback.message is None:
             return
-        if admin_panel_access(uid, settings, db):
+        if await admin_panel_access(uid, settings, db):
             from app.handlers.admin_panel import send_admin_home
 
             await send_admin_home(
@@ -91,7 +91,7 @@ async def cb_check_channel_join(
         else:
             await callback.message.answer(
                 texts.WELCOME,
-                reply_markup=buyer_reply_keyboard(
+                reply_markup=await buyer_reply_keyboard(
                     callback.message, db, user_id=uid
                 ),
             )
@@ -121,7 +121,7 @@ async def cmd_reqchannel(
 
     raw = (command.args or "").strip()
     if raw.lower() in ("off", "-", "0", "none"):
-        db.set_required_channel(None)
+        await db.set_required_channel(None)
         await message.answer(texts.REQ_CHANNEL_CLEARED)
         return
 
@@ -156,7 +156,7 @@ async def cmd_reqchannel_link(
     if not raw:
         await start_invite_link_step(message, state)
         return
-    ok, reply = save_invite_link(db, raw)
+    ok, reply = await save_invite_link(db, raw)
     await message.answer(reply)
     if ok:
         await state.clear()
@@ -215,7 +215,7 @@ async def on_required_channel_link_input(
     if not await guard_admin_message(message, settings, db, TOOLS_MISC):
         await state.clear()
         return
-    ok, reply = save_invite_link(db, message.text or "")
+    ok, reply = await save_invite_link(db, message.text or "")
     await message.answer(reply)
     if ok:
         await state.clear()

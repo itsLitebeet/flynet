@@ -26,12 +26,12 @@ class TestFlow(StatesGroup):
     confirming = State()
 
 
-def _test_unavailable_reason(db: Database, user_id: int) -> str | None:
-    if not db.is_test_feature_enabled():
+async def _test_unavailable_reason(db: Database, user_id: int) -> str | None:
+    if not await db.is_test_feature_enabled():
         return texts.TEST_SUB_DISABLED
-    if db.get_test_location() is None:
+    if await db.get_test_location() is None:
         return texts.TEST_SUB_NO_LOCATION
-    if db.user_has_claimed_test(user_id):
+    if await db.user_has_claimed_test(user_id):
         return texts.TEST_SUB_ALREADY_USED
     return None
 
@@ -50,15 +50,15 @@ async def _start_test_flow(
             return
         uid = user.id
     await state.clear()
-    reason = _test_unavailable_reason(db, uid)
+    reason = await _test_unavailable_reason(db, uid)
     if reason:
         await message.answer(
             reason,
-            reply_markup=buyer_reply_keyboard(message, db, user_id=uid),
+            reply_markup=await buyer_reply_keyboard(message, db, user_id=uid),
         )
         return
 
-    loc = db.get_test_location()
+    loc = await db.get_test_location()
     assert loc is not None
     await state.set_state(TestFlow.confirming)
     from app.ui_reply import answer_with_inline_keyboard
@@ -102,19 +102,19 @@ async def cb_test_confirm(
         await callback.answer()
         return
 
-    reason = _test_unavailable_reason(db, user.id)
+    reason = await _test_unavailable_reason(db, user.id)
     if reason:
         await state.clear()
         await callback.message.answer(
             reason,
-            reply_markup=buyer_reply_keyboard(
+            reply_markup=await buyer_reply_keyboard(
                 callback.message, db, user_id=user.id
             ),
         )
         await callback.answer()
         return
 
-    loc = db.get_test_location()
+    loc = await db.get_test_location()
     if loc is None or not loc.inbound_ids:
         await callback.answer("لوکیشن تست در دسترس نیست.", show_alert=True)
         return
@@ -122,7 +122,7 @@ async def cb_test_confirm(
     await callback.answer()
     await callback.message.edit_text(texts.TEST_SUB_PROVISIONING)
 
-    order_id = db.create_order(
+    order_id = await db.create_order(
         user_id=user.id,
         location_id=loc.id,
         location_name=loc.name,
@@ -146,7 +146,7 @@ async def cb_test_confirm(
             )
     except XuiError as exc:
         log.warning("Test provision failed for order %s: %s", order_id, exc)
-        db.set_order_status(order_id, "failed")
+        await db.set_order_status(order_id, "failed")
         actor = Actor.from_user(user)
         if actor is not None:
             await make_logger(bot, db).log_test_service(
@@ -164,7 +164,7 @@ async def cb_test_confirm(
         return
     except Exception as exc:  # noqa: BLE001
         log.exception("Unexpected test provision error for order %s", order_id)
-        db.set_order_status(order_id, "failed")
+        await db.set_order_status(order_id, "failed")
         actor = Actor.from_user(user)
         if actor is not None:
             await make_logger(bot, db).log_test_service(
@@ -181,7 +181,7 @@ async def cb_test_confirm(
         await state.clear()
         return
 
-    db.set_order_provisioned(
+    await db.set_order_provisioned(
         order_id=order_id,
         email=result.email,
         sub_id=result.sub_id,
@@ -205,7 +205,7 @@ async def cb_test_confirm(
             success=True,
         )
 
-    show_test = buyer_show_test_button(db, user.id)
+    show_test = await buyer_show_test_button(db, user.id)
     await callback.message.answer(
         texts.TEST_SUB_OK.format(configs_block=configs_block),
         reply_markup=keyboards.main_reply_keyboard(show_test=show_test),

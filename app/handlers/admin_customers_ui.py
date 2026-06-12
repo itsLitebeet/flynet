@@ -123,20 +123,20 @@ def _format_customer_order_line(
 async def format_customers_page(
     db: Database, page: int = 0
 ) -> tuple[str, int, list]:
-    total = db.count_customers()
+    total = await db.count_customers()
     if total == 0:
         return texts.ADMIN_CUSTOMERS_EMPTY, 1, []
 
     per_page = ADMIN_CUSTOMERS_PER_PAGE
     total_pages = max(1, math.ceil(total / per_page))
     page = max(0, min(page, total_pages - 1))
-    customers = db.list_customers_paginated(page * per_page, per_page)
+    customers = await db.list_customers_paginated(page * per_page, per_page)
 
     all_orders: list = []
     orders_by_user: dict[int, list] = {}
     for c in customers:
         uid = int(c["user_id"])
-        orders = db.list_user_orders_admin(uid, limit=20, exclude_test=True)
+        orders = await db.list_user_orders_admin(uid, limit=20, exclude_test=True)
         orders_by_user[uid] = orders
         all_orders.extend(orders)
 
@@ -171,7 +171,7 @@ async def format_customers_page(
 async def format_customers_search_results(
     db: Database, query: str
 ) -> tuple[str, list]:
-    rows = db.search_customers(query, limit=15)
+    rows = await db.search_customers(query, limit=15)
     if not rows:
         return texts.ADMIN_CUSTOMERS_SEARCH_EMPTY.format(
             query=escape(query)
@@ -194,14 +194,14 @@ async def format_customers_search_results(
 
 
 async def format_customer_detail(db: Database, user_id: int) -> str | None:
-    row = db.get_user(user_id)
-    stats = db.get_customer_order_stats(user_id)
+    row = await db.get_user(user_id)
+    stats = await db.get_customer_order_stats(user_id)
     if row is None or stats is None:
         return None
 
     username = _username_label(row)
     ban_state = "مسدود" if bool(row["is_banned"]) else "فعال"
-    orders = db.list_user_orders_admin(user_id, limit=50, exclude_test=True)
+    orders = await db.list_user_orders_admin(user_id, limit=50, exclude_test=True)
     usage_map = await load_panel_usage_for_orders(db, orders)
 
     if orders:

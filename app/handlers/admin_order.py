@@ -45,11 +45,11 @@ async def send_admin_order_view(
     back_data: str | None = keyboards.CB_ADM_PENDING_LIST,
 ) -> bool:
     """Show order detail + management keyboard; return False if not found."""
-    text = format_admin_order_detail(db, order_id)
+    text = await format_admin_order_detail(db, order_id)
     if text is None:
         return False
 
-    order = db.get_order(order_id)
+    order = await db.get_order(order_id)
     assert order is not None
     panel_live = await _panel_live_snippet(db, order)
     if panel_live:
@@ -73,7 +73,7 @@ async def _panel_for_order(db: Database, order) -> tuple | None:
     """Return (location, email) or None if panel ops impossible."""
     if str(order["status"]) not in ("provisioned", "expired", "quota_exhausted") or not order["xui_email"]:
         return None
-    loc = db.get_location(int(order["location_id"]))
+    loc = await db.get_location(int(order["location_id"]))
     if loc is None:
         return None
     return loc, str(order["xui_email"])
@@ -144,7 +144,7 @@ async def _apply_add_gb(
         new_total = base_bytes + _gb_to_bytes(add_gb)
         await xui.update_client(email=email, total_bytes=new_total, enable=True)
     new_gb = max(int(order["volume_gb"]), (new_total + GIB_IN_BYTES - 1) // GIB_IN_BYTES)
-    db.update_order_plan(order_id, volume_gb=new_gb)
+    await db.update_order_plan(order_id, volume_gb=new_gb)
     return new_gb
 
 
@@ -153,7 +153,7 @@ async def _apply_set_gb(
 ) -> None:
     async with XuiClient(loc.base_url, loc.api_token) as xui:
         await xui.update_client(email=email, volume_gb=total_gb, enable=True)
-    db.update_order_plan(order_id, volume_gb=total_gb)
+    await db.update_order_plan(order_id, volume_gb=total_gb)
 
 
 async def _apply_add_days(
@@ -169,7 +169,7 @@ async def _apply_add_days(
         )
         new_expiry = base_ms + add_days * DAY_IN_SECONDS * 1000
         await xui.update_client(email=email, expiry_time_ms=new_expiry, enable=True)
-    db.update_order_plan(
+    await db.update_order_plan(
         order_id, duration_days=int(order["duration_days"]) + add_days
     )
     return new_expiry
@@ -256,7 +256,7 @@ async def cb_order_enable(
         await callback.answer()
         return
 
-    order = db.get_order(order_id)
+    order = await db.get_order(order_id)
     if order is None:
         await callback.answer(texts.ADMIN_ORDER_NOTFOUND, show_alert=True)
         return
@@ -303,7 +303,7 @@ async def cb_order_disable(
         await callback.answer()
         return
 
-    order = db.get_order(order_id)
+    order = await db.get_order(order_id)
     if order is None:
         await callback.answer(texts.ADMIN_ORDER_NOTFOUND, show_alert=True)
         return
@@ -351,7 +351,7 @@ async def cb_order_delete_ok(
         await callback.answer()
         return
 
-    order = db.get_order(order_id)
+    order = await db.get_order(order_id)
     if order is None:
         await callback.answer(texts.ADMIN_ORDER_NOTFOUND, show_alert=True)
         return
@@ -383,7 +383,7 @@ async def cb_order_delete_ok(
             fetch_panel=False,
         )
 
-    if not db.delete_order(order_id):
+    if not await db.delete_order(order_id):
         if isinstance(callback.message, Message):
             await callback.message.edit_text(
                 "❗ حذف از دیتابیس ناموفق.",
@@ -418,7 +418,7 @@ async def cb_order_delete_ask(
         await callback.answer()
         return
 
-    order = db.get_order(order_id)
+    order = await db.get_order(order_id)
     if order is None:
         await callback.answer(texts.ADMIN_ORDER_NOTFOUND, show_alert=True)
         return
@@ -487,7 +487,7 @@ async def cb_order_edit_plan_menu(
         await callback.answer()
         return
 
-    order = db.get_order(order_id)
+    order = await db.get_order(order_id)
     if order is None:
         await callback.answer(texts.ADMIN_ORDER_NOTFOUND, show_alert=True)
         return
@@ -523,7 +523,7 @@ async def cb_order_add_gb(
         await callback.answer()
         return
 
-    order = db.get_order(order_id)
+    order = await db.get_order(order_id)
     if order is None:
         await callback.answer(texts.ADMIN_ORDER_NOTFOUND, show_alert=True)
         return
@@ -580,7 +580,7 @@ async def cb_order_add_days(
         await callback.answer()
         return
 
-    order = db.get_order(order_id)
+    order = await db.get_order(order_id)
     if order is None:
         await callback.answer(texts.ADMIN_ORDER_NOTFOUND, show_alert=True)
         return
@@ -645,7 +645,7 @@ async def cb_order_set_gb_ask(
         await callback.answer()
         return
 
-    order = db.get_order(order_id)
+    order = await db.get_order(order_id)
     if order is None:
         await callback.answer(texts.ADMIN_ORDER_NOTFOUND, show_alert=True)
         return
@@ -676,7 +676,7 @@ async def cb_order_add_days_ask(
         await callback.answer()
         return
 
-    order = db.get_order(order_id)
+    order = await db.get_order(order_id)
     if order is None:
         await callback.answer(texts.ADMIN_ORDER_NOTFOUND, show_alert=True)
         return
@@ -724,7 +724,7 @@ async def msg_order_set_gb(
     order_id = int(data["order_id"])
     await state.clear()
 
-    order = db.get_order(order_id)
+    order = await db.get_order(order_id)
     if order is None:
         await message.answer(texts.ADMIN_ORDER_NOTFOUND)
         return
@@ -781,7 +781,7 @@ async def msg_order_add_days_custom(
     order_id = int(data["order_id"])
     await state.clear()
 
-    order = db.get_order(order_id)
+    order = await db.get_order(order_id)
     if order is None:
         await message.answer(texts.ADMIN_ORDER_NOTFOUND)
         return

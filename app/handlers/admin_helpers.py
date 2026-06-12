@@ -27,20 +27,20 @@ def admin_from_message(message: Message, settings: Settings) -> bool:
     return message.from_user is not None and is_admin(message.from_user.id, settings)
 
 
-def admin_can(
+async def admin_can(
     user_id: int | None, perm: str, settings: Settings, db: Database
 ) -> bool:
     if user_id is None:
         return False
-    return has_permission(user_id, perm, settings, db)
+    return await has_permission(user_id, perm, settings, db)
 
 
-def admin_panel_access(
+async def admin_panel_access(
     user_id: int | None, settings: Settings, db: Database
 ) -> bool:
     if user_id is None:
         return False
-    return can_access_panel(user_id, settings, db)
+    return await can_access_panel(user_id, settings, db)
 
 
 async def guard_admin_message(
@@ -51,7 +51,7 @@ async def guard_admin_message(
     if user is None or not is_staff(user.id, settings):
         await message.answer(texts.NOT_ADMIN)
         return False
-    if not has_permission(user.id, perm, settings, db):
+    if not await has_permission(user.id, perm, settings, db):
         await message.answer(texts.NOT_PERMITTED)
         return False
     return True
@@ -64,16 +64,16 @@ async def guard_admin_callback(
     if user is None or not is_staff(user.id, settings):
         await callback.answer(texts.NOT_ADMIN, show_alert=True)
         return False
-    if not has_permission(user.id, perm, settings, db):
+    if not await has_permission(user.id, perm, settings, db):
         await callback.answer(texts.NOT_PERMITTED, show_alert=True)
         return False
     return True
 
 
-def format_role_label(user_id: int, settings: Settings, db: Database) -> str:
+async def format_role_label(user_id: int, settings: Settings, db: Database) -> str:
     from app import texts
 
-    role = get_role(user_id, settings, db)
+    role = await get_role(user_id, settings, db)
     return texts.ADMIN_ROLE_LABELS.get(role, role)
 
 
@@ -84,8 +84,8 @@ def normalize_panel_url(raw: str) -> str:
     return url
 
 
-def location_pricing_label(db: Database, loc) -> str:
-    base, per_gb, per_day = db.get_pricing_for_location(loc.id)
+async def location_pricing_label(db: Database, loc) -> str:
+    base, per_gb, per_day = await db.get_pricing_for_location(loc.id)
     uses_global = (
         loc.price_base is None
         and loc.price_per_gb is None
@@ -95,38 +95,38 @@ def location_pricing_label(db: Database, loc) -> str:
     return f"{tag} — {texts.format_pricing_formula(base, per_gb, per_day)}"
 
 
-def format_stats_text(db: Database) -> str:
+async def format_stats_text(db: Database) -> str:
     return texts.ADMIN_STATS.format(
-        users=db.count_users(),
-        orders=db.count_orders(),
-        awaiting_payment=db.count_orders_by_status("awaiting_payment"),
-        awaiting_review=db.count_orders_by_status("awaiting_review"),
-        provisioned=db.count_orders_by_status("provisioned"),
-        declined=db.count_orders_by_status("declined"),
-        failed=db.count_orders_by_status("failed"),
-        tickets=db.count_tickets(),
+        users=await db.count_users(),
+        orders=await db.count_orders(),
+        awaiting_payment=await db.count_orders_by_status("awaiting_payment"),
+        awaiting_review=await db.count_orders_by_status("awaiting_review"),
+        provisioned=await db.count_orders_by_status("provisioned"),
+        declined=await db.count_orders_by_status("declined"),
+        failed=await db.count_orders_by_status("failed"),
+        tickets=await db.count_tickets(),
     )
 
 
-def format_base_plans_text(db: Database) -> str:
-    volumes = ", ".join(f"{g} GB" for g in db.get_volume_presets()) or "—"
-    durations = ", ".join(f"{d} روز" for d in db.get_duration_presets()) or "—"
+async def format_base_plans_text(db: Database) -> str:
+    volumes = ", ".join(f"{g} GB" for g in await db.get_volume_presets()) or "—"
+    durations = ", ".join(f"{d} روز" for d in await db.get_duration_presets()) or "—"
     return texts.ADMIN_PLANS_HEADER.format(volumes=volumes, durations=durations)
 
 
-def format_settings_text(db: Database) -> str:
+async def format_settings_text(db: Database) -> str:
     from app.pricing import describe_offer
 
-    base, per_gb, per_day = db.get_pricing()
+    base, per_gb, per_day = await db.get_pricing()
     return texts.ADMIN_SETTINGS_VIEW.format(
         card_number=escape(
-            texts.format_card_number(db.get_setting("card_number", "—") or "—")
+            texts.format_card_number(await db.get_setting("card_number", "—") or "—")
         ),
-        card_holder=escape(db.get_setting("card_holder", "—") or "—"),
+        card_holder=escape(await db.get_setting("card_holder", "—") or "—"),
         base=base,
         per_gb=per_gb,
         per_day=per_day,
-        offer_desc=describe_offer(db.get_offer_config()),
+        offer_desc=describe_offer(await db.get_offer_config()),
     )
 
 
@@ -148,7 +148,7 @@ async def sync_location_orders(
             orphan_deleted: list[int] = []
             test_panel_cleaned: list[int] = []
 
-            for row in db.list_provisioned_orders(location_id=loc.id):
+            for row in await db.list_provisioned_orders(location_id=loc.id):
                 email = row["xui_email"]
                 if not email:
                     continue
@@ -166,12 +166,12 @@ async def sync_location_orders(
                         await xui.delete_client(email, keep_traffic=1)
                     except XuiError:
                         continue
-                    if db.detach_test_order_from_panel(oid):
+                    if await db.detach_test_order_from_panel(oid):
                         test_panel_cleaned.append(oid)
                     continue
 
                 if email not in panel_emails:
-                    if db.delete_order(oid):
+                    if await db.delete_order(oid):
                         orphan_deleted.append(oid)
                 else:
                     usage = _usage_from_client(clients_by_email[email])
@@ -182,7 +182,7 @@ async def sync_location_orders(
                         new_status = "quota_exhausted"
                     
                     if new_status != str(row["status"]):
-                        db.set_order_status(oid, new_status)
+                        await db.set_order_status(oid, new_status)
 
             return orphan_deleted, test_panel_cleaned, None
     except XuiError as exc:
@@ -193,9 +193,9 @@ async def run_sync_panel(
     db: Database, loc_filter: int | None = None
 ) -> list[str]:
     """Messages to send after a panel sync (excluding the initial 'started' line)."""
-    locations = db.list_locations(only_enabled=False)
+    locations = await db.list_locations(only_enabled=False)
     if loc_filter is not None:
-        loc = db.get_location(loc_filter)
+        loc = await db.get_location(loc_filter)
         locations = [loc] if loc else []
 
     all_orphans: list[int] = []
@@ -215,7 +215,7 @@ async def run_sync_panel(
         all_orphans.extend(orphans)
         all_test_cleaned.extend(test_cleaned)
 
-    declined_deleted = db.delete_orders_by_status("declined")
+    declined_deleted = await db.delete_orders_by_status("declined")
     if not all_orphans and not all_test_cleaned and declined_deleted == 0:
         out.append(texts.SYNC_PANEL_NONE.format(declined=0))
     else:
@@ -235,9 +235,9 @@ async def run_sync_panel(
     return out
 
 
-def run_clear_declined(db: Database) -> str:
-    declined = db.delete_orders_by_status("declined")
-    unpaid = db.delete_orders_by_status("awaiting_payment")
+async def run_clear_declined(db: Database) -> str:
+    declined = await db.delete_orders_by_status("declined")
+    unpaid = await db.delete_orders_by_status("awaiting_payment")
     total = declined + unpaid
     if total == 0:
         return texts.CLEAR_DECLINED_NONE

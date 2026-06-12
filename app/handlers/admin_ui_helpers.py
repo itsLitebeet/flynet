@@ -131,13 +131,13 @@ async def admin_edit_or_answer(
             raise
 
 
-def format_services_list_text(db: Database, *, loc_filter: int | None = None) -> str:
+async def format_services_list_text(db: Database, *, loc_filter: int | None = None) -> str:
     packages = (
-        db.list_service_packages(loc_filter, only_enabled=False)
+        await db.list_service_packages(loc_filter, only_enabled=False)
         if loc_filter is not None
-        else db.list_all_service_packages()
+        else await db.list_all_service_packages()
     )
-    mode = "روشن ✅" if db.is_manual_purchase_enabled() else "خاموش ❌"
+    mode = "روشن ✅" if await db.is_manual_purchase_enabled() else "خاموش ❌"
     if not packages:
         body = texts.LIST_SERVICES_EMPTY
     else:
@@ -145,12 +145,12 @@ def format_services_list_text(db: Database, *, loc_filter: int | None = None) ->
         lines = [texts.LIST_SERVICES_HEADER.format(filter_line=filter_line)]
         from app.pricing import format_price_with_offer
 
-        offer = db.get_offer_config()
+        offer = await db.get_offer_config()
         for pkg in packages:
-            loc = db.get_location(pkg.location_id)
+            loc = await db.get_location(pkg.location_id)
             loc_name = escape(loc.name) if loc else "—"
             base = int(pkg.price)
-            final = db.resolve_price(base)
+            final = await db.resolve_price(base)
             if offer.is_active and final < base:
                 price_label = format_price_with_offer(base, final)
             else:
@@ -172,21 +172,21 @@ def format_services_list_text(db: Database, *, loc_filter: int | None = None) ->
     )
 
 
-def format_tools_menu_text(db: Database, settings) -> str:
+async def format_tools_menu_text(db: Database, settings) -> str:
     from app.channel_gate import channel_label, is_gate_enabled
 
-    log_id = db.get_log_channel_id()
+    log_id = await db.get_log_channel_id()
     log_line = (
         f"متصل: <code>{log_id}</code> ✅"
         if log_id
         else "غیرفعال ❌"
     )
     req_line = (
-        f"{channel_label(db, settings)} ✅"
-        if is_gate_enabled(db, settings)
+        f"{await channel_label(db, settings)} ✅"
+        if await is_gate_enabled(db, settings)
         else "غیرفعال ❌"
     )
-    test_line = "روشن ✅" if db.is_test_feature_enabled() else "خاموش ❌"
+    test_line = "روشن ✅" if await db.is_test_feature_enabled() else "خاموش ❌"
     return texts.ADMIN_TOOLS_MENU.format(
         log_channel=log_line,
         req_channel=req_line,

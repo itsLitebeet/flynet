@@ -781,18 +781,18 @@ def admin_offer_inline(db) -> InlineKeyboardMarkup:
     )
 
 
-def admin_settings_inline(user_id: int, settings, db) -> InlineKeyboardMarkup:
+async def admin_settings_inline(user_id: int, settings, db) -> InlineKeyboardMarkup:
     from app.admin_perms import OFFER, SERVICES, SETTINGS, is_owner
 
     rows: list[list[InlineKeyboardButton]] = []
-    if _admin_perm(user_id, OFFER, settings, db):
+    if await _admin_perm(user_id, OFFER, settings, db):
         rows.append([
             InlineKeyboardButton(
                 text=texts.ADMIN_BTN_OFFER, callback_data=CB_ADM_OFFER,
             style='danger'),
         ])
     hint_row: list[InlineKeyboardButton] = []
-    if _admin_perm(user_id, SETTINGS, settings, db):
+    if await _admin_perm(user_id, SETTINGS, settings, db):
         hint_row.append(
             InlineKeyboardButton(
                 text=texts.ADMIN_BTN_SETCARD_HELP, callback_data=CB_ADM_SETCARD_HELP,
@@ -806,7 +806,7 @@ def admin_settings_inline(user_id: int, settings, db) -> InlineKeyboardMarkup:
     if hint_row:
         rows.append(hint_row)
     plan_row: list[InlineKeyboardButton] = []
-    if _admin_perm(user_id, SERVICES, settings, db):
+    if await _admin_perm(user_id, SERVICES, settings, db):
         plan_row.append(
             InlineKeyboardButton(text="📋 پلن‌های پایه", callback_data=CB_ADM_PLANS,style='primary')
         )
@@ -889,7 +889,7 @@ def admin_perm_matrix_home_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def admin_perm_role_keyboard(role: str, db) -> InlineKeyboardMarkup:
+async def admin_perm_role_keyboard(role: str, db) -> InlineKeyboardMarkup:
     from app.role_permissions import (
         PERM_LABELS,
         TOGGLABLE_PERMS,
@@ -897,7 +897,7 @@ def admin_perm_role_keyboard(role: str, db) -> InlineKeyboardMarkup:
     )
 
     rows: list[list[InlineKeyboardButton]] = []
-    perms = permissions_for_role(db, role)
+    perms = await permissions_for_role(db, role)
     pair: list[InlineKeyboardButton] = []
     for perm in TOGGLABLE_PERMS:
         on = perm in perms
@@ -1028,7 +1028,7 @@ def admin_users_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def admin_user_detail_keyboard(
+async def admin_user_detail_keyboard(
     user_id: int,
     actor_id: int,
     settings,
@@ -1047,7 +1047,7 @@ def admin_user_detail_keyboard(
             style='primary'),
         ],
     ]
-    if _admin_perm(actor_id, USERS, settings, db):
+    if await _admin_perm(actor_id, USERS, settings, db):
         ban_btn = (
             InlineKeyboardButton(
                 text=texts.BTN_USER_UNBAN, callback_data=f"{CB_ADM_USER_UNBAN_PREFIX}{user_id}", style='success',
@@ -1063,7 +1063,7 @@ def admin_user_detail_keyboard(
             text="🔄 بروزرسانی از تلگرام", callback_data=f"{CB_ADM_USER_UPDATE_PREFIX}{user_id}", style='primary',
         )
     ])
-    if order_ids and _admin_perm(actor_id, ORDERS_MANAGE, settings, db):
+    if order_ids and await _admin_perm(actor_id, ORDERS_MANAGE, settings, db):
         order_row: list[InlineKeyboardButton] = []
         for oid in order_ids[:6]:
             order_row.append(
@@ -1162,7 +1162,7 @@ def admin_customers_search_keyboard(customers: list) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def admin_customer_detail_keyboard(
+async def admin_customer_detail_keyboard(
     user_id: int,
     actor_id: int,
     settings,
@@ -1179,7 +1179,7 @@ def admin_customer_detail_keyboard(
             callback_data=f"{CB_ADM_USER_DETAIL_PREFIX}{user_id}",
         style='primary'),
     ]
-    if _admin_perm(actor_id, USERS, settings, db):
+    if await _admin_perm(actor_id, USERS, settings, db):
         ban_btn = (
             InlineKeyboardButton(
                 text=texts.BTN_USER_UNBAN, callback_data=f"{CB_ADM_CUST_UNBAN_PREFIX}{user_id}", style='success',
@@ -1204,7 +1204,7 @@ def admin_customer_detail_keyboard(
             ),
         ],
     ]
-    if order_ids and _admin_perm(actor_id, ORDERS_MANAGE, settings, db):
+    if order_ids and await _admin_perm(actor_id, ORDERS_MANAGE, settings, db):
         order_row: list[InlineKeyboardButton] = []
         for oid in order_ids[:8]:
             order_row.append(
@@ -1363,7 +1363,7 @@ def broadcast_cancel_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def admin_tools_inline(
+async def admin_tools_inline(
     user_id: int,
     settings,
     db,
@@ -1374,13 +1374,13 @@ def admin_tools_inline(
     from app.admin_perms import TOOLS_BROADCAST, TOOLS_MISC, TOOLS_SYNC
 
     rows: list[list[InlineKeyboardButton]] = []
-    if _admin_perm(user_id, TOOLS_BROADCAST, settings, db):
+    if await _admin_perm(user_id, TOOLS_BROADCAST, settings, db):
         rows.append([
             InlineKeyboardButton(
                 text=texts.BTN_ADMIN_BROADCAST, callback_data=CB_ADM_BROADCAST,
             style='primary'),
         ])
-    if _admin_perm(user_id, TOOLS_MISC, settings, db):
+    if await _admin_perm(user_id, TOOLS_MISC, settings, db):
         log_row: list[InlineKeyboardButton] = [
             InlineKeyboardButton(
                 text=texts.ADMIN_BTN_LOG_CHANNEL, callback_data=CB_ADM_LOG_CHANNEL,
@@ -1411,7 +1411,7 @@ def admin_tools_inline(
                 text=texts.ADMIN_BTN_TOGGLE_TEST, callback_data=CB_ADM_TOGGLE_TEST,
             style='primary'),
         ])
-    if _admin_perm(user_id, TOOLS_SYNC, settings, db):
+    if await _admin_perm(user_id, TOOLS_SYNC, settings, db):
         rows.append([
             InlineKeyboardButton(
                 text="🔄 همگام‌سازی پنل", callback_data=CB_ADM_TOOL_SYNC,
@@ -1439,7 +1439,7 @@ def admin_tools_inline(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def admin_pending_list(
+async def admin_pending_list(
     orders: list[dict], user_id: int, settings, db
 ) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
@@ -1450,7 +1450,7 @@ def admin_pending_list(
                 callback_data=f"{CB_ADM_ORDER_VIEW_PREFIX}{o['id']}",
             style='primary')
         ])
-    footer = admin_pending_footer(user_id, settings, db).inline_keyboard
+    footer = (await admin_pending_footer(user_id, settings, db)).inline_keyboard
     rows.extend(footer)
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

@@ -8,8 +8,8 @@ from app import texts
 from app.db import Database
 
 
-def _user_label(db: Database, user_id: int) -> str:
-    row = db.get_user(user_id)
+async def _user_label(db: Database, user_id: int) -> str:
+    row = await db.get_user(user_id)
     if row is None:
         return f"<code>{user_id}</code>"
     try:
@@ -24,14 +24,14 @@ def _user_label(db: Database, user_id: int) -> str:
     )
 
 
-def _admin_reviewer_label(db: Database, admin_id: int | None) -> str:
+async def _admin_reviewer_label(db: Database, admin_id: int | None) -> str:
     if admin_id is None:
         return "—"
-    return _user_label(db, int(admin_id))
+    return await _user_label(db, int(admin_id))
 
 
-def format_admin_order_detail(db: Database, order_id: int) -> str | None:
-    order = db.get_order(order_id)
+async def format_admin_order_detail(db: Database, order_id: int) -> str | None:
+    order = await db.get_order(order_id)
     if order is None:
         return None
 
@@ -51,7 +51,7 @@ def format_admin_order_detail(db: Database, order_id: int) -> str | None:
     return texts.ADMIN_ORDER_DETAIL.format(
         order_id=order_id,
         status=status,
-        user_line=_user_label(db, int(order["user_id"])),
+        user_line=await _user_label(db, int(order["user_id"])),
         location=escape(str(order["location_name"])),
         location_id=int(order["location_id"]),
         volume=vol,
@@ -60,7 +60,7 @@ def format_admin_order_detail(db: Database, order_id: int) -> str | None:
         nickname=nick,
         panel_email=panel_email,
         sub_id=sub_id,
-        reviewer=_admin_reviewer_label(
+        reviewer=await _admin_reviewer_label(
             db, int(order["admin_id"]) if order["admin_id"] is not None else None
         ),
         decline_reason=decline,

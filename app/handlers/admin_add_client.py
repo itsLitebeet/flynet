@@ -37,12 +37,12 @@ class AdminAddClientFlow(StatesGroup):
     picking_location = State()
 
 
-def _calc_order_price(
+async def _calc_order_price(
     db: Database, volume_gb: int, duration_days: int, location_id: int
 ) -> int:
-    base, per_gb, per_day = db.get_pricing_for_location(location_id)
+    base, per_gb, per_day = await db.get_pricing_for_location(location_id)
     base_price = texts.calc_price(volume_gb, duration_days, base, per_gb, per_day)
-    return db.resolve_price(base_price)
+    return await db.resolve_price(base_price)
 
 
 async def _track_wizard_message(state: FSMContext, sent: Message) -> None:
@@ -68,9 +68,9 @@ async def _delete_wizard_messages(
 ) -> None:
     for mid in message_ids:
         try:
-            await bot.delete_message(chat_id=chat_id, message_id=mid)
+            await bot.edit_message_reply_markup(chat_id=chat_id, message_id=mid, reply_markup=None)
         except Exception:  # noqa: BLE001 — already gone or too old
-            log.debug("Could not delete wizard message %s in %s", mid, chat_id)
+            log.debug("Could not clear wizard message markup %s in %s", mid, chat_id)
 
 
 def _parse_positive_int(raw: str) -> int | None:
@@ -189,7 +189,7 @@ async def add_client_flow_cancel(
     else:
         uid = event.from_user.id if event.from_user else None
         markup = (
-            keyboards.admin_reply_keyboard(uid, settings, db)
+            await keyboards.admin_reply_keyboard(uid, settings, db)
             if uid is not None
             else None
         )
@@ -229,7 +229,7 @@ async def add_client_user_id(
         first_name = chat.first_name
         last_name = chat.last_name
     except Exception:
-        existing = db.get_user(user_id)
+        existing = await db.get_user(user_id)
         if existing:
             username = existing["username"]
             first_name = existing["first_name"]
@@ -239,7 +239,7 @@ async def add_client_user_id(
             first_name = None
             last_name = None
 
-    db.upsert_user(
+    await db.upsert_user(
         user_id=user_id,
         username=username,
         first_name=first_name,
@@ -303,7 +303,7 @@ async def add_client_days(
         )
         return
 
-    locs = db.list_locations(only_enabled=True, exclude_test=True)
+    locs = await db.list_locations(only_enabled=True, exclude_test=True)
     if not locs:
         chat_id = message.chat.id
         msg_ids = list((await state.get_data()).get(_WIZARD_MSG_IDS_KEY) or [])
@@ -340,10 +340,10 @@ async def add_client_days(
     volume_gb = int(data["volume_gb"])
     duration_days = int(data["duration_days"])
 
-    price = _calc_order_price(db, volume_gb, duration_days, loc.id)
+    price = await _calc_order_price(db, volume_gb, duration_days, loc.id)
     panel_only = target_user_id is None
     if panel_only:
-        db.upsert_user(
+        await db.upsert_user(
             user_id=admin_id,
             username=message.from_user.username,
             first_name=message.from_user.first_name,
@@ -354,7 +354,7 @@ async def add_client_days(
     else:
         order_user_id = target_user_id
 
-    order_id = db.create_order(
+    order_id = await db.create_order(
         user_id=order_user_id,
         location_id=loc.id,
         location_name=loc.name,
@@ -377,7 +377,7 @@ async def add_client_days(
             )
     except XuiError as exc:
         log.warning("Admin manual provision failed order %s: %s", order_id, exc)
-        db.set_order_status(order_id, "failed", admin_id=admin_id)
+        await db.set_order_status(order_id, "failed", admin_id=admin_id)
         await state.clear()
         order_hint = f" (سفارش <code>#{order_id}</code>)"
         await message.answer(
@@ -388,7 +388,7 @@ async def add_client_days(
         return
     except Exception as exc:  # noqa: BLE001
         log.exception("Unexpected admin manual provision order %s", order_id)
-        db.set_order_status(order_id, "failed", admin_id=admin_id)
+        await db.set_order_status(order_id, "failed", admin_id=admin_id)
         await state.clear()
         order_hint = f" (سفارش <code>#{order_id}</code>)"
         await message.answer(
@@ -398,7 +398,7 @@ async def add_client_days(
         )
         return
 
-    db.set_order_provisioned(
+    await db.set_order_provisioned(
         order_id=order_id,
         email=result.email,
         sub_id=result.sub_id,

@@ -71,7 +71,7 @@ async def _commit_package(
         await message.answer(texts.ORDER_INCOMPLETE)
         return
 
-    ok, reason, pkg_id = db.add_service_package(
+    ok, reason, pkg_id = await db.add_service_package(
         loc_id, volume_gb, duration_days, price
     )
     await state.clear()
@@ -79,7 +79,7 @@ async def _commit_package(
         await message.answer(_add_service_error_text(reason))
         return
 
-    loc = db.get_location(loc_id)
+    loc = await db.get_location(loc_id)
     loc_name = escape(loc.name) if loc else "—"
     await message.answer(
         texts.ADD_SERVICE_OK.format(
@@ -96,12 +96,12 @@ async def _commit_package(
         await send_services(message, db, settings, user.id, edit_in_place=False)
 
 
-def _eligible_locations(db: Database):
-    return db.list_locations(only_enabled=True, exclude_test=True)
+async def _eligible_locations(db: Database):
+    return await db.list_locations(only_enabled=True, exclude_test=True)
 
 
 async def _prompt_location(message: Message, state: FSMContext, db: Database) -> None:
-    locs = _eligible_locations(db)
+    locs = await _eligible_locations(db)
     if not locs:
         await state.clear()
         await message.answer(texts.ADD_SERVICE_WIZARD_NO_LOCATIONS)
@@ -121,7 +121,7 @@ async def _prompt_volume(
     await answer_with_inline_keyboard(
         message,
         texts.ADD_SERVICE_WIZARD_VOLUME.format(location=escape(location_name)),
-        keyboards.admin_add_service_volumes(db.get_volume_presets()),
+        keyboards.admin_add_service_volumes(await db.get_volume_presets()),
     )
 
 
@@ -140,7 +140,7 @@ async def _prompt_duration(
             location=escape(location_name),
             volume=volume_gb,
         ),
-        keyboards.admin_add_service_durations(db.get_duration_presets()),
+        keyboards.admin_add_service_durations(await db.get_duration_presets()),
     )
 
 
@@ -242,7 +242,7 @@ async def cb_pick_location(
         await callback.answer()
         return
 
-    loc = db.get_location(loc_id)
+    loc = await db.get_location(loc_id)
     if loc is None or loc.is_test or not loc.enabled:
         await callback.answer("لوکیشن در دسترس نیست.", show_alert=True)
         return

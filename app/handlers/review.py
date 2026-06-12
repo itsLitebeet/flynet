@@ -67,7 +67,7 @@ async def _reject_if_not_reviewable(
     callback: CallbackQuery, db: Database, order_id: int
 ) -> bool:
     """Return True if order is still awaiting_review; else alert and return False."""
-    order = db.get_order(order_id)
+    order = await db.get_order(order_id)
     if order is None:
         await callback.answer("سفارش پیدا نشد.", show_alert=True)
         return False
@@ -103,13 +103,13 @@ async def cb_accept_order(
     if not await _reject_if_not_reviewable(callback, db, order_id):
         return
 
-    order = db.get_order(order_id)
+    order = await db.get_order(order_id)
     assert order is not None
     admin_id = callback.from_user.id
     is_test = bool(order["is_test"]) if "is_test" in order.keys() else False
 
-    if not db.claim_order_review(order_id, "approved", admin_id):
-        order = db.get_order(order_id)
+    if not await db.claim_order_review(order_id, "approved", admin_id):
+        order = await db.get_order(order_id)
         st = order["status"] if order else "—"
         await callback.answer(
             texts.REVIEW_ALREADY.format(status=_status_label(str(st))),
@@ -126,10 +126,10 @@ async def cb_accept_order(
         action="تأیید شد",
     )
 
-    location = db.get_location(int(order["location_id"]))
+    location = await db.get_location(int(order["location_id"]))
     if location is None or not location.inbound_ids:
         err = "لوکیشن مرتبط با این سفارش حذف شده یا inbound ندارد."
-        db.set_order_status(order_id, "failed", admin_id=callback.from_user.id)
+        await db.set_order_status(order_id, "failed", admin_id=callback.from_user.id)
         admin = Actor.from_user(callback.from_user)
         if admin is not None:
             await make_logger(bot, db).log_order_provision_failed(
@@ -151,7 +151,7 @@ async def cb_accept_order(
     is_renewal = bool(renew_of_order_id)
     parent_order = None
     if is_renewal:
-        parent_order = db.get_order(int(renew_of_order_id))
+        parent_order = await db.get_order(int(renew_of_order_id))
         if parent_order and parent_order['xui_email']:
             email = parent_order['xui_email']
         else:
@@ -204,7 +204,7 @@ async def cb_accept_order(
                 )
     except XuiError as exc:
         log.warning('Provisioning failed for order %s: %s', order_id, exc)
-        db.set_order_status(order_id, 'failed', admin_id=callback.from_user.id)
+        await db.set_order_status(order_id, 'failed', admin_id=callback.from_user.id)
         admin = Actor.from_user(callback.from_user)
         if admin is not None:
             await make_logger(bot, db).log_order_provision_failed(
@@ -226,7 +226,7 @@ async def cb_accept_order(
         return
     except Exception as exc:  # noqa: BLE001 — any other failure (network, etc.)
         log.exception('Unexpected provisioning error for order %s', order_id)
-        db.set_order_status(order_id, 'failed', admin_id=callback.from_user.id)
+        await db.set_order_status(order_id, 'failed', admin_id=callback.from_user.id)
         admin = Actor.from_user(callback.from_user)
         if admin is not None:
             await make_logger(bot, db).log_order_provision_failed(
@@ -248,15 +248,15 @@ async def cb_accept_order(
         return
 
     if is_renewal:
-        db.update_order_plan(
+        await db.update_order_plan(
             int(renew_of_order_id),
             volume_gb=int(parent_order["volume_gb"]) + int(order["volume_gb"]),
             duration_days=int(parent_order["duration_days"]) + int(order["duration_days"]),
         )
-        db.set_order_status(int(renew_of_order_id), 'provisioned')
-        db.set_order_status(order_id, 'completed_renewal', admin_id=callback.from_user.id)
+        await db.set_order_status(int(renew_of_order_id), 'provisioned')
+        await db.set_order_status(order_id, 'completed_renewal', admin_id=callback.from_user.id)
     else:
-        db.set_order_provisioned(
+        await db.set_order_provisioned(
             order_id=order_id,
             email=result.email,
             sub_id=result.sub_id,
@@ -326,7 +326,7 @@ async def _apply_decline(
     error_reply: Message | None = None,
 ) -> bool:
     """Decline order and notify buyer. Returns True on success."""
-    order = db.get_order(order_id)
+    order = await db.get_order(order_id)
     if order is None:
         if error_reply is not None:
             await error_reply.answer("سفارش پیدا نشد.")
@@ -340,10 +340,10 @@ async def _apply_decline(
 
     user_id = int(order["user_id"])
     admin_id = admin_user.id
-    if not db.claim_order_review(
+    if not await db.claim_order_review(
         order_id, "declined", admin_id, decline_reason=reason
     ):
-        order = db.get_order(order_id)
+        order = await db.get_order(order_id)
         st = order["status"] if order else "—"
         if error_reply is not None:
             await error_reply.answer(
@@ -424,7 +424,7 @@ async def cb_decline_order(
     if not await _reject_if_not_reviewable(callback, db, order_id):
         return
 
-    order = db.get_order(order_id)
+    order = await db.get_order(order_id)
     assert order is not None
 
     await state.set_state(DeclineFlow.waiting_reason)

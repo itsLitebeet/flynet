@@ -65,12 +65,12 @@ async def send_customer_detail(
     text = await format_customer_detail(db, user_id)
     if text is None:
         return False
-    row = db.get_user(user_id)
+    row = await db.get_user(user_id)
     if row is None:
         return False
-    orders = db.list_user_orders_admin(user_id, limit=30, exclude_test=True)
+    orders = await db.list_user_orders_admin(user_id, limit=30, exclude_test=True)
     order_ids = [int(o["id"]) for o in orders][:8]
-    markup = keyboards.admin_customer_detail_keyboard(
+    markup = await keyboards.admin_customer_detail_keyboard(
         user_id,
         actor_id,
         settings,
@@ -167,7 +167,7 @@ async def customers_flow_cancel(
     event: Message | CallbackQuery, state: FSMContext, settings: Settings, db: Database
 ) -> None:
     user_id = event.from_user.id if event.from_user else None
-    if user_id is None or not admin_can(user_id, CUSTOMERS, settings, db):
+    if user_id is None or not await admin_can(user_id, CUSTOMERS, settings, db):
         msg = (
             texts.NOT_ADMIN
             if user_id is None or not is_admin(user_id, settings)
@@ -252,10 +252,10 @@ async def cb_admin_cust_ban(
     if callback.from_user and user_id == callback.from_user.id:
         await callback.answer(texts.BAN_SELF, show_alert=True)
         return
-    if db.get_user(user_id) is None:
+    if await db.get_user(user_id) is None:
         await callback.answer(texts.BAN_USER_NOTFOUND, show_alert=True)
         return
-    db.set_user_banned(user_id, True)
+    await db.set_user_banned(user_id, True)
     if isinstance(callback.message, Message):
         await send_customer_detail(
             callback.message,
@@ -282,10 +282,10 @@ async def cb_admin_cust_unban(
     except ValueError:
         await callback.answer()
         return
-    if db.get_user(user_id) is None:
+    if await db.get_user(user_id) is None:
         await callback.answer(texts.BAN_USER_NOTFOUND, show_alert=True)
         return
-    db.set_user_banned(user_id, False)
+    await db.set_user_banned(user_id, False)
     if isinstance(callback.message, Message):
         await send_customer_detail(
             callback.message,
@@ -305,7 +305,7 @@ async def _log_ban(
     from app.logs import Actor, make_logger
 
     admin = Actor.from_user(callback.from_user)
-    row = db.get_user(user_id)
+    row = await db.get_user(user_id)
     if admin is None or row is None:
         return
     target = Actor(

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from html import escape
 
 from aiogram import F, Router
@@ -26,7 +25,7 @@ class LocationConfigButtonsFlow(StatesGroup):
 async def send_config_buttons_menu(
     message: Message, db: Database, loc_id: int, edit_in_place: bool = False
 ) -> None:
-    loc = db.get_location(loc_id)
+    loc = await db.get_location(loc_id)
     if loc is None:
         await admin_edit_or_answer(message, texts.EDIT_LOC_NOT_FOUND.format(id=loc_id), edit_in_place=edit_in_place)
         return
@@ -94,11 +93,11 @@ async def cb_admin_loc_btn_del(
         await callback.answer()
         return
 
-    loc = db.get_location(loc_id)
+    loc = await db.get_location(loc_id)
     if loc and 0 <= index < len(loc.config_buttons):
         buttons = list(loc.config_buttons)
         buttons.pop(index)
-        db.set_location_config_buttons(loc_id, buttons)
+        await db.set_location_config_buttons(loc_id, buttons)
         await send_config_buttons_menu(callback.message, db, loc_id, edit_in_place=True)
     
     await callback.answer("دکمه حذف شد.", show_alert=True)
@@ -180,7 +179,7 @@ async def edit_loc_btn_keywords(
         await message.answer("لطفاً کلمات کلیدی را وارد کنید.")
         return
 
-    loc = db.get_location(loc_id)
+    loc = await db.get_location(loc_id)
     if not loc:
         await state.clear()
         return
@@ -191,7 +190,7 @@ async def edit_loc_btn_keywords(
         "keywords": keywords
     })
     
-    db.set_location_config_buttons(loc_id, buttons)
+    await db.set_location_config_buttons(loc_id, buttons)
     await state.clear()
     
     msg = await message.answer(f"✅ دکمه <b>{escape(name)}</b> با موفقیت اضافه شد!")

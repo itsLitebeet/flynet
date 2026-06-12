@@ -21,7 +21,7 @@ async def clear_admin_receipt_buttons(
     action: str,
 ) -> None:
     """Remove Accept/Decline buttons from every admin's receipt copy of this order."""
-    refs = db.get_admin_receipt_refs(order_id)
+    refs = await db.get_admin_receipt_refs(order_id)
     if not refs:
         return
 

@@ -30,9 +30,9 @@ class AdminOfferFlow(StatesGroup):
     waiting_fixed = State()
 
 
-def _offer_menu_text(db: Database) -> str:
+async def _offer_menu_text(db: Database) -> str:
     return texts.ADMIN_OFFER_MENU.format(
-        offer_desc=describe_offer(db.get_offer_config())
+        offer_desc=describe_offer(await db.get_offer_config())
     )
 
 
@@ -41,7 +41,7 @@ async def send_offer_menu(
 ) -> None:
     await admin_edit_or_answer(
         message,
-        _offer_menu_text(db),
+        await _offer_menu_text(db),
         keyboards.admin_offer_inline(db),
         edit_in_place=edit_in_place,
     )
@@ -87,7 +87,7 @@ async def cmd_setoffer(
 
     raw = (command.args or "").strip().lower()
     if not raw or raw in ("clear", "off", "none", "0"):
-        db.clear_global_offer()
+        await db.clear_global_offer()
         await message.answer(texts.ADMIN_OFFER_CLEARED)
         return
 
@@ -98,10 +98,10 @@ async def cmd_setoffer(
         return
 
     kind, value = parsed
-    db.set_global_offer(kind, value)
+    await db.set_global_offer(kind, value)
     await message.answer(
         texts.ADMIN_OFFER_SET_OK.format(
-            offer_desc=describe_offer(db.get_offer_config())
+            offer_desc=describe_offer(await db.get_offer_config())
         )
     )
 
@@ -123,7 +123,7 @@ async def cb_admin_offer_clear(
 ) -> None:
     if not await guard_admin_callback(callback, settings, db, OFFER):
         return
-    db.clear_global_offer()
+    await db.clear_global_offer()
     if isinstance(callback.message, Message):
         await send_offer_menu(callback.message, db, edit_in_place=True)
     await callback.answer(texts.ADMIN_OFFER_CLEARED)
@@ -144,12 +144,12 @@ async def cb_admin_offer_percent_preset(
     if not 1 <= pct <= 99:
         await callback.answer(texts.ADMIN_OFFER_INVALID, show_alert=True)
         return
-    db.set_global_offer("percent", pct)
+    await db.set_global_offer("percent", pct)
     if isinstance(callback.message, Message):
         await send_offer_menu(callback.message, db, edit_in_place=True)
     await callback.answer(
         texts.ADMIN_OFFER_SET_OK.format(
-            offer_desc=describe_offer(db.get_offer_config())
+            offer_desc=describe_offer(await db.get_offer_config())
         )
     )
 
@@ -222,7 +222,7 @@ async def offer_flow_cancel(
     db: Database,
 ) -> None:
     user_id = event.from_user.id if event.from_user else None
-    if user_id is None or not admin_can(user_id, OFFER, settings, db):
+    if user_id is None or not await admin_can(user_id, OFFER, settings, db):
         msg = (
             texts.NOT_ADMIN
             if user_id is None or not is_admin(user_id, settings)
@@ -259,10 +259,10 @@ async def offer_percent_input(
         await message.answer(texts.ADMIN_OFFER_INVALID)
         return
     await state.clear()
-    db.set_global_offer("percent", pct)
+    await db.set_global_offer("percent", pct)
     await message.answer(
         texts.ADMIN_OFFER_SET_OK.format(
-            offer_desc=describe_offer(db.get_offer_config())
+            offer_desc=describe_offer(await db.get_offer_config())
         ),
         reply_markup=keyboards.admin_offer_inline(db),
     )
@@ -284,10 +284,10 @@ async def offer_amount_input(
         await message.answer(texts.ADMIN_OFFER_INVALID)
         return
     await state.clear()
-    db.set_global_offer("amount", amount)
+    await db.set_global_offer("amount", amount)
     await message.answer(
         texts.ADMIN_OFFER_SET_OK.format(
-            offer_desc=describe_offer(db.get_offer_config())
+            offer_desc=describe_offer(await db.get_offer_config())
         ),
         reply_markup=keyboards.admin_offer_inline(db),
     )
@@ -309,10 +309,10 @@ async def offer_fixed_input(
         await message.answer(texts.ADMIN_OFFER_INVALID)
         return
     await state.clear()
-    db.set_global_offer("fixed", price)
+    await db.set_global_offer("fixed", price)
     await message.answer(
         texts.ADMIN_OFFER_SET_OK.format(
-            offer_desc=describe_offer(db.get_offer_config())
+            offer_desc=describe_offer(await db.get_offer_config())
         ),
         reply_markup=keyboards.admin_offer_inline(db),
     )

@@ -35,7 +35,7 @@ async def send_perm_matrix_home(
 ) -> None:
     await admin_edit_or_answer(
         message,
-        format_full_matrix_text(db),
+        await format_full_matrix_text(db),
         keyboards.admin_perm_matrix_home_keyboard(),
         edit_in_place=edit_in_place,
     )
@@ -50,8 +50,8 @@ async def send_role_perm_editor(
 ) -> None:
     await admin_edit_or_answer(
         message,
-        format_role_editor_text(db, role),
-        keyboards.admin_perm_role_keyboard(role, db),
+        await format_role_editor_text(db, role),
+        await keyboards.admin_perm_role_keyboard(role, db),
         edit_in_place=edit_in_place,
     )
 
@@ -79,7 +79,7 @@ async def cb_perm_reset_role(
     if role not in CONFIGURABLE_ROLES:
         await callback.answer()
         return
-    reset_role_permissions(db, role)
+    await reset_role_permissions(db, role)
     if isinstance(callback.message, Message):
         await send_role_perm_editor(
             callback.message, db, role, edit_in_place=True
@@ -122,7 +122,7 @@ async def cb_perm_toggle(
         await callback.answer()
         return
     try:
-        enabled = toggle_role_permission(db, role, perm)
+        enabled = await toggle_role_permission(db, role, perm)
     except ValueError:
         await callback.answer(texts.ADMIN_PERM_PANEL_REQUIRED, show_alert=True)
         return
@@ -141,7 +141,7 @@ async def cb_perm_reset_all(
     if not _require_owner(callback, settings):
         await callback.answer(texts.NOT_PERMITTED, show_alert=True)
         return
-    reset_all_role_permissions(db)
+    await reset_all_role_permissions(db)
     if isinstance(callback.message, Message):
         await send_perm_matrix_home(callback.message, db, edit_in_place=True)
     await callback.answer(texts.ADMIN_PERM_RESET_ALL_OK)

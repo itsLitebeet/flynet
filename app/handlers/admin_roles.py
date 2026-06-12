@@ -17,9 +17,9 @@ from app.handlers.admin_ui_helpers import admin_edit_or_answer
 router = Router(name="admin_roles")
 
 
-def _roles_menu_text(settings: Settings, db: Database) -> str:
+async def _roles_menu_text(settings: Settings, db: Database) -> str:
     lines: list[str] = []
-    for uid, role in db.list_staff_roles(settings.admin_ids):
+    for uid, role in await db.list_staff_roles(settings.admin_ids):
         label = "👑 " + texts.ADMIN_ROLE_LABELS["owner"] if is_owner(uid, settings) else texts.ADMIN_ROLE_LABELS.get(role, role)
         lines.append(
             texts.ADMIN_ROLES_LINE.format(
@@ -36,8 +36,8 @@ async def send_roles_menu(
 ) -> None:
     await admin_edit_or_answer(
         message,
-        _roles_menu_text(settings, db),
-        keyboards.admin_roles_keyboard(settings, db),
+        await _roles_menu_text(settings, db),
+        await keyboards.admin_roles_keyboard(settings, db),
         edit_in_place=edit_in_place,
     )
 
@@ -76,7 +76,7 @@ async def cmd_setadminrole(
         await message.answer(texts.ADMIN_ROLE_USAGE)
         return
 
-    db.set_admin_role(target_id, role)
+    await db.set_admin_role(target_id, role)
     await message.answer(
         texts.ADMIN_ROLE_SET_OK.format(
             user_id=target_id,
@@ -120,7 +120,7 @@ async def cb_set_admin_role(
         await callback.answer("نقش مالک ثابت است.", show_alert=True)
         return
     try:
-        db.set_admin_role(target_id, role)
+        await db.set_admin_role(target_id, role)
     except ValueError:
         await callback.answer(texts.ADMIN_ROLE_USAGE, show_alert=True)
         return

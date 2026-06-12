@@ -3,21 +3,21 @@ import sqlite3
 
 from app.db import Database
 from app.xui import XuiClient
-from app.settings import load_settings
 
 async def main():
-    settings = load_settings()
-    db = Database("netfly.db")
+    db = await Database.create("netfly.db")
 
     # Get Master Location
-    locs = db.list_locations(only_enabled=True)
+    locs = await db.list_locations(only_enabled=True)
     if not locs:
         print("No enabled master location found.")
+        await db.close()
         return
     master_loc = locs[0]
     
     if not master_loc.inbound_ids:
         print(f"Master location '{master_loc.name}' has no inbound_ids set! Please configure inbounds.")
+        await db.close()
         return
 
     print(f"Using Master Location: {master_loc.name} with Inbounds: {master_loc.inbound_ids}")
@@ -57,11 +57,11 @@ async def main():
                         email=email,
                         inbound_ids=master_loc.inbound_ids,
                     )
-                    db._conn.execute(
-                        "UPDATE orders SET location_id = ?, location_name = ?, updated_at = datetime('now') WHERE id = ?",
-                        (master_loc.id, master_loc.name, order_id)
-                    )
-                    db._conn.commit()
+                    async with db._cursor() as cur_db:
+                        await cur_db.execute(
+                            "UPDATE orders SET location_id = ?, location_name = ?, updated_at = datetime('now') WHERE id = ?",
+                            (master_loc.id, master_loc.name, order_id)
+                        )
                     print(f"  [SUCCESS] Updated {email} to use all inbounds and updated database location.")
                 except Exception as e:
                     print(f"  [ERROR] Failed to update {email}: {e}")
@@ -77,14 +77,16 @@ async def main():
                         client_uuid=uuid,
                         sub_id=sub_id,
                     )
-                    db._conn.execute(
-                        "UPDATE orders SET location_id = ?, location_name = ?, updated_at = datetime('now') WHERE id = ?",
-                        (master_loc.id, master_loc.name, order_id)
-                    )
-                    db._conn.commit()
+                    async with db._cursor() as cur_db:
+                        await cur_db.execute(
+                            "UPDATE orders SET location_id = ?, location_name = ?, updated_at = datetime('now') WHERE id = ?",
+                            (master_loc.id, master_loc.name, order_id)
+                        )
                     print(f"  [SUCCESS] Created {email} on Master Panel and updated database location.")
                 except Exception as e:
                     print(f"  [ERROR] Failed to create {email}: {e}")
+
+    await db.close()
 
 if __name__ == "__main__":
     asyncio.run(main())

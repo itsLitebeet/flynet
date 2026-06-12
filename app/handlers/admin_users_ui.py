@@ -66,7 +66,7 @@ async def load_panel_usage_for_orders(
 
     merged: dict[str, ClientUsage] = {}
     for loc_id, emails in by_loc.items():
-        loc = db.get_location(loc_id)
+        loc = await db.get_location(loc_id)
         if loc is None:
             continue
         try:
@@ -120,20 +120,20 @@ def _panel_client_summary(
 
 async def format_users_page(db: Database, page: int = 0) -> tuple[str, int, list]:
     """Return (message_html, total_pages, users_on_page)."""
-    total = db.count_users()
+    total = await db.count_users()
     if total == 0:
         return texts.ADMIN_USERS_EMPTY, 1, []
 
     per_page = ADMIN_USERS_PER_PAGE
     total_pages = max(1, math.ceil(total / per_page))
     page = max(0, min(page, total_pages - 1))
-    users = db.list_users_paginated(page * per_page, per_page)
+    users = await db.list_users_paginated(page * per_page, per_page)
 
     all_orders: list = []
     orders_by_user: dict[int, list] = {}
     for u in users:
         uid = int(u["user_id"])
-        orders = db.list_user_orders_admin(uid, limit=20)
+        orders = await db.list_user_orders_admin(uid, limit=20)
         orders_by_user[uid] = orders
         all_orders.extend(orders)
 
@@ -175,13 +175,13 @@ async def format_users_page(db: Database, page: int = 0) -> tuple[str, int, list
 
 
 async def format_user_detail(db: Database, user_id: int) -> str | None:
-    row = db.get_user(user_id)
+    row = await db.get_user(user_id)
     if row is None:
         return None
 
     username = f"@{row['username']}" if row["username"] else "—"
     ban_state = "مسدود 🚫" if bool(row["is_banned"]) else "فعال ✅"
-    orders = db.list_user_orders_admin(user_id, limit=30)
+    orders = await db.list_user_orders_admin(user_id, limit=30)
     usage_map = await load_panel_usage_for_orders(db, orders)
 
     if orders:

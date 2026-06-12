@@ -119,13 +119,13 @@ def _extract_edit_raw(message: Message, command: CommandObject | None = None) ->
     return text
 
 
-def _apply_edit_from_parts(
+async def _apply_edit_from_parts(
     db: Database,
     loc_id: int,
     parts: list[str],
 ) -> tuple[bool, str | None]:
     """Parse pipe-separated fields (name..inbounds, optional sub). Returns (ok, error_key)."""
-    loc = db.get_location(loc_id)
+    loc = await db.get_location(loc_id)
     if loc is None:
         return False, "not_found"
 
@@ -151,7 +151,7 @@ def _apply_edit_from_parts(
             return False, "sub_bad"
         sub_url_template = sub_parsed
 
-    if not db.update_location(
+    if not await db.update_location(
         loc_id,
         name=name,
         base_url=base_url,
@@ -175,7 +175,7 @@ async def _reply_edit_errors(message: Message, err: str, loc_id: int | None) -> 
 
 
 async def _reply_edit_success(message: Message, db: Database, loc_id: int) -> None:
-    loc = db.get_location(loc_id)
+    loc = await db.get_location(loc_id)
     if loc is None:
         return
     inbounds = ",".join(str(i) for i in loc.inbound_ids) or "—"
@@ -210,7 +210,7 @@ async def _run_editlocation(
             await _reply_edit_errors(message, err, loc_id)
         return err is not None
 
-    ok, apply_err = _apply_edit_from_parts(db, loc_id, field_parts)
+    ok, apply_err = await _apply_edit_from_parts(db, loc_id, field_parts)
     if apply_err:
         await _reply_edit_errors(message, apply_err, loc_id)
         return True
@@ -235,13 +235,13 @@ async def _save_location(
     inbound_ids: list[int],
     sub_url_template: str | None,
 ) -> bool:
-    loc = db.get_location(loc_id)
+    loc = await db.get_location(loc_id)
     if loc is None:
         await message.answer(texts.EDIT_LOC_NOT_FOUND.format(id=loc_id))
         return False
 
     base_url = normalize_panel_url(base_url)
-    if not db.update_location(
+    if not await db.update_location(
         loc_id,
         name=name,
         base_url=base_url,
@@ -252,7 +252,7 @@ async def _save_location(
         await message.answer(texts.EDIT_LOC_NOT_FOUND.format(id=loc_id))
         return False
 
-    updated = db.get_location(loc_id)
+    updated = await db.get_location(loc_id)
     if updated is None:
         return False
 
@@ -287,7 +287,7 @@ async def _prompt_step(
 async def start_edit_location_wizard(
     message: Message, state: FSMContext, db: Database, loc_id: int
 ) -> None:
-    loc = db.get_location(loc_id)
+    loc = await db.get_location(loc_id)
     if loc is None:
         await message.answer(texts.EDIT_LOC_NOT_FOUND.format(id=loc_id))
         return
@@ -391,7 +391,7 @@ async def edit_location_cancel(
         else:
             await event.answer(msg)
         return
-    if not admin_can(user_id, LOCATIONS, settings, db):
+    if not await admin_can(user_id, LOCATIONS, settings, db):
         msg = texts.NOT_PERMITTED
         if isinstance(event, CallbackQuery):
             await event.answer(msg, show_alert=True)

@@ -63,18 +63,18 @@ async def _edit_or_answer(callback: CallbackQuery, text: str, reply_markup=None)
         )
 
 
-def _calc_base_price_for(
+async def _calc_base_price_for(
     db: Database, volume_gb: int, duration_days: int, location_id: int
 ) -> int:
-    base, per_gb, per_day = db.get_pricing_for_location(location_id)
+    base, per_gb, per_day = await db.get_pricing_for_location(location_id)
     return texts.calc_price(volume_gb, duration_days, base, per_gb, per_day)
 
 
-def _calc_price_for(
+async def _calc_price_for(
     db: Database, volume_gb: int, duration_days: int, location_id: int
 ) -> int:
-    return db.resolve_price(
-        _calc_base_price_for(db, volume_gb, duration_days, location_id)
+    return await db.resolve_price(
+        await _calc_base_price_for(db, volume_gb, duration_days, location_id)
     )
 
 
@@ -85,7 +85,7 @@ async def _clear_plan_selection(state: FSMContext) -> None:
     await state.set_data(data)
 
 
-def _resolve_order_terms(
+async def _resolve_order_terms(
     data: dict, db: Database
 ) -> tuple[int, str, int, int, int] | None:
     """Validate FSM data; re-read package price from DB before creating order."""
@@ -95,7 +95,7 @@ def _resolve_order_terms(
     except (KeyError, TypeError, ValueError):
         return None
 
-    loc = db.get_location(location_id)
+    loc = await db.get_location(location_id)
     if loc is None or not loc.enabled or not loc.purchase_enabled or loc.is_test:
         return None
 
@@ -105,10 +105,10 @@ def _resolve_order_terms(
             package_id = int(data["package_id"])
         except (KeyError, TypeError, ValueError):
             return None
-        pkg = db.get_service_package(package_id)
+        pkg = await db.get_service_package(package_id)
         if pkg is None or not pkg.enabled or pkg.location_id != location_id:
             return None
-        final_price = db.resolve_price(pkg.price)
+        final_price = await db.resolve_price(pkg.price)
         return (
             location_id,
             location_name,
@@ -125,7 +125,7 @@ def _resolve_order_terms(
     if volume_gb <= 0 or duration_days <= 0:
         return None
 
-    price = _calc_price_for(db, volume_gb, duration_days, location_id)
+    price = await _calc_price_for(db, volume_gb, duration_days, location_id)
     return location_id, location_name, volume_gb, duration_days, price
 
 
@@ -136,7 +136,7 @@ async def _abort_order_flow(
     data = await state.get_data()
     order_id = int(data.get("order_id") or 0)
     if order_id:
-        row = db.get_order(order_id)
+        row = await db.get_order(order_id)
         # Only delete while still waiting for payment (not after receipt sent).
         if row is not None and str(row["status"]) == "awaiting_payment":
             if bot is not None:
@@ -147,20 +147,20 @@ async def _abort_order_flow(
                         user=buyer,
                         had_receipt=False,
                     )
-            db.delete_order(order_id)
+            await db.delete_order(order_id)
     await state.clear()
     try:
-        await message.delete()
+        await message.edit_reply_markup(reply_markup=None)
     except Exception:
         pass
     await message.answer(
-        texts.CANCELLED, reply_markup=buyer_reply_keyboard(message, db)
+        texts.CANCELLED, reply_markup=await buyer_reply_keyboard(message, db)
     )
 
 
 async def _show_locations(callback: CallbackQuery, db: Database, state: FSMContext) -> None:
     await _clear_plan_selection(state)
-    locs = db.list_locations(
+    locs = await db.list_locations(
         only_enabled=True, exclude_test=True, only_purchase_open=True
     )
     if not locs:
@@ -168,17 +168,24 @@ async def _show_locations(callback: CallbackQuery, db: Database, state: FSMConte
         await state.clear()
         return
 
-    # Skip picking location, just pick the first available location
-    loc = locs[0]
-    await state.update_data(
-        location_id=loc.id,
-        location_name=loc.name,
-        inbound_ids=loc.inbound_ids,
-    )
-    if db.is_manual_purchase_enabled():
-        await _show_packages(callback, state, loc.id, loc.name, db)
+    if len(locs) > 1:
+        await state.set_state(OrderFlow.picking_location)
+        await _edit_or_answer(
+            callback,
+            texts.ORDER_PICK_LOCATION,
+            keyboards.locations(locs),
+        )
     else:
-        await _show_volumes(callback, state, loc.name, db)
+        loc = locs[0]
+        await state.update_data(
+            location_id=loc.id,
+            location_name=loc.name,
+            inbound_ids=loc.inbound_ids,
+        )
+        if await db.is_manual_purchase_enabled():
+            await _show_packages(callback, state, loc.id, loc.name, db)
+        else:
+            await _show_volumes(callback, state, loc.name, db)
 
 
 async def _show_packages(
@@ -188,13 +195,13 @@ async def _show_packages(
     location_name: str,
     db: Database,
 ) -> None:
-    packages = db.list_service_packages(location_id)
+    packages = await db.list_service_packages(location_id)
     if not packages:
         await _edit_or_answer(
             callback,
             texts.ORDER_NO_PACKAGES,
             keyboards.locations(
-                db.list_locations(
+                await db.list_locations(
                     only_enabled=True,
                     exclude_test=True,
                     only_purchase_open=True,
@@ -209,7 +216,7 @@ async def _show_packages(
     await _edit_or_answer(
         callback,
         texts.ORDER_PICK_PACKAGE.format(location=escape(location_name)),
-        keyboards.service_packages(packages, db),
+        reply_markup=await keyboards.service_packages(packages, db),
     )
 
 
@@ -221,7 +228,7 @@ async def _show_volumes(
     await _edit_or_answer(
         callback,
         texts.ORDER_PICK_VOLUME.format(location=escape(location_name)),
-        keyboards.volumes(db.get_volume_presets()),
+        keyboards.volumes(await db.get_volume_presets()),
     )
 
 
@@ -239,7 +246,7 @@ async def _show_durations(
             location=escape(location_name),
             volume=volume_gb,
         ),
-        keyboards.durations(db.get_duration_presets()),
+        keyboards.durations(await db.get_duration_presets()),
     )
 
 
@@ -252,14 +259,14 @@ async def _show_review(callback: CallbackQuery, state: FSMContext, db: Database)
 
     if mode == PURCHASE_MODE_PACKAGES:
         pkg_id = int(data.get("package_id") or 0)
-        pkg = db.get_service_package(pkg_id) if pkg_id else None
+        pkg = await db.get_service_package(pkg_id) if pkg_id else None
         base_price = pkg.price if pkg else int(data.get("price") or 0)
         back_cb = keyboards.CB_ORDER_BACK_PKG
     else:
-        base_price = _calc_base_price_for(db, vol, days, loc_id)
+        base_price = await _calc_base_price_for(db, vol, days, loc_id)
         back_cb = keyboards.CB_ORDER_BACK_DUR
 
-    price = db.resolve_price(base_price)
+    price = await db.resolve_price(base_price)
     await state.update_data(price=price)
 
     await state.set_state(OrderFlow.reviewing)
@@ -284,48 +291,57 @@ async def _begin_buy_message(message: Message, state: FSMContext, db: Database) 
     if renew_order_id:
         await state.update_data(renew_of_order_id=renew_order_id)
 
-    locs = db.list_locations(
+    locs = await db.list_locations(
         only_enabled=True, exclude_test=True, only_purchase_open=True
     )
     if not locs:
         await message.answer(
             texts.NO_LOCATIONS_USER,
-            reply_markup=buyer_reply_keyboard(message, db),
+            reply_markup=await buyer_reply_keyboard(message, db),
         )
         return
-    
-    # Pick the first location automatically
-    loc = locs[0]
-    await state.update_data(
-        location_id=loc.id,
-        location_name=loc.name,
-        inbound_ids=loc.inbound_ids,
-    )
 
     from app.ui_reply import answer_with_inline_keyboard
 
-    if db.is_manual_purchase_enabled():
-        packages = db.list_service_packages(loc.id)
-        if not packages:
-            await message.answer(texts.ORDER_NO_PACKAGES, reply_markup=buyer_reply_keyboard(message, db))
-            return
-        await state.update_data(purchase_mode=PURCHASE_MODE_PACKAGES)
-        await state.set_state(OrderFlow.picking_package)
+    if len(locs) > 1:
+        await state.set_state(OrderFlow.picking_location)
         await answer_with_inline_keyboard(
             message,
-            texts.ORDER_PICK_PACKAGE.format(location=escape(loc.name)),
-            keyboards.service_packages(packages, db),
+            texts.ORDER_PICK_LOCATION,
+            keyboards.locations(locs),
             parse_mode=ParseMode.HTML,
         )
     else:
-        await state.update_data(purchase_mode=PURCHASE_MODE_LEGACY)
-        await state.set_state(OrderFlow.picking_volume)
-        await answer_with_inline_keyboard(
-            message,
-            texts.ORDER_PICK_VOLUME.format(location=escape(loc.name)),
-            keyboards.volumes(db.get_volume_presets()),
-            parse_mode=ParseMode.HTML,
+        # Pick the first location automatically
+        loc = locs[0]
+        await state.update_data(
+            location_id=loc.id,
+            location_name=loc.name,
+            inbound_ids=loc.inbound_ids,
         )
+
+        if await db.is_manual_purchase_enabled():
+            packages = await db.list_service_packages(loc.id)
+            if not packages:
+                await message.answer(texts.ORDER_NO_PACKAGES, reply_markup=await buyer_reply_keyboard(message, db))
+                return
+            await state.update_data(purchase_mode=PURCHASE_MODE_PACKAGES)
+            await state.set_state(OrderFlow.picking_package)
+            await answer_with_inline_keyboard(
+                message,
+                texts.ORDER_PICK_PACKAGE.format(location=escape(loc.name)),
+                reply_markup=await keyboards.service_packages(packages, db),
+                parse_mode=ParseMode.HTML,
+            )
+        else:
+            await state.update_data(purchase_mode=PURCHASE_MODE_LEGACY)
+            await state.set_state(OrderFlow.picking_volume)
+            await answer_with_inline_keyboard(
+                message,
+                texts.ORDER_PICK_VOLUME.format(location=escape(loc.name)),
+                keyboards.volumes(await db.get_volume_presets()),
+                parse_mode=ParseMode.HTML,
+            )
 
 
 # ---------- entry ----------
@@ -354,7 +370,7 @@ async def cb_pick_location(callback: CallbackQuery, state: FSMContext, db: Datab
         await callback.answer()
         return
 
-    loc = db.get_location(loc_id)
+    loc = await db.get_location(loc_id)
     if loc is None or not loc.enabled or loc.is_test:
         await callback.answer("این لوکیشن دیگر در دسترس نیست.", show_alert=True)
         await _show_locations(callback, db, state)
@@ -370,7 +386,7 @@ async def cb_pick_location(callback: CallbackQuery, state: FSMContext, db: Datab
         location_name=loc.name,
         inbound_ids=loc.inbound_ids,
     )
-    if db.is_manual_purchase_enabled():
+    if await db.is_manual_purchase_enabled():
         await _show_packages(callback, state, loc.id, loc.name, db)
     else:
         await _show_volumes(callback, state, loc.name, db)
@@ -390,7 +406,7 @@ async def cb_pick_package(callback: CallbackQuery, state: FSMContext, db: Databa
         await callback.answer()
         return
 
-    pkg = db.get_service_package(package_id)
+    pkg = await db.get_service_package(package_id)
     data = await state.get_data()
     loc_id = int(data.get("location_id", 0))
     if pkg is None or not pkg.enabled or pkg.location_id != loc_id:
@@ -403,7 +419,7 @@ async def cb_pick_package(callback: CallbackQuery, state: FSMContext, db: Databa
     await state.update_data(
         volume_gb=pkg.volume_gb,
         duration_days=pkg.duration_days,
-        price=db.resolve_price(pkg.price),
+        price=await db.resolve_price(pkg.price),
         package_id=pkg.id,
         purchase_mode=PURCHASE_MODE_PACKAGES,
     )
@@ -442,7 +458,7 @@ async def cb_volume_preset(callback: CallbackQuery, state: FSMContext, db: Datab
     except ValueError:
         await callback.answer()
         return
-    if gb not in db.get_volume_presets():
+    if gb not in await db.get_volume_presets():
         await callback.answer()
         return
 
@@ -482,7 +498,7 @@ async def on_custom_volume(message: Message, state: FSMContext, db: Database) ->
             location=escape(str(data["location_name"])),
             volume=gb,
         ),
-        reply_markup=keyboards.durations(db.get_duration_presets()),
+        reply_markup=keyboards.durations(await db.get_duration_presets()),
     )
 
 
@@ -498,7 +514,7 @@ async def cb_pick_duration(callback: CallbackQuery, state: FSMContext, db: Datab
     except ValueError:
         await callback.answer()
         return
-    if days not in db.get_duration_presets():
+    if days not in await db.get_duration_presets():
         await callback.answer()
         return
 
@@ -524,14 +540,14 @@ async def cb_confirm_order(
         await callback.answer()
         return
 
-    terms = _resolve_order_terms(data, db)
+    terms = await _resolve_order_terms(data, db)
     if terms is None:
         await callback.answer(texts.ORDER_PLAN_CHANGED, show_alert=True)
         loc_id = int(data.get("location_id") or 0)
         if (
             data.get("purchase_mode") == PURCHASE_MODE_PACKAGES
             and loc_id
-            and db.list_service_packages(loc_id)
+            and await db.list_service_packages(loc_id)
         ):
             await _show_packages(
                 callback,
@@ -553,7 +569,7 @@ async def cb_confirm_order(
         price=price_toman,
     )
 
-    order_id = db.create_order(
+    order_id = await db.create_order(
         user_id=user.id,
         location_id=location_id,
         location_name=location_name,
@@ -576,8 +592,8 @@ async def cb_confirm_order(
             price=price_toman,
         )
 
-    card_raw = db.get_setting("card_number", "—") or "—"
-    card_holder = db.get_setting("card_holder", "—") or "—"
+    card_raw = await db.get_setting("card_number", "—") or "—"
+    card_holder = await db.get_setting("card_holder", "—") or "—"
 
     await _edit_or_answer(
         callback,
@@ -621,10 +637,22 @@ async def cb_cancel_anywhere(
 async def cb_back_to_locations(
     callback: CallbackQuery, state: FSMContext, db: Database, bot: Bot
 ) -> None:
-    if isinstance(callback.message, Message):
-        await _abort_order_flow(callback.message, state, db, bot)
+    locs = await db.list_locations(
+        only_enabled=True, exclude_test=True, only_purchase_open=True
+    )
+    if len(locs) > 1 and isinstance(callback.message, Message):
+        await _clear_plan_selection(state)
+        await state.set_state(OrderFlow.picking_location)
+        await _edit_or_answer(
+            callback,
+            texts.ORDER_PICK_LOCATION,
+            keyboards.locations(locs),
+        )
     else:
-        await state.clear()
+        if isinstance(callback.message, Message):
+            await _abort_order_flow(callback.message, state, db, bot)
+        else:
+            await state.clear()
     await callback.answer()
 
 
@@ -636,7 +664,7 @@ async def cb_back_to_volumes(callback: CallbackQuery, state: FSMContext, db: Dat
     data = await state.get_data()
     loc_id = int(data.get("location_id", 0))
     loc_name = str(data.get("location_name", "—"))
-    if db.is_manual_purchase_enabled() and loc_id:
+    if await db.is_manual_purchase_enabled() and loc_id:
         await _show_packages(callback, state, loc_id, loc_name, db)
     else:
         await _show_volumes(callback, state, loc_name, db)
@@ -690,12 +718,12 @@ async def on_receipt_photo(
 
     # Highest-resolution photo size is last.
     file_id = message.photo[-1].file_id
-    db.set_order_screenshot(order_id, file_id, new_status="awaiting_review")
+    await db.set_order_screenshot(order_id, file_id, new_status="awaiting_review")
 
     await state.clear()
     await message.answer(
         texts.ORDER_RECEIPT_RECEIVED,
-        reply_markup=buyer_reply_keyboard(message, db),
+        reply_markup=await buyer_reply_keyboard(message, db),
     )
 
     user = message.from_user
@@ -737,7 +765,7 @@ async def on_receipt_photo(
                 reply_markup=review_kb,
             )
             if sent:
-                db.add_admin_receipt_message(order_id, admin_id, sent.message_id)
+                await db.add_admin_receipt_message(order_id, admin_id, sent.message_id)
         except Exception:  # noqa: BLE001 — admin may have blocked the bot
             log.exception("Failed to send receipt to admin %s", admin_id)
 

@@ -729,17 +729,6 @@ class XuiClient:
         from app import texts as _texts
         usage = await self.get_usage(email)
         
-
-    async def renew_client(
-        self,
-        email: str,
-        volume_gb: int,
-        duration_days: int,
-        is_test: bool = False,
-    ) -> None:
-        from app import texts as _texts
-        usage = await self.get_usage(email)
-        
         # Calculate new total bytes
         if is_test:
             test_cap_bytes = _texts.TEST_VOLUME_MB * 1024 * 1024

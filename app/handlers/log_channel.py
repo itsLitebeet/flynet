@@ -44,7 +44,7 @@ async def cmd_logchannel(
 
     raw = (command.args or "").strip()
     if raw.lower() in ("off", "-", "0", "none"):
-        db.set_log_channel_id(None)
+        await db.set_log_channel_id(None)
         await message.answer(texts.LOG_CHANNEL_CLEARED)
         return
 

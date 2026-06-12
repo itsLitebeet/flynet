@@ -74,7 +74,7 @@ async def _guard_cb(
     if not is_admin(uid, settings):
         await callback.answer(texts.NOT_ADMIN, show_alert=True)
         return None
-    if not admin_can(uid, perm, settings, db):
+    if not await admin_can(uid, perm, settings, db):
         await callback.answer(texts.NOT_PERMITTED, show_alert=True)
         return None
     return uid
@@ -90,14 +90,20 @@ async def _guard_cb_any(
     if not is_admin(uid, settings):
         await callback.answer(texts.NOT_ADMIN, show_alert=True)
         return None
-    if not any(admin_can(uid, p, settings, db) for p in perms):
+    has_any = False
+    for p in perms:
+        if await admin_can(uid, p, settings, db):
+            has_any = True
+            break
+    if not has_any:
         await callback.answer(texts.NOT_PERMITTED, show_alert=True)
         return None
     return uid
 
 
-def _admin_home_body(db: Database) -> str:
-    return f"{texts.ADMIN_PANEL_HOME}\n\n{format_stats_text(db)}"
+async def _admin_home_body(db: Database) -> str:
+    stats = await format_stats_text(db)
+    return f"{texts.ADMIN_PANEL_HOME}\n\n{stats}"
 
 
 async def send_admin_home(
@@ -114,17 +120,17 @@ async def send_admin_home(
         # callback.message is from the bot — caller must pass admin_user_id
         if user is None or user.is_bot:
             return
-        if not admin_panel_access(user.id, settings, db):
+        if not await admin_panel_access(user.id, settings, db):
             return
         uid = user.id
-    elif not admin_panel_access(uid, settings, db):
+    elif not await admin_panel_access(uid, settings, db):
         return
-    markup = keyboards.admin_reply_keyboard(uid, settings, db)
+    markup = await keyboards.admin_reply_keyboard(uid, settings, db)
     if edit_in_place:
         await admin_edit_or_answer(
             message,
-            _admin_home_body(db),
-            keyboards.admin_home_inline(uid, settings, db),
+            await _admin_home_body(db),
+            await keyboards.admin_home_inline(uid, settings, db),
             edit_in_place=True,
         )
         return
@@ -133,8 +139,8 @@ async def send_admin_home(
         reply_markup=markup,
     )
     await message.answer(
-        format_stats_text(db),
-        reply_markup=keyboards.admin_home_inline(uid, settings, db),
+        await format_stats_text(db),
+        reply_markup=await keyboards.admin_home_inline(uid, settings, db),
     )
 
 
@@ -146,8 +152,8 @@ async def send_pending_list(
     *,
     edit_in_place: bool = False,
 ) -> None:
-    rows = db.pending_orders(limit=20)
-    footer = keyboards.admin_pending_footer(user_id, settings, db)
+    rows = await db.pending_orders(limit=20)
+    footer = await keyboards.admin_pending_footer(user_id, settings, db)
     if not rows:
         await admin_edit_or_answer(
             message,
@@ -170,7 +176,7 @@ async def send_pending_list(
     await admin_edit_or_answer(
         message,
         texts.ADMIN_PENDING_HEADER.format(count=len(rows)),
-        keyboards.admin_pending_list(buttons, user_id, settings, db),
+        await keyboards.admin_pending_list(buttons, user_id, settings, db),
         edit_in_place=edit_in_place,
     )
 
@@ -187,9 +193,9 @@ async def send_settings(
     message_id: int | None = None,
 ) -> bool:
     body = texts.ADMIN_SETTINGS_MENU.format(
-        settings_block=format_settings_text(db)
+        settings_block=await format_settings_text(db)
     )
-    markup = keyboards.admin_settings_inline(user_id, settings, db)
+    markup = await keyboards.admin_settings_inline(user_id, settings, db)
     cid = chat_id if chat_id is not None else message.chat.id
     mid = message_id
     if mid is None and edit_in_place:
@@ -224,9 +230,9 @@ async def _present_settings_on_callback(
         return False
     chat_id, msg_id = target
     body = texts.ADMIN_SETTINGS_MENU.format(
-        settings_block=format_settings_text(db)
+        settings_block=await format_settings_text(db)
     )
-    markup = keyboards.admin_settings_inline(user_id, settings, db)
+    markup = await keyboards.admin_settings_inline(user_id, settings, db)
     return await present_inline_screen(
         bot,
         chat_id=chat_id,
@@ -237,11 +243,11 @@ async def _present_settings_on_callback(
     )
 
 
-def _services_menu_body(db: Database) -> str:
-    body = format_services_list_text(db)
+async def _services_menu_body(db: Database) -> str:
+    body = await format_services_list_text(db)
     if len(body) <= 3900:
         return body
-    mode = "روشن ✅" if db.is_manual_purchase_enabled() else "خاموش ❌"
+    mode = "روشن ✅" if await db.is_manual_purchase_enabled() else "خاموش ❌"
     return texts.ADMIN_SERVICES_MENU.format(
         manual_mode=mode,
         packages_block=(
@@ -260,9 +266,9 @@ async def send_services(
     edit_in_place: bool = False,
     bot: Bot | None = None,
 ) -> None:
-    body = _services_menu_body(db)
+    body = await _services_menu_body(db)
     markup = keyboards.admin_services_inline(
-        manual_enabled=db.is_manual_purchase_enabled()
+        manual_enabled=await db.is_manual_purchase_enabled()
     )
     if bot is not None:
         await present_inline_screen(
@@ -292,10 +298,10 @@ async def send_base_plans(
 ) -> None:
     await admin_edit_or_answer(
         message,
-        format_base_plans_text(db),
+        await format_base_plans_text(db),
         keyboards.admin_plans_keyboard(
-            db.get_volume_presets(),
-            db.get_duration_presets(),
+            await db.get_volume_presets(),
+            await db.get_duration_presets(),
         ),
         edit_in_place=edit_in_place,
     )
@@ -311,13 +317,13 @@ async def send_tools(
 ) -> None:
     await admin_edit_or_answer(
         message,
-        format_tools_menu_text(db, settings),
-        keyboards.admin_tools_inline(
+        await format_tools_menu_text(db, settings),
+        await keyboards.admin_tools_inline(
             user_id,
             settings,
             db,
-            has_log_channel=bool(db.get_log_channel_id()),
-            has_req_channel=is_gate_enabled(db, settings),
+            has_log_channel=bool(await db.get_log_channel_id()),
+            has_req_channel=await is_gate_enabled(db, settings),
         ),
         edit_in_place=edit_in_place,
     )
@@ -331,12 +337,12 @@ async def send_locations(
     *,
     edit_in_place: bool = False,
 ) -> None:
-    locs = db.list_locations(only_enabled=False)
+    locs = await db.list_locations(only_enabled=False)
     if not locs:
         await admin_edit_or_answer(
             message,
             texts.ADMIN_LOC_EMPTY,
-            keyboards.admin_home_inline(user_id, settings, db),
+            await keyboards.admin_home_inline(user_id, settings, db),
             edit_in_place=edit_in_place,
         )
         return
@@ -355,7 +361,7 @@ async def send_location_detail(
     *,
     edit_in_place: bool = False,
 ) -> bool:
-    loc = db.get_location(loc_id)
+    loc = await db.get_location(loc_id)
     if loc is None:
         return False
 
@@ -365,7 +371,7 @@ async def send_location_detail(
         test_line = (
             f"\n🧪 <b>لوکیشن تست</b> — {texts.format_test_volume()} · "
             f"{texts.format_test_duration()} · رایگان · "
-            f"دکمه تست: {'روشن' if db.is_test_feature_enabled() else 'خاموش'}\n"
+            f"دکمه تست: {'روشن' if await db.is_test_feature_enabled() else 'خاموش'}\n"
         )
     purchase_state = (
         "باز ✅"
@@ -383,7 +389,7 @@ async def send_location_detail(
         base_url=escape(loc.base_url),
         inbounds=",".join(str(i) for i in loc.inbound_ids) or "—",
         sub=sub,
-        pricing=escape(location_pricing_label(db, loc)),
+        pricing=escape(await location_pricing_label(db, loc)),
     )
     await admin_edit_or_answer(
         message,
@@ -410,7 +416,7 @@ async def send_users(
 ) -> None:
     text, total_pages, users = await format_users_page(db, page)
     if not users:
-        markup = keyboards.admin_home_inline(user_id, settings, db)
+        markup = await keyboards.admin_home_inline(user_id, settings, db)
         if edit_in_place:
             try:
                 await message.edit_text(
@@ -451,14 +457,14 @@ async def send_user_detail(
     actor_id: int,
     edit_in_place: bool = False,
 ) -> bool:
-    row = db.get_user(user_id)
+    row = await db.get_user(user_id)
     text = await format_user_detail(db, user_id)
     if text is None or row is None:
         return False
     is_banned = bool(row["is_banned"])
-    orders = db.list_user_orders_admin(user_id, limit=30)
+    orders = await db.list_user_orders_admin(user_id, limit=30)
     order_ids = [int(o["id"]) for o in orders][:6]
-    markup = keyboards.admin_user_detail_keyboard(
+    markup = await keyboards.admin_user_detail_keyboard(
         user_id,
         actor_id,
         settings,
@@ -480,12 +486,12 @@ async def send_user_detail(
     return True
 
 
-def _order_receipt_caption(db: Database, order) -> str | None:
+async def _order_receipt_caption(db: Database, order) -> str | None:
     if order is None or order["status"] != "awaiting_review":
         return None
-    loc = db.get_location(int(order["location_id"]))
+    loc = await db.get_location(int(order["location_id"]))
     loc_name = loc.name if loc else "—"
-    user_row = db.get_user(int(order["user_id"]))
+    user_row = await db.get_user(int(order["user_id"]))
     if user_row:
         full_name = escape(
             " ".join(
@@ -544,7 +550,7 @@ async def cmd_clear(message: Message, settings: Settings, db: Database) -> None:
 async def cmd_admin_panel(message: Message, settings: Settings, db: Database) -> None:
     if message.from_user is None:
         return
-    if not admin_panel_access(message.from_user.id, settings, db):
+    if not await admin_panel_access(message.from_user.id, settings, db):
         await message.answer(
             texts.NOT_ADMIN
             if not is_admin(message.from_user.id, settings)
@@ -568,46 +574,46 @@ async def admin_menu_buttons(
 
     text = message.text or ""
     if text == texts.ADMIN_BTN_PANEL:
-        if not admin_panel_access(uid, settings, db):
+        if not await admin_panel_access(uid, settings, db):
             await message.answer(texts.NOT_PERMITTED)
             return
         await send_admin_home(message, settings, db)
     elif text == texts.ADMIN_BTN_DASHBOARD:
-        if not admin_panel_access(uid, settings, db):
+        if not await admin_panel_access(uid, settings, db):
             await message.answer(texts.NOT_PERMITTED)
             return
         await state.clear()
         await send_admin_home(message, settings, db, admin_user_id=uid)
     elif text == texts.ADMIN_BTN_PENDING:
-        if not admin_can(uid, ORDERS_REVIEW, settings, db):
+        if not await admin_can(uid, ORDERS_REVIEW, settings, db):
             await message.answer(texts.NOT_PERMITTED)
             return
         await send_pending_list(message, settings, db, uid)
     elif text == texts.ADMIN_BTN_SETTINGS:
         if not (
-            admin_can(uid, SETTINGS, settings, db)
-            or admin_can(uid, SERVICES, settings, db)
-            or admin_can(uid, OFFER, settings, db)
+            await admin_can(uid, SETTINGS, settings, db)
+            or await admin_can(uid, SERVICES, settings, db)
+            or await admin_can(uid, OFFER, settings, db)
         ):
             await message.answer(texts.NOT_PERMITTED)
             return
         await send_settings(message, settings, db, uid)
     elif text == texts.ADMIN_BTN_LOCATIONS:
-        if not admin_can(uid, LOCATIONS, settings, db):
+        if not await admin_can(uid, LOCATIONS, settings, db):
             await message.answer(texts.NOT_PERMITTED)
             return
         await send_locations(message, settings, db, uid)
     elif text == texts.ADMIN_BTN_TOOLS:
         if not (
-            admin_can(uid, TOOLS_BROADCAST, settings, db)
-            or admin_can(uid, TOOLS_SYNC, settings, db)
-            or admin_can(uid, TOOLS_MISC, settings, db)
+            await admin_can(uid, TOOLS_BROADCAST, settings, db)
+            or await admin_can(uid, TOOLS_SYNC, settings, db)
+            or await admin_can(uid, TOOLS_MISC, settings, db)
         ):
             await message.answer(texts.NOT_PERMITTED)
             return
         await send_tools(message, settings, db, uid)
     elif text == texts.ADMIN_BTN_USERS:
-        if not admin_can(uid, USERS, settings, db):
+        if not await admin_can(uid, USERS, settings, db):
             await message.answer(texts.NOT_PERMITTED)
             return
         await send_users(message, settings, db, page=0, user_id=uid)
@@ -667,7 +673,7 @@ async def cb_admin_orders(
         await callback.answer()
         return
     uid = callback.from_user.id
-    if admin_can(uid, ORDERS_REVIEW, settings, db):
+    if await admin_can(uid, ORDERS_REVIEW, settings, db):
         await send_pending_list(
             callback.message, settings, db, uid, edit_in_place=True
         )
@@ -713,9 +719,9 @@ async def cb_admin_settings(
         return
     uid = callback.from_user.id
     if not (
-        admin_can(uid, SETTINGS, settings, db)
-        or admin_can(uid, SERVICES, settings, db)
-        or admin_can(uid, OFFER, settings, db)
+        await admin_can(uid, SETTINGS, settings, db)
+        or await admin_can(uid, SERVICES, settings, db)
+        or await admin_can(uid, OFFER, settings, db)
     ):
         await callback.answer(texts.NOT_PERMITTED, show_alert=True)
         return
@@ -767,9 +773,9 @@ async def cb_admin_services(
         return
 
     chat_id, msg_id = target
-    body = _services_menu_body(db)
+    body = await _services_menu_body(db)
     markup = keyboards.admin_services_inline(
-        manual_enabled=db.is_manual_purchase_enabled()
+        manual_enabled=await db.is_manual_purchase_enabled()
     )
     try:
         await present_inline_screen(
@@ -845,9 +851,9 @@ async def cb_admin_services_legacy_hint(
         await callback.answer("پیام یافت نشد.", show_alert=True)
         return
     chat_id, msg_id = target
-    body = _services_menu_body(db)
+    body = await _services_menu_body(db)
     markup = keyboards.admin_services_inline(
-        manual_enabled=db.is_manual_purchase_enabled()
+        manual_enabled=await db.is_manual_purchase_enabled()
     )
     await present_inline_screen(
         bot,
@@ -870,7 +876,7 @@ async def msg_admin_services(
     user = message.from_user
     if user is None:
         return
-    if not admin_can(user.id, SERVICES, settings, db):
+    if not await admin_can(user.id, SERVICES, settings, db):
         await message.answer(texts.NOT_PERMITTED)
         return
     await state.clear()
@@ -888,8 +894,8 @@ async def cb_admin_toggle_manual(
     if await _guard_cb(callback, settings, db, SERVICES) is None:
         return
     await state.clear()
-    enabled = not db.is_manual_purchase_enabled()
-    db.set_manual_purchase_enabled(enabled)
+    enabled = not await db.is_manual_purchase_enabled()
+    await db.set_manual_purchase_enabled(enabled)
     mode = "پلن ازپیش‌تعریف ✅" if enabled else "فرمول قیمت ❌"
     await callback.answer(f"خرید دستی: {mode}")
     if callback.message is not None and callback.from_user is not None:
@@ -928,7 +934,7 @@ async def cb_admin_del_volume(callback: CallbackQuery, settings: Settings, db: D
     except ValueError:
         await callback.answer()
         return
-    ok, reason = db.remove_volume_preset(gb)
+    ok, reason = await db.remove_volume_preset(gb)
     if not ok:
         msg = {
             "missing": texts.ADMIN_PLAN_NOT_FOUND,
@@ -938,10 +944,10 @@ async def cb_admin_del_volume(callback: CallbackQuery, settings: Settings, db: D
         return
     if isinstance(callback.message, Message):
         await callback.message.edit_text(
-            format_base_plans_text(db),
+            await format_base_plans_text(db),
             reply_markup=keyboards.admin_plans_keyboard(
-                db.get_volume_presets(),
-                db.get_duration_presets(),
+                await db.get_volume_presets(),
+                await db.get_duration_presets(),
             ),
         )
     await callback.answer(texts.ADMIN_PLAN_VOL_REMOVED.format(gb=gb))
@@ -957,7 +963,7 @@ async def cb_admin_del_duration(callback: CallbackQuery, settings: Settings, db:
     except ValueError:
         await callback.answer()
         return
-    ok, reason = db.remove_duration_preset(days)
+    ok, reason = await db.remove_duration_preset(days)
     if not ok:
         msg = {
             "missing": texts.ADMIN_PLAN_NOT_FOUND,
@@ -967,10 +973,10 @@ async def cb_admin_del_duration(callback: CallbackQuery, settings: Settings, db:
         return
     if isinstance(callback.message, Message):
         await callback.message.edit_text(
-            format_base_plans_text(db),
+            await format_base_plans_text(db),
             reply_markup=keyboards.admin_plans_keyboard(
-                db.get_volume_presets(),
-                db.get_duration_presets(),
+                await db.get_volume_presets(),
+                await db.get_duration_presets(),
             ),
         )
     await callback.answer(texts.ADMIN_PLAN_DUR_REMOVED.format(days=days))
@@ -986,9 +992,9 @@ async def cb_admin_tools(callback: CallbackQuery, settings: Settings, db: Databa
         await callback.answer(texts.NOT_ADMIN, show_alert=True)
         return
     if not (
-        admin_can(uid, TOOLS_BROADCAST, settings, db)
-        or admin_can(uid, TOOLS_SYNC, settings, db)
-        or admin_can(uid, TOOLS_MISC, settings, db)
+        await admin_can(uid, TOOLS_BROADCAST, settings, db)
+        or await admin_can(uid, TOOLS_SYNC, settings, db)
+        or await admin_can(uid, TOOLS_MISC, settings, db)
     ):
         await callback.answer(texts.NOT_PERMITTED, show_alert=True)
         return
@@ -1038,7 +1044,7 @@ async def admin_panel_flow_cancel(
     db: Database,
 ) -> None:
     user_id = event.from_user.id if event.from_user else None
-    if user_id is None or not admin_can(user_id, ORDERS_MANAGE, settings, db):
+    if user_id is None or not await admin_can(user_id, ORDERS_MANAGE, settings, db):
         msg = (
             texts.NOT_ADMIN
             if user_id is None or not is_admin(user_id, settings)
@@ -1053,7 +1059,7 @@ async def admin_panel_flow_cancel(
     await state.clear()
     if isinstance(event, CallbackQuery):
         if isinstance(event.message, Message):
-            if admin_can(user_id, ORDERS_REVIEW, settings, db):
+            if await admin_can(user_id, ORDERS_REVIEW, settings, db):
                 await send_pending_list(
                     event.message, settings, db, user_id, edit_in_place=True
                 )
@@ -1077,7 +1083,7 @@ async def admin_panel_order_id_input(
     message: Message, state: FSMContext, settings: Settings, db: Database
 ) -> None:
     user = message.from_user
-    if user is None or not admin_can(user.id, ORDERS_MANAGE, settings, db):
+    if user is None or not await admin_can(user.id, ORDERS_MANAGE, settings, db):
         await state.clear()
         await message.answer(
             texts.NOT_ADMIN
@@ -1104,7 +1110,7 @@ async def admin_panel_order_id_input(
     ):
         await message.answer(
             texts.ADMIN_ORDER_LOOKUP_NOTFOUND.format(order_id=order_id),
-            reply_markup=keyboards.admin_pending_footer(user.id, settings, db),
+            reply_markup=await keyboards.admin_pending_footer(user.id, settings, db),
         )
 
 
@@ -1148,7 +1154,7 @@ async def cb_admin_log_channel(callback: CallbackQuery, state: FSMContext, setti
 async def cb_admin_log_channel_off(callback: CallbackQuery, settings: Settings, db: Database) -> None:
     if await _guard_cb(callback, settings, db, TOOLS_MISC) is None:
         return
-    db.set_log_channel_id(None)
+    await db.set_log_channel_id(None)
     if isinstance(callback.message, Message):
         await send_tools(callback.message, settings, db, callback.from_user.id, edit_in_place=True)
     await callback.answer(texts.LOG_CHANNEL_CLEARED)
@@ -1173,7 +1179,7 @@ async def cb_admin_req_channel_off(
 ) -> None:
     if await _guard_cb(callback, settings, db, TOOLS_MISC) is None:
         return
-    db.set_required_channel(None)
+    await db.set_required_channel(None)
     if isinstance(callback.message, Message):
         await send_tools(
             callback.message, settings, db, callback.from_user.id, edit_in_place=True
@@ -1185,8 +1191,8 @@ async def cb_admin_req_channel_off(
 async def cb_admin_toggle_test(callback: CallbackQuery, settings: Settings, db: Database) -> None:
     if await _guard_cb(callback, settings, db, TOOLS_MISC) is None:
         return
-    enabled = not db.is_test_feature_enabled()
-    db.set_test_feature_enabled(enabled)
+    enabled = not await db.is_test_feature_enabled()
+    await db.set_test_feature_enabled(enabled)
     state_word = "روشن ✅" if enabled else "خاموش ❌"
     if isinstance(callback.message, Message):
         await send_tools(callback.message, settings, db, callback.from_user.id, edit_in_place=True)
@@ -1205,8 +1211,8 @@ async def cb_admin_toggle_test_from_loc(callback: CallbackQuery, settings: Setti
     except ValueError:
         await callback.answer()
         return
-    enabled = not db.is_test_feature_enabled()
-    db.set_test_feature_enabled(enabled)
+    enabled = not await db.is_test_feature_enabled()
+    await db.set_test_feature_enabled(enabled)
     state_word = "روشن ✅" if enabled else "خاموش ❌"
     if isinstance(callback.message, Message):
         await send_location_detail(
@@ -1270,7 +1276,7 @@ async def cb_admin_user_info(
     except ValueError:
         await callback.answer()
         return
-    row = db.get_user(user_id)
+    row = await db.get_user(user_id)
     if row is None:
         await callback.answer("کاربر یافت نشد.", show_alert=True)
         return
@@ -1327,7 +1333,7 @@ async def cb_admin_update_user(callback: CallbackQuery, bot: Bot, settings: Sett
     
     try:
         chat = await bot.get_chat(user_id)
-        db.upsert_user(
+        await db.upsert_user(
             user_id=user_id,
             username=chat.username,
             first_name=chat.first_name,
@@ -1377,10 +1383,10 @@ async def cb_admin_ban_user(callback: CallbackQuery, bot: Bot, settings: Setting
     if user_id == callback.from_user.id:
         await callback.answer(texts.BAN_SELF, show_alert=True)
         return
-    if db.get_user(user_id) is None:
+    if await db.get_user(user_id) is None:
         await callback.answer(texts.BAN_USER_NOTFOUND, show_alert=True)
         return
-    db.set_user_banned(user_id, True)
+    await db.set_user_banned(user_id, True)
     if isinstance(callback.message, Message):
         await send_user_detail(
             callback.message,
@@ -1405,10 +1411,10 @@ async def cb_admin_unban_user(callback: CallbackQuery, bot: Bot, settings: Setti
     except ValueError:
         await callback.answer()
         return
-    if db.get_user(user_id) is None:
+    if await db.get_user(user_id) is None:
         await callback.answer(texts.BAN_USER_NOTFOUND, show_alert=True)
         return
-    db.set_user_banned(user_id, False)
+    await db.set_user_banned(user_id, False)
     if isinstance(callback.message, Message):
         await send_user_detail(
             callback.message,
@@ -1428,7 +1434,7 @@ async def _log_ban_from_callback(
     from app.logs import Actor, make_logger
 
     admin = Actor.from_user(callback.from_user)
-    row = db.get_user(user_id)
+    row = await db.get_user(user_id)
     if admin is None or row is None:
         return
     target = Actor(
@@ -1457,8 +1463,8 @@ async def cb_admin_view_order(callback: CallbackQuery, bot: Bot, settings: Setti
         await callback.answer()
         return
 
-    order = db.get_order(order_id)
-    caption = _order_receipt_caption(db, order)
+    order = await db.get_order(order_id)
+    caption = await _order_receipt_caption(db, order)
     if caption is None:
         await callback.answer("سفارش در انتظار بررسی نیست.", show_alert=True)
         return
@@ -1477,13 +1483,13 @@ async def cb_admin_view_order(callback: CallbackQuery, bot: Bot, settings: Setti
                 reply_markup=review_kb,
             )
             if sent:
-                db.add_admin_receipt_message(order_id, admin_chat, sent.message_id)
+                await db.add_admin_receipt_message(order_id, admin_chat, sent.message_id)
         else:
             sent = await bot.send_message(
                 admin_chat, caption, reply_markup=review_kb
             )
             if sent:
-                db.add_admin_receipt_message(order_id, admin_chat, sent.message_id)
+                await db.add_admin_receipt_message(order_id, admin_chat, sent.message_id)
     except Exception:  # noqa: BLE001
         await callback.answer("ارسال رسید ناموفق بود.", show_alert=True)
         return
@@ -1529,13 +1535,13 @@ async def cb_admin_loc_toggle(callback: CallbackQuery, settings: Settings, db: D
         await callback.answer()
         return
 
-    loc = db.get_location(loc_id)
+    loc = await db.get_location(loc_id)
     if loc is None:
         await callback.answer("لوکیشن یافت نشد.", show_alert=True)
         return
 
     new_state = not loc.enabled
-    db.set_location_enabled(loc_id, new_state)
+    await db.set_location_enabled(loc_id, new_state)
     state_word = "فعال" if new_state else "غیرفعال"
     await callback.answer(f"لوکیشن {state_word} شد ✅")
     if isinstance(callback.message, Message):
@@ -1561,7 +1567,7 @@ async def cb_admin_loc_purchase_toggle(
         await callback.answer()
         return
 
-    loc = db.get_location(loc_id)
+    loc = await db.get_location(loc_id)
     if loc is None:
         await callback.answer("لوکیشن یافت نشد.", show_alert=True)
         return
@@ -1570,7 +1576,7 @@ async def cb_admin_loc_purchase_toggle(
         return
 
     new_state = not loc.purchase_enabled
-    db.set_location_purchase_enabled(loc_id, new_state)
+    await db.set_location_purchase_enabled(loc_id, new_state)
     state_word = "باز" if new_state else "بسته"
     await callback.answer(f"خرید جدید {state_word} شد ✅")
     if isinstance(callback.message, Message):
@@ -1594,12 +1600,12 @@ async def cb_admin_loc_purge_prompt(callback: CallbackQuery, settings: Settings,
         await callback.answer()
         return
 
-    loc = db.get_location(loc_id)
+    loc = await db.get_location(loc_id)
     if loc is None:
         await callback.answer("لوکیشن یافت نشد.", show_alert=True)
         return
 
-    count = db.count_orders_for_location(loc_id)
+    count = await db.count_orders_for_location(loc_id)
     if isinstance(callback.message, Message):
         await callback.message.answer(
             texts.PURGE_CONFIRM.format(
@@ -1630,14 +1636,14 @@ async def cb_admin_tool_clear(callback: CallbackQuery, settings: Settings, db: D
     if await _guard_cb(callback, settings, db, TOOLS_SYNC) is None:
         return
     if isinstance(callback.message, Message):
-        await callback.message.answer(run_clear_declined(db))
+        await callback.message.answer(await run_clear_declined(db))
     await callback.answer("انجام شد ✅")
 
 @router.callback_query(F.data == keyboards.CB_ADM_TOOL_CLEAR_TEST)
 async def cb_admin_tool_clear_test(callback: CallbackQuery, settings: Settings, db: Database) -> None:
     if await _guard_cb(callback, settings, db, TOOLS_SYNC) is None:
         return
-    count = db.clear_test_clients()
+    count = await db.clear_test_clients()
     if isinstance(callback.message, Message):
         await callback.message.answer(f"✅ تعداد {count} اکانت تست از دیتابیس ربات پاکسازی شد. اکنون کاربران قدیمی می‌توانند مجددا تست دریافت کنند.")
     await callback.answer("انجام شد ✅")
