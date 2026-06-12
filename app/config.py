@@ -42,10 +42,34 @@ class Settings:
     admin_ids: list[int] = field(default_factory=list)
     db_path: Path = Path("netfly.db")
     required_channel_id: int | None = None
+    sms_api_key: str | None = None
+    sms_line_number: str | None = None
+    sms_admin_mobiles: list[str] = field(default_factory=list)
+    sms_template_id: int | None = None
 
     @property
     def is_configured(self) -> bool:
         return bool(self.bot_token) and self.bot_token != "123456:ABC-DEF_your_token_here"
+
+
+def _parse_mobiles(raw: str | None) -> list[str]:
+    if not raw:
+        return []
+    mobiles: list[str] = []
+    for part in raw.split(","):
+        part = part.strip()
+        if part:
+            mobiles.append(part)
+    return mobiles
+
+
+def _parse_optional_int(raw: str | None) -> int | None:
+    if not raw:
+        return None
+    try:
+        return int(raw.strip())
+    except ValueError:
+        return None
 
 
 def load_settings() -> Settings:
@@ -53,9 +77,17 @@ def load_settings() -> Settings:
     admins = _parse_admin_ids(os.getenv("ADMIN_IDS"))
     db_path = Path(os.getenv("DB_PATH", "netfly.db"))
     req_ch = _parse_optional_channel_id(os.getenv("REQUIRED_CHANNEL_ID"))
+    sms_key = os.getenv("SMS_API_KEY", "").strip() or None
+    sms_line = os.getenv("SMS_LINE_NUMBER", "").strip() or None
+    sms_mobs = _parse_mobiles(os.getenv("SMS_ADMIN_MOBILES"))
+    sms_temp = _parse_optional_int(os.getenv("SMS_TEMPLATE_ID"))
     return Settings(
         bot_token=token,
         admin_ids=admins,
         db_path=db_path,
         required_channel_id=req_ch,
+        sms_api_key=sms_key,
+        sms_line_number=sms_line,
+        sms_admin_mobiles=sms_mobs,
+        sms_template_id=sms_temp,
     )

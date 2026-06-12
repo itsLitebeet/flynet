@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from html import escape
 
@@ -23,6 +24,7 @@ from app.config import Settings
 from app.db import Database
 from app.handlers.buyer_ui import buyer_reply_keyboard
 from app.logs import Actor, make_logger
+from app.sms import send_pending_order_sms
 
 
 router = Router(name="order")
@@ -755,6 +757,15 @@ async def on_receipt_photo(
             duration_days=int(data["duration_days"]),
             price=int(data["price"]),
         )
+
+    asyncio.create_task(
+        send_pending_order_sms(
+            settings=settings,
+            order_id=order_id,
+            price=int(data["price"]),
+            location_name=str(data["location_name"]),
+        )
+    )
 
     for admin_id in settings.admin_ids:
         try:
