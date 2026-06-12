@@ -198,23 +198,29 @@ def _mark(enabled: bool) -> str:
 async def format_full_matrix_text(db: Database) -> str:
     from app import texts
 
-    header = "Permission".ljust(16)
+    col_width = 14
+    left_padding = 16
+
+    header = "Permission".ljust(left_padding)
     for role in MATRIX_ROLES:
-        header += ROLE_SHORT_LABELS[role].rjust(16)
+        header += ROLE_SHORT_LABELS[role].center(col_width)
     lines = [f"<pre>{header}"]
 
+    pad_left = (col_width - 2) // 2
+    pad_right = col_width - 2 - pad_left
+
     for perm in TOGGLABLE_PERMS:
-        row = PERM_LABELS.get(perm, perm).ljust(16)
+        row = PERM_LABELS.get(perm, perm).ljust(left_padding)
         for role in MATRIX_ROLES:
             if role == ROLE_OWNER:
                 on = True
             else:
                 on = perm in (await permissions_for_role(db, role))
-            row += " " * 14 + _mark(on)
+            row += " " * pad_left + _mark(on) + " " * pad_right
         lines.append(row)
 
-    lines.append("manage_admins".ljust(16) + "".join(
-        " " * 14 + _mark(r == ROLE_OWNER) for r in MATRIX_ROLES
+    lines.append("manage_admins".ljust(left_padding) + "".join(
+        " " * pad_left + _mark(r == ROLE_OWNER) + " " * pad_right for r in MATRIX_ROLES
     ))
     lines.append("</pre>")
     lines.append(texts.ADMIN_PERM_MATRIX_HINT)
