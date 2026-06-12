@@ -330,7 +330,7 @@ async def _begin_buy_message(message: Message, state: FSMContext, db: Database) 
             await answer_with_inline_keyboard(
                 message,
                 texts.ORDER_PICK_PACKAGE.format(location=escape(loc.name)),
-                reply_markup=await keyboards.service_packages(packages, db),
+                await keyboards.service_packages(packages, db),
                 parse_mode=ParseMode.HTML,
             )
         else:
