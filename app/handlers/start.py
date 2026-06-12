@@ -88,7 +88,7 @@ async def cmd_help(
     await message.answer(texts.HELP, reply_markup=await _main_kb(message, settings, db))
 
 
-@router.message(Command("cancel"), StateFilter(None))
+@router.message(Command("cancel"))
 async def cmd_cancel(
     message: Message, state: FSMContext, settings: Settings, db: Database
 ) -> None:
@@ -97,7 +97,7 @@ async def cmd_cancel(
 
 
 # ---------- reply-keyboard menu (bottom buttons) ----------
-@router.message(F.text == texts.BTN_HELP, StateFilter(None))
+@router.message(F.text == texts.BTN_HELP)
 async def msg_help(
     message: Message, state: FSMContext, settings: Settings, db: Database
 ) -> None:
@@ -105,7 +105,7 @@ async def msg_help(
     await message.answer(texts.HELP, reply_markup=await _main_kb(message, settings, db))
 
 
-@router.message(F.text == texts.BTN_ABOUT, StateFilter(None))
+@router.message(F.text == texts.BTN_ABOUT)
 async def msg_about(
     message: Message, state: FSMContext, settings: Settings, db: Database
 ) -> None:
@@ -113,7 +113,7 @@ async def msg_about(
     await message.answer(texts.ABOUT, reply_markup=await _main_kb(message, settings, db))
 
 
-@router.message(F.text == texts.BTN_MY_ACCOUNT, StateFilter(None))
+@router.message(F.text == texts.BTN_MY_ACCOUNT)
 async def msg_account(
     message: Message, db: Database, state: FSMContext, settings: Settings
 ) -> None:

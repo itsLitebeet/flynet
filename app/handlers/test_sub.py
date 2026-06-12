@@ -74,12 +74,12 @@ async def _start_test_flow(
     )
 
 
-@router.message(F.text == texts.BTN_TEST_SUB, StateFilter(None))
+@router.message(F.text == texts.BTN_TEST_SUB)
 async def msg_test_sub(message: Message, state: FSMContext, db: Database) -> None:
     await _start_test_flow(message, state, db)
 
 
-@router.callback_query(F.data == keyboards.CB_MAIN_TEST, StateFilter(None))
+@router.callback_query(F.data == keyboards.CB_MAIN_TEST)
 async def cb_test_sub(callback: CallbackQuery, state: FSMContext, db: Database) -> None:
     if callback.message is None:
         await callback.answer()

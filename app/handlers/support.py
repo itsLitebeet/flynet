@@ -54,7 +54,7 @@ async def _open_support_message(message: Message, state: FSMContext) -> None:
     )
 
 
-@router.message(F.text == texts.BTN_SUPPORT, StateFilter(None))
+@router.message(F.text == texts.BTN_SUPPORT)
 async def msg_open_support(message: Message, state: FSMContext) -> None:
     await _open_support_message(message, state)
 

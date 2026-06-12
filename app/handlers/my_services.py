@@ -405,10 +405,11 @@ async def _show_services_list(
 
 
 # ---------- entry: list ----------
-@router.message(F.text == texts.BTN_MY_SERVICES, StateFilter(None))
-async def msg_my_services(message: Message, db: Database) -> None:
+@router.message(F.text == texts.BTN_MY_SERVICES)
+async def msg_my_services(message: Message, state: FSMContext, db: Database) -> None:
     if message.from_user is None:
         return
+    await state.clear()
     await _show_services_list(message, db, message.from_user.id)
 
 

@@ -345,7 +345,7 @@ async def _begin_buy_message(message: Message, state: FSMContext, db: Database) 
 
 
 # ---------- entry ----------
-@router.message(F.text == texts.BTN_BUY, StateFilter(None))
+@router.message(F.text == texts.BTN_BUY)
 async def msg_start_order(message: Message, state: FSMContext, db: Database) -> None:
     await _begin_buy_message(message, state, db)
 
