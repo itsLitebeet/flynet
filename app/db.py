@@ -530,7 +530,7 @@ class Database:
                 "SELECT id, status, xui_email, location_id, location_name, "
                 "volume_gb, duration_days, nickname, price, created_at, "
                 "updated_at, is_test, xui_sub_id, admin_id, decline_reason, "
-                "screenshot_file_id "
+                "screenshot_file_id, renew_of_order_id "
                 f"FROM orders WHERE user_id = ?{test_clause} "
                 "ORDER BY updated_at DESC LIMIT ?",
                 (user_id, limit),

@@ -53,7 +53,7 @@ def _format_usage_compact(usage: ClientUsage) -> str:
 
 
 def _format_customer_order_line(
-    order, *, usage: ClientUsage | None = None
+    order, *, usage: ClientUsage | None = None, children: list | None = None
 ) -> str:
     status = panel_live_badge(usage, db_status=str(order["status"]))
     is_test = _is_test_order(order)
@@ -108,6 +108,41 @@ def _format_customer_order_line(
     footer = "\n".join(footer_lines)
     if footer:
         footer += "\n"
+
+    if children:
+        child_lines = []
+        for child in children:
+            c_status = panel_live_badge(None, db_status=str(child["status"]))
+            c_vol = texts.format_order_volume(int(child["volume_gb"]), is_test=False)
+            c_duration = texts.format_order_duration(int(child["duration_days"]), is_test=False)
+            c_price = texts.format_price(int(child["price"]))
+            c_created_at = escape(str(child["created_at"]))
+
+            c_plan_parts = [c_vol, c_duration, c_price]
+            if child["nickname"]:
+                c_plan_parts.insert(0, escape(str(child["nickname"])))
+            c_plan_detail = " · ".join(c_plan_parts)
+
+            c_review_bits = []
+            if child["admin_id"]:
+                c_review_bits.append(
+                    texts.ADMIN_CUSTOMER_ORDER_REVIEWER.format(
+                        reviewer=f"<code>{int(child['admin_id'])}</code>"
+                    )
+                )
+            if child["screenshot_file_id"]:
+                c_review_bits.append(texts.ADMIN_CUSTOMER_ORDER_RECEIPT)
+            c_review_line = " · ".join(c_review_bits)
+            if c_review_line:
+                c_review_line = f" · {c_review_line}"
+
+            c_loc = escape(str(child["location_name"]))
+            child_lines.append(
+                f"\n<b>#{child['id']}</b> · {c_status}\n"
+                f"{c_loc} · {c_plan_detail}\n"
+                f"<i>{c_created_at}</i>{c_review_line}"
+            )
+        footer += "\n" + "\n".join(child_lines) + "\n"
 
     return texts.ADMIN_CUSTOMER_ORDER_BLOCK.format(
         order_id=order["id"],
@@ -204,13 +239,27 @@ async def format_customer_detail(db: Database, user_id: int) -> str | None:
     orders = await db.list_user_orders_admin(user_id, limit=50, exclude_test=True)
     usage_map = await load_panel_usage_for_orders(db, orders)
 
+    base_orders = []
     if orders:
+        orders_dict = {int(o["id"]): o for o in orders}
+        renewals = {}
+        for o in orders:
+            parent_id = o["renew_of_order_id"]
+            if parent_id and int(parent_id) in orders_dict:
+                renewals.setdefault(int(parent_id), []).append(o)
+            else:
+                base_orders.append(o)
+
+        for parent_id in renewals:
+            renewals[parent_id].reverse()
+
         order_lines = [
             _format_customer_order_line(
                 o,
                 usage=usage_map.get(str(o["xui_email"])) if o["xui_email"] else None,
+                children=renewals.get(int(o["id"])),
             )
-            for o in orders
+            for o in base_orders
         ]
         orders_block = "\n".join(order_lines)
     else:
@@ -235,11 +284,11 @@ async def format_customer_detail(db: Database, user_id: int) -> str | None:
         orders_block=orders_block,
     )
     if len(text) > 4000:
-        shown = min(len(orders), 15)
+        shown = min(len(base_orders), 15)
         order_lines = order_lines[:shown]
         orders_block = "\n".join(order_lines)
-        if len(orders) > shown:
-            orders_block += f"\n\n<i>+{len(orders) - shown} سفارش دیگر…</i>"
+        if len(base_orders) > shown:
+            orders_block += f"\n\n<i>+{len(base_orders) - shown} سفارش دیگر…</i>"
         text = texts.ADMIN_CUSTOMER_DETAIL.format(
             user_id=user_id,
             full_name=_user_display_name(row),

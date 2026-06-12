@@ -69,7 +69,7 @@ async def send_customer_detail(
     if row is None:
         return False
     orders = await db.list_user_orders_admin(user_id, limit=30, exclude_test=True)
-    order_ids = [int(o["id"]) for o in orders][:8]
+    order_ids = [int(o["id"]) for o in orders if not o["renew_of_order_id"]][:8]
     markup = await keyboards.admin_customer_detail_keyboard(
         user_id,
         actor_id,
