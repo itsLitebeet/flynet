@@ -88,6 +88,7 @@ CB_ADM_REQ_CHANNEL_OFF   = "adm:reqoff"
 CB_ADM_TOGGLE_TEST       = "adm:ttest"
 CB_ADM_TOGGLE_TEST_LOC_PREFIX = "adm:ttloc:"  # adm:ttloc:<location_id>
 CB_ADM_FLOW_CANCEL       = "adm:fcancel"
+CB_ADM_PM_PREFIX         = "adm:pm:"          # adm:pm:<user_id>
 CB_ADM_SETCARD_HELP      = "adm:hcard"
 CB_ADM_SETPRICE_HELP     = "adm:hprice"
 CB_ADM_ADDLOC_HELP       = "adm:hloc"
@@ -1201,6 +1202,11 @@ async def admin_customer_detail_keyboard(
         [
             InlineKeyboardButton(
                 text="🔄 بروزرسانی از تلگرام", callback_data=f"{CB_ADM_USER_UPDATE_PREFIX}{user_id}", style='primary',
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text="📩 ارسال پیام خصوصی", callback_data=f"{CB_ADM_PM_PREFIX}{user_id}", style='primary',
             ),
         ],
     ]

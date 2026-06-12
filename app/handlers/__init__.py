@@ -3,6 +3,7 @@ from aiogram import Router
 from app.handlers import (
     admin,
     admin_broadcast,
+    admin_pm,
     admin_customers,
     admin_offer,
     admin_location_edit,
@@ -39,6 +40,7 @@ def build_root_router() -> Router:
     root.include_router(start.router)
     root.include_router(support.router)
     root.include_router(admin_broadcast.router)
+    root.include_router(admin_pm.router)
     root.include_router(admin_order.router)
     root.include_router(log_channel.router)
     root.include_router(required_channel.router)
