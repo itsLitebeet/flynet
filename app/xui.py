@@ -516,6 +516,8 @@ class XuiClient:
         payload = body
         if inbound_ids is not None:
             payload["inboundIds"] = list(inbound_ids)
+        elif "inboundIds" in client:
+            payload["inboundIds"] = client["inboundIds"]
 
         return await self._request(
             "POST", f"/panel/api/clients/update/{email}", json_body=payload
