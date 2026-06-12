@@ -280,7 +280,7 @@ async def format_customer_detail(db: Database, user_id: int) -> str | None:
         total_spent=texts.format_price(int(stats["total_spent"] or 0)),
         first_order=escape(str(stats["first_order_at"])),
         last_order=escape(str(stats["last_order_at"])),
-        order_count=len(orders),
+        order_count=len(base_orders),
         orders_block=orders_block,
     )
     if len(text) > 4000:
@@ -304,7 +304,7 @@ async def format_customer_detail(db: Database, user_id: int) -> str | None:
             total_spent=texts.format_price(int(stats["total_spent"] or 0)),
             first_order=escape(str(stats["first_order_at"])),
             last_order=escape(str(stats["last_order_at"])),
-            order_count=len(orders),
+            order_count=len(base_orders),
             orders_block=orders_block,
         )
     return text

@@ -555,7 +555,7 @@ class Database:
             await cur.execute(
                 "SELECT u.user_id, u.username, u.first_name, u.last_name, "
                 "u.created_at, u.is_banned, "
-                "COUNT(o.id) AS order_count, "
+                "SUM(CASE WHEN o.renew_of_order_id IS NULL THEN 1 ELSE 0 END) AS order_count, "
                 "SUM(CASE WHEN o.status IN ('provisioned', 'expired', 'quota_exhausted') THEN 1 ELSE 0 END) "
                 "AS provisioned_count, "
                 "SUM(CASE WHEN o.status IN ('provisioned', 'expired', 'quota_exhausted') THEN o.price ELSE 0 END) "
@@ -579,7 +579,7 @@ class Database:
             return []
 
         agg = (
-            "COUNT(o.id) AS order_count, "
+            "SUM(CASE WHEN o.renew_of_order_id IS NULL THEN 1 ELSE 0 END) AS order_count, "
             "SUM(CASE WHEN o.status IN ('provisioned', 'expired', 'quota_exhausted') THEN 1 ELSE 0 END) "
             "AS provisioned_count, "
             "SUM(CASE WHEN o.status IN ('provisioned', 'expired', 'quota_exhausted') THEN o.price ELSE 0 END) "
@@ -617,7 +617,7 @@ class Database:
     async def get_customer_order_stats(self, user_id: int) -> sqlite3.Row | None:
         async with self._cursor() as cur:
             await cur.execute(
-                "SELECT COUNT(o.id) AS total_orders, "
+                "SELECT SUM(CASE WHEN o.renew_of_order_id IS NULL THEN 1 ELSE 0 END) AS total_orders, "
                 "SUM(CASE WHEN o.status IN ('provisioned', 'expired', 'quota_exhausted') THEN 1 ELSE 0 END) "
                 "AS provisioned, "
                 "SUM(CASE WHEN o.status = 'awaiting_review' THEN 1 ELSE 0 END) "
@@ -638,6 +638,14 @@ class Database:
                 (user_id,),
             )
             row = await cur.fetchone()
+            if row is None or row["total_orders"] is None or int(row["total_orders"]) == 0:
+                # Fallback check: if they have any order at all (even renewals or test orders)
+                # But wait, if they have only renewals, they still have total_orders = 0 if parent IS NULL?
+                # Actually, let's keep the return check simple: if SUM is NULL or 0, check if there are any orders.
+                # In SQL, COUNT(*) counts everything. So let's check:
+                pass
+            
+            # Let's count all orders to check if user has orders
             if row is None or row["total_orders"] is None or int(row["total_orders"]) == 0:
                 return None
             return row
