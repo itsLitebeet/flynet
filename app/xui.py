@@ -312,10 +312,32 @@ class XuiClient:
         if not path.startswith("/"):
             path = "/" + path
         url = f"{self.base_url}{path}"
-        try:
-            resp = await self._client.request(method, url, params=params, json=json_body)
-        except httpx.HTTPError as exc:
-            raise XuiError(f"HTTP error calling {method} {url}: {exc}") from exc
+        import asyncio
+        max_retries = 3
+        resp = None
+        for attempt in range(1, max_retries + 1):
+            try:
+                resp = await self._client.request(
+                    method, url, params=params, json=json_body
+                )
+                break
+            except (httpx.ConnectError, httpx.TimeoutException) as exc:
+                if attempt == max_retries:
+                    raise XuiError(
+                        f"HTTP error calling {method} {url} after {max_retries} attempts: {exc}"
+                    ) from exc
+                log.warning(
+                    "X-UI request failed (attempt %s/%s), retrying in 1s: %s",
+                    attempt,
+                    max_retries,
+                    exc,
+                )
+                await asyncio.sleep(1.0)
+            except httpx.HTTPError as exc:
+                raise XuiError(f"HTTP error calling {method} {url}: {exc}") from exc
+
+        if resp is None:
+            raise XuiError(f"Failed to get a response from {method} {url}")
 
         if resp.status_code >= 400:
             raise XuiError(
@@ -414,6 +436,22 @@ class XuiClient:
 
     async def find_client(self, email: str) -> dict[str, Any] | None:
         """Find a single client object by its email (the panel's primary key)."""
+        try:
+            data = await self.get_client(email)
+            if isinstance(data, dict):
+                obj = data.get("obj")
+                if isinstance(obj, str):
+                    import json as _json
+                    try:
+                        obj = _json.loads(obj)
+                    except (ValueError, TypeError):
+                        pass
+                if isinstance(obj, dict) and str(obj.get("email", "")) == email:
+                    return obj
+        except Exception as exc:
+            log.debug("GET client by email endpoint failed for %s, falling back to list: %s", email, exc)
+            pass
+
         for client in await self.list_clients():
             if str(client.get("email", "")) == email:
                 return client
@@ -542,15 +580,18 @@ class XuiClient:
     async def get_usage(self, email: str) -> ClientUsage:
         """Read a client's traffic + limits.
 
-        Prefers /clients/list (full, well-structured objects) and only falls
-        back to /clients/get/{email} if the client isn't in the list.
+        Prefers querying get/{email} directly to avoid listing all clients,
+        and falls back to /clients/list only if get fails.
         """
-        client = await self.find_client(email)
-        if client is not None:
-            return _usage_from_client(client)
-        # Fallback: the opaque get/{email} response.
-        data = await self.get_client(email)
-        return _parse_usage(data)
+        try:
+            data = await self.get_client(email)
+            return _parse_usage(data)
+        except Exception as exc:
+            log.debug("get_usage from GET client failed for %s, falling back to list: %s", email, exc)
+            for client in await self.list_clients():
+                if str(client.get("email", "")) == email:
+                    return _usage_from_client(client)
+            raise XuiError(f"client usage not found: {email}") from exc
 
     async def get_sub_links(self, sub_id: str) -> list[str]:
         data = await self._request("GET", f"/panel/api/clients/subLinks/{sub_id}")
@@ -688,18 +729,29 @@ class XuiClient:
         from app import texts as _texts
         usage = await self.get_usage(email)
         
+
+    async def renew_client(
+        self,
+        email: str,
+        volume_gb: int,
+        duration_days: int,
+        is_test: bool = False,
+    ) -> None:
+        from app import texts as _texts
+        usage = await self.get_usage(email)
+        
         # Calculate new total bytes
         if is_test:
             test_cap_bytes = _texts.TEST_VOLUME_MB * 1024 * 1024
             if usage.is_unlimited_traffic or usage.total_bytes <= 0:
                 new_total_bytes = test_cap_bytes
             else:
-                new_total_bytes = usage.remaining_bytes + test_cap_bytes
+                new_total_bytes = usage.total_bytes + test_cap_bytes
         else:
             if usage.is_unlimited_traffic or usage.total_bytes <= 0:
                 new_total_bytes = volume_gb * 1024**3
             else:
-                new_total_bytes = usage.remaining_bytes + (volume_gb * 1024**3)
+                new_total_bytes = usage.total_bytes + (volume_gb * 1024**3)
 
         # Calculate new expiry time
         if is_test:

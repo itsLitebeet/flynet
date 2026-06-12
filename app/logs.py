@@ -106,8 +106,8 @@ def _log_event(title: str, detail: str) -> str:
     return title
 
 
-def _buyer_line(db: Database, user_id: int) -> str:
-    row = db.get_user(user_id)
+async def _buyer_line(db: Database, user_id: int) -> str:
+    row = await db.get_user(user_id)
     if row is None:
         return f"<code>{user_id}</code>"
     try:
@@ -122,7 +122,7 @@ def _buyer_line(db: Database, user_id: int) -> str:
     )
 
 
-def _order_manage_detail_block(db: Database, order) -> str:
+async def _order_manage_detail_block(db: Database, order) -> str:
     """Full order snapshot for admin action logs."""
     from app import texts
 
@@ -151,10 +151,11 @@ def _order_manage_detail_block(db: Database, order) -> str:
         if order["xui_sub_id"]
         else "—"
     )
+    buyer_info = await _buyer_line(db, int(order['user_id']))
     return (
         f"{body}\n"
         f"🏷 نام: {nick}\n"
-        f"👤 خریدار:\n{_buyer_line(db, int(order['user_id']))}\n"
+        f"👤 خریدار:\n{buyer_info}\n"
         f"🆔 پنل: {panel}\n"
         f"🔔 subId: {sub}\n"
         f"📌 نمایش وضعیت: {status}\n"
@@ -170,11 +171,11 @@ class NetFlyLogger:
         self._bot = bot
         self._db = db
 
-    def channel_id(self) -> int | None:
-        return self._db.get_log_channel_id()
+    async def channel_id(self) -> int | None:
+        return await self._db.get_log_channel_id()
 
     async def _send_text(self, text: str) -> bool:
-        chat_id = self.channel_id()
+        chat_id = await self.channel_id()
         if chat_id is None:
             return False
         try:
@@ -194,7 +195,7 @@ class NetFlyLogger:
         return caption[: _CAPTION_MAX - 1] + "…"
 
     async def _send_photo(self, photo_file_id: str, caption: str) -> bool:
-        chat_id = self.channel_id()
+        chat_id = await self.channel_id()
         if chat_id is None:
             return False
         try:
@@ -453,7 +454,7 @@ class NetFlyLogger:
     async def _panel_live_line(self, order) -> str | None:
         if not order["xui_email"] or str(order["status"]) != "provisioned":
             return None
-        loc = self._db.get_location(int(order["location_id"]))
+        loc = await self._db.get_location(int(order["location_id"]))
         if loc is None:
             return None
         from app.xui import XuiClient, XuiError
@@ -497,7 +498,7 @@ class NetFlyLogger:
         notes: str | None = None,
         fetch_panel: bool = True,
     ) -> None:
-        row = order if order is not None else self._db.get_order(order_id)
+        row = order if order is not None else await self._db.get_order(order_id)
         detail_parts = [
             f"🆔 سفارش: <code>#{order_id}</code>",
             f"👮 ادمین:\n{admin.html_line()}",
@@ -506,7 +507,7 @@ class NetFlyLogger:
         if notes:
             detail_parts.append(f"📝 جزئیات عملیات: {escape(notes)}")
         if row is not None:
-            detail_parts.append(_order_manage_detail_block(self._db, row))
+            detail_parts.append(await _order_manage_detail_block(self._db, row))
             if fetch_panel:
                 panel_live = await self._panel_live_line(row)
                 if panel_live:
@@ -576,7 +577,7 @@ async def try_bind_log_channel(bot: Bot, db: Database, chat_id: int) -> tuple[bo
         log.exception("bind log channel %s", chat_id)
         return False, texts.LOG_CHANNEL_BAD.format(error=escape(str(exc)))
 
-    db.set_log_channel_id(chat_id)
+    await db.set_log_channel_id(chat_id)
     return True, texts.LOG_CHANNEL_OK.format(chat_id=chat_id)
 
 

@@ -1,0 +1,13 @@
+services:
+  netfly:
+    build: .
+    container_name: netfly-bot
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+    # If you're on a Linux host inside Iran and api.telegram.org is blocked,
+    # uncomment the next two lines and point the bot's traffic through your VPN.
+    # network_mode: "host"
+    # environment:
+    #   HTTPS_PROXY: "socks5://127.0.0.1:1080"

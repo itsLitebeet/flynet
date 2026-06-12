@@ -1,0 +1,26 @@
+[Unit]
+Description=NetFly Telegram Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=netfly
+Group=netfly
+WorkingDirectory=/opt/netfly
+EnvironmentFile=/opt/netfly/.env
+ExecStart=/opt/netfly/.venv/bin/python /opt/netfly/bot.py
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/netfly
+
+[Install]
+WantedBy=multi-user.target
