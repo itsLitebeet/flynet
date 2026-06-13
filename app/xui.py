@@ -684,21 +684,36 @@ class XuiClient:
         """Create a client and fetch its subscription links.
 
         Steps:
-          1) POST /clients/add
-          2) Resolve subId/uuid (add response → /clients/list → /clients/get).
-          3) GET /clients/subLinks/{subId} for the actual config URIs.
+          1) If client already exists (e.g. from previous failed attempt), update it.
+          2) Otherwise, POST /clients/add
+          3) Resolve subId/uuid.
+          4) GET /clients/subLinks/{subId} for the actual config URIs.
         """
-        add_resp = await self.add_client(
-            email=email,
-            volume_gb=volume_gb,
-            duration_days=duration_days,
-            inbound_ids=inbound_ids,
-            tg_user_id=tg_user_id,
-            total_bytes=total_bytes,
-            expiry_time_ms=expiry_time_ms,
-        )
-
-        sub_id, client_uuid = await self.resolve_client_identity(email, add_resp=add_resp)
+        existing = await self.find_client(email)
+        if existing:
+            log.info("Client %s already exists on panel. Reusing and updating.", email)
+            total = int(total_bytes) if total_bytes is not None else _gb_to_bytes(volume_gb)
+            expiry = int(expiry_time_ms) if expiry_time_ms is not None else _expiry_ms_from_days(duration_days)
+            await self.update_client(
+                email=email,
+                total_bytes=total,
+                expiry_time_ms=expiry,
+                tg_user_id=tg_user_id,
+                enable=True,
+                inbound_ids=inbound_ids,
+            )
+            sub_id, client_uuid = await self.resolve_client_identity(email)
+        else:
+            add_resp = await self.add_client(
+                email=email,
+                volume_gb=volume_gb,
+                duration_days=duration_days,
+                inbound_ids=inbound_ids,
+                tg_user_id=tg_user_id,
+                total_bytes=total_bytes,
+                expiry_time_ms=expiry_time_ms,
+            )
+            sub_id, client_uuid = await self.resolve_client_identity(email, add_resp=add_resp)
 
         # Some panels generate the UUID server-side and don't echo it; that's fine.
         if not client_uuid:
